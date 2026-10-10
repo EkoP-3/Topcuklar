@@ -108,17 +108,14 @@ export function recordMatch(opts: RecordOptions): Recording {
             return;
           }
           const name = `arena-${opts.fighters[0].id}-vs-${opts.fighters[1].id}-seed${opts.seed}.${format.ext}`;
-          const url = URL.createObjectURL(
-            new Blob(chunks, { type: format.ext === "mp4" ? "video/mp4" : "video/webm" }),
+          const blob = new Blob(chunks, {
+            type: format.ext === "mp4" ? "video/mp4" : "video/webm",
+          });
+          saveFile(name, blob).then(
+            (saved) => resolve(saved ? name : null),
+            (err: unknown) =>
+              reject(err instanceof Error ? err : new Error("Kayıt kaydedilemedi.")),
           );
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = name;
-          document.body.append(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 30_000);
-          resolve(name);
         };
         recorder.onerror = () => reject(new Error("Kayıt sırasında bir hata oluştu."));
         if (recorder.state !== "inactive") recorder.stop();
@@ -157,4 +154,42 @@ export function recordMatch(opts: RecordOptions): Recording {
     },
     done,
   };
+}
+
+interface HostDownloads {
+  save(request: { filename: string; data: Blob }): Promise<unknown>;
+}
+
+/**
+ * Saves a file. Inside the claude.ai viewer, plain downloads are blocked, so the
+ * viewer's own "downloads" capability is used there; everywhere else a normal
+ * browser download. Resolves false when the person declined the save.
+ */
+async function saveFile(name: string, blob: Blob): Promise<boolean> {
+  const host = (
+    window as unknown as {
+      claude?: { use?: (name: string) => Promise<HostDownloads | null> };
+    }
+  ).claude;
+  if (host?.use) {
+    try {
+      const downloads = await host.use("downloads");
+      if (downloads) {
+        await downloads.save({ filename: name, data: blob });
+        return true;
+      }
+    } catch (err) {
+      if ((err as { code?: string } | null)?.code === "declined") return false;
+      // Any other failure: fall through to the ordinary download below.
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  return true;
 }

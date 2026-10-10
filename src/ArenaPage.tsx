@@ -51,7 +51,7 @@ export function ArenaPage() {
   const [search] = useState(readSearch);
 
   useEffect(() => {
-    document.title = "Arena — Silah Savaşı Prototipi";
+    document.title = "Arena Prototipi";
   }, []);
 
   const [a, setA] = useState(knownOrRandom(search.a));

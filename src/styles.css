@@ -4,6 +4,8 @@
 html,
 body {
   margin: 0;
+  color-scheme: dark;
+  color: #f4f6fb;
   background: #05060a;
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
