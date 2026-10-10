@@ -31,7 +31,9 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("2D canvas is not supported in this browser");
 
-  const scanlines = makeScanlines(ctx, quality);
+  // Static layers are drawn once and blitted every frame (much cheaper than redrawing).
+  const background = buildBackground(quality);
+  const overlay = buildOverlay(quality);
   const hpLag: number[] = [];
   let frame = 0;
 
@@ -50,12 +52,13 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
 
     ctx.save();
     ctx.translate(fx.shakeX, fx.shakeY);
+    ctx.drawImage(background, 0, 0, W, H);
     drawTopPanel(ctx, world, hpLag);
     drawArena(ctx, world, fx, frame);
     drawBottomPanel(ctx, world);
     ctx.restore();
 
-    drawOverlay(ctx, fx, scanlines);
+    drawOverlay(ctx, fx, overlay);
   };
 
   return { draw };
@@ -150,29 +153,6 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   ctx.translate(AX, AY);
   roundRect(ctx, 0, 0, AS, AS, 40);
   ctx.clip();
-
-  const bg = ctx.createLinearGradient(0, 0, 0, AS);
-  bg.addColorStop(0, "#0d1224");
-  bg.addColorStop(1, "#070912");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, AS, AS);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.045)";
-  ctx.lineWidth = 2;
-  for (let p = 120; p < AS; p += 120) {
-    ctx.beginPath();
-    ctx.moveTo(p, 0);
-    ctx.lineTo(p, AS);
-    ctx.moveTo(0, p);
-    ctx.lineTo(AS, p);
-    ctx.stroke();
-  }
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `800 150px ${DISPLAY_FONT}`;
-  ctx.fillStyle = "rgba(255,255,255,0.04)";
-  ctx.fillText("ARENA SIM", AS / 2, AS / 2);
 
   // Everything below lives in world units.
   ctx.save();
@@ -419,25 +399,74 @@ function drawBanner(ctx: Ctx, world: World): void {
 
 // --- overlay ---------------------------------------------------------------------
 
-function drawOverlay(ctx: Ctx, fx: Fx, scanlines: CanvasPattern | null): void {
+function drawOverlay(ctx: Ctx, fx: Fx, overlay: HTMLCanvasElement): void {
+  if (fx.flash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${clamp(fx.flash * 0.4, 0, 0.4)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.drawImage(overlay, 0, 0, W, H);
+}
+
+function layer(quality: number): { canvas: HTMLCanvasElement; g: Ctx | null } {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(W * quality);
+  canvas.height = Math.round(H * quality);
+  const g = canvas.getContext("2d");
+  g?.setTransform(quality, 0, 0, quality, 0, 0);
+  return { canvas, g };
+}
+
+/** Arena floor, grid and watermark. Transparent outside the arena. */
+function buildBackground(quality: number): HTMLCanvasElement {
+  const { canvas, g: ctx } = layer(quality);
+  if (!ctx) return canvas;
+  ctx.translate(AX, AY);
+  roundRect(ctx, 0, 0, AS, AS, 40);
+  ctx.clip();
+
+  const bg = ctx.createLinearGradient(0, 0, 0, AS);
+  bg.addColorStop(0, "#0d1224");
+  bg.addColorStop(1, "#070912");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, AS, AS);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.045)";
+  ctx.lineWidth = 2;
+  for (let p = 120; p < AS; p += 120) {
+    ctx.beginPath();
+    ctx.moveTo(p, 0);
+    ctx.lineTo(p, AS);
+    ctx.moveTo(0, p);
+    ctx.lineTo(AS, p);
+    ctx.stroke();
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 150px ${DISPLAY_FONT}`;
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  ctx.fillText("ARENA SIM", AS / 2, AS / 2);
+
+  return canvas;
+}
+
+/** Vignette and CRT scanlines, drawn on top of everything. */
+function buildOverlay(quality: number): HTMLCanvasElement {
+  const { canvas, g: ctx } = layer(quality);
+  if (!ctx) return canvas;
   const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
   vignette.addColorStop(1, "rgba(0,0,0,0.5)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
 
-  if (fx.flash > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${clamp(fx.flash * 0.4, 0, 0.4)})`;
-    ctx.fillRect(0, 0, W, H);
-  }
-
+  const scanlines = makeScanlines(ctx, quality);
   if (scanlines) {
-    ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = scanlines;
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+  return canvas;
 }
 
 function makeScanlines(ctx: Ctx, quality: number): CanvasPattern | null {

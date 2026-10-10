@@ -6,6 +6,7 @@ import { SIDES } from "./sim/render/palette";
 import { ROSTER, findDef } from "./sim/roster";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
+import { canRecord, recordMatch, type Recording } from "./recorder";
 
 interface ArenaSearch {
   a: string | undefined;
@@ -56,16 +57,40 @@ export function ArenaPage() {
   const [speed, setSpeed] = useState(1);
   const [auto, setAuto] = useState(true);
   const [matchup, setMatchup] = useState<[string, string] | null>(null);
+  const [recProgress, setRecProgress] = useState<number | null>(null);
+  const [recMessage, setRecMessage] = useState<string | null>(null);
+  const recording = useRef<Recording | null>(null);
+  const [recordable] = useState(canRecord);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef<World | null>(null);
   const fxRef = useRef<Fx | null>(null);
-  const live = useRef({ paused, speed, auto });
+  const live = useRef({ paused, speed, auto, busy: false });
   const nextMatch = useRef(() => setSeed(randomSeed()));
 
   useEffect(() => {
-    live.current = { paused, speed, auto };
-  }, [paused, speed, auto]);
+    live.current = { paused, speed, auto, busy: recProgress !== null };
+  }, [paused, speed, auto, recProgress]);
+
+  const startRecording = () => {
+    if (recording.current) return;
+    const fighters = resolveFighters(seed, a, b);
+    setRecMessage(null);
+    setRecProgress(0);
+    const job = recordMatch({ seed, fighters, onProgress: setRecProgress });
+    recording.current = job;
+    job.done
+      .then((name) => setRecMessage(name ? `İndirildi: ${name}` : "Kayıt iptal edildi."))
+      .catch((err: unknown) =>
+        setRecMessage(err instanceof Error ? err.message : "Kayıt başarısız oldu."),
+      )
+      .finally(() => {
+        recording.current = null;
+        setRecProgress(null);
+      });
+  };
+
+  useEffect(() => () => recording.current?.cancel(), []);
 
   // Start a fresh match whenever the setup changes.
   useEffect(() => {
@@ -89,9 +114,9 @@ export function ArenaPage() {
       last = now;
       const world = worldRef.current;
       const fx = fxRef.current;
-      const { paused: isPaused, speed: rate, auto: isAuto } = live.current;
+      const { paused: isPaused, speed: rate, auto: isAuto, busy } = live.current;
 
-      if (world && fx) {
+      if (world && fx && !busy) {
         if (!isPaused) {
           world.advance(dt * rate);
           fx.consume(world);
@@ -203,6 +228,46 @@ export function ArenaPage() {
             <button className={buttonClass} onClick={() => setSeed(randomSeed())}>
               🎲 Rastgele maç
             </button>
+          </div>
+
+          <div className="space-y-2">
+            {recProgress === null ? (
+              <button
+                className={`${buttonClass} w-full bg-[#3d8bff]/25 hover:bg-[#3d8bff]/40`}
+                onClick={startRecording}
+                disabled={!recordable}
+              >
+                🎬 Bu maçı video olarak kaydet
+              </button>
+            ) : (
+              <div className="space-y-2 rounded-lg border border-white/15 bg-white/5 p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Kaydediliyor… %{Math.round(recProgress * 100)}</span>
+                  <button
+                    className="text-neutral-400 underline"
+                    onClick={() => recording.current?.cancel()}
+                  >
+                    İptal
+                  </button>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded bg-white/10">
+                  <div
+                    className="h-full bg-[#3d8bff]"
+                    style={{ width: `${Math.round(recProgress * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-neutral-400">
+                  Gerçek zamanlı kaydediliyor (~30 sn). Bu sekmeyi açık tutun; bitince dosya
+                  kendiliğinden iner.
+                </p>
+              </div>
+            )}
+            {!recordable && (
+              <p className="text-xs text-neutral-500">
+                Bu tarayıcı video kaydını desteklemiyor (Chrome/Edge önerilir).
+              </p>
+            )}
+            {recMessage && <p className="text-xs text-neutral-400">{recMessage}</p>}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
