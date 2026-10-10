@@ -124,38 +124,23 @@ function drawFighterPanel(
   ctx.restore();
 }
 
+/** One quiet line per fighter: just the ability state. Names and HP are already up top. */
 function drawBottomPanel(ctx: Ctx, world: World): void {
-  const x = 60;
-  const y = 1436;
-  const w = 960;
-  const h = 330;
-  roundRect(ctx, x, y, w, h, 26);
-  ctx.fillStyle = "rgba(255,255,255,0.045)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
+  const y = 1470;
   ctx.textBaseline = "alphabetic";
-  ctx.textAlign = "left";
+  ctx.font = `600 34px ${MONO_FONT}`;
   world.fighters.slice(0, 2).forEach((f, i) => {
-    const side = SIDES[f.side];
-    const cx = x + 34 + i * 470;
-    ctx.font = `700 36px ${MONO_FONT}`;
-    ctx.fillStyle = side.main;
-    ctx.fillText(`${side.name} ${f.def.name}`, cx, y + 70);
-    ctx.font = `600 32px ${MONO_FONT}`;
-    ctx.fillStyle = "#e8ecf4";
-    ctx.fillText(`HP ${Math.max(0, Math.ceil(f.hp))}/${f.maxHp}`, cx, y + 124);
-    ctx.fillText(`DMG ${world.damageDealt[f.index] ?? 0}`, cx, y + 172);
-    ctx.fillStyle = f.alive ? "#ffd45e" : "#ff6b6b";
-    ctx.fillText(f.alive ? (f.ability?.hud?.(f) ?? "[BRUTE FORCE]") : "[K.O.]", cx, y + 236);
+    const left = i === 0;
+    ctx.textAlign = left ? "left" : "right";
+    ctx.fillStyle = f.alive ? SIDES[f.side].light : "rgba(232,236,244,0.3)";
+    const text = f.alive ? (f.ability?.hud?.(f) ?? "").replace(/[[\]]/g, "") : "K.O.";
+    ctx.fillText(text, left ? AX : AX + AS, y);
   });
 
   ctx.textAlign = "center";
-  ctx.font = `500 26px ${MONO_FONT}`;
-  ctx.fillStyle = "rgba(232,236,244,0.45)";
-  ctx.fillText(`SEED ${world.seed}`, W / 2, y + h - 22);
+  ctx.font = `500 22px ${MONO_FONT}`;
+  ctx.fillStyle = "rgba(232,236,244,0.28)";
+  ctx.fillText(`seed ${world.seed}`, W / 2, y + 70);
 }
 
 // --- arena -----------------------------------------------------------------------
@@ -287,8 +272,8 @@ function drawFighter(ctx: Ctx, f: Fighter): void {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `800 ${Math.round(f.radius * 0.9)}px ${MONO_FONT}`;
-  outlinedText(ctx, String(Math.max(0, Math.ceil(f.hp))), 0, 3, "#ffffff", 7);
+  ctx.font = `700 ${Math.round(f.radius * 0.5)}px ${MONO_FONT}`;
+  outlinedText(ctx, String(Math.max(0, Math.ceil(f.hp))), 0, 2, "#ffffff", 4);
 
   ctx.restore();
 }

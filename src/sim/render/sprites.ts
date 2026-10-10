@@ -1,30 +1,63 @@
 import { OUTLINE } from "./palette";
 
-/** Drill head colour per level: wood, stone, iron, gold, diamond, void. */
-const TIER_COLORS = ["#a8743d", "#9aa1ab", "#e6e9ee", "#ffd447", "#4de8e0", "#8a55e8"] as const;
-
 type Ctx = CanvasRenderingContext2D;
 
-function fillShape(ctx: Ctx, color: string, width = 4): void {
+/** Drill bit colour per level: wood, stone, iron, gold, diamond, void. */
+const TIER_COLORS = ["#a8743d", "#9aa1ab", "#e6e9ee", "#ffd447", "#4de8e0", "#8a55e8"] as const;
+
+const STEEL = "#b9c3d6";
+const DARK_STEEL = "#687389";
+const WOOD = "#a76d3c";
+const DARK_WOOD = "#6c4325";
+const GOLD = "#f4b934";
+const DARK_GOLD = "#a9741a";
+const GLOW = "#79d4ff";
+const RED = "#e5483f";
+
+const LINE = 5;
+
+/**
+ * Fills the current path with a flat colour, adds a light top half and a shaded
+ * bottom half (one light direction for every weapon), then outlines it.
+ */
+function solid(ctx: Ctx, color: string): void {
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.lineWidth = width;
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = "rgba(255,255,255,0.26)";
+  ctx.fillRect(-4000, -4000, 8000, 4000);
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillRect(-4000, 0, 8000, 4000);
+  ctx.restore();
+  ctx.lineWidth = LINE;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
 }
 
-/** A line with a dark outline so it reads on any background. */
-function bar(ctx: Ctx, x0: number, y0: number, x1: number, y1: number, w: number, color: string) {
+function rect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** A thin vertical band across the weapon (grip wrap, ring, groove). */
+function band(ctx: Ctx, x: number, h: number, w: number, color: string): void {
+  rect(ctx, x - w / 2, -h / 2, w, h, Math.min(3, w / 2));
+  solid(ctx, color);
+}
+
+/** The current path as a thick outlined line. */
+function stroke(ctx: Ctx, w: number, color: string): void {
   ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
+  ctx.lineJoin = "round";
   ctx.strokeStyle = OUTLINE;
-  ctx.lineWidth = w + 6;
+  ctx.lineWidth = w + LINE * 1.4;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
   ctx.strokeStyle = color;
   ctx.lineWidth = w;
   ctx.stroke();
@@ -32,7 +65,7 @@ function bar(ctx: Ctx, x0: number, y0: number, x1: number, y1: number, w: number
 
 /**
  * Draws a weapon pointing along +x. `from` is where the handle starts (usually
- * hidden under the body) and `to` is the tip.
+ * hidden under the body) and `to` is the tip. `thick` is the weapon's hit width.
  */
 export function drawWeapon(
   ctx: Ctx,
@@ -42,118 +75,188 @@ export function drawWeapon(
   thick: number,
   level = 0,
 ): void {
-  const len = to - from;
+  const L = to - from;
+  const T = thick;
   ctx.save();
   ctx.translate(from, 0);
   ctx.lineJoin = "round";
+  ctx.lineCap = "round";
 
   switch (id) {
     case "drill": {
-      bar(ctx, 0, 0, len * 0.34, 0, thick * 0.5, "#8d95a6");
+      // grip
+      rect(ctx, 0, -T * 0.3, L * 0.3, T * 0.6, 4);
+      solid(ctx, DARK_STEEL);
+      band(ctx, L * 0.09, T * 0.78, 5, STEEL);
+      band(ctx, L * 0.2, T * 0.78, 5, STEEL);
+      // collar
+      rect(ctx, L * 0.28, -T * 0.5, L * 0.08, T, 4);
+      solid(ctx, STEEL);
+      // conical bit with flutes
+      const bit = TIER_COLORS[Math.min(level, TIER_COLORS.length - 1)] ?? STEEL;
       ctx.beginPath();
-      ctx.moveTo(len * 0.3, -thick * 0.62);
-      ctx.lineTo(len, 0);
-      ctx.lineTo(len * 0.3, thick * 0.62);
+      ctx.moveTo(L * 0.36, -T * 0.66);
+      ctx.lineTo(L, 0);
+      ctx.lineTo(L * 0.36, T * 0.66);
       ctx.closePath();
-      fillShape(ctx, TIER_COLORS[Math.min(level, TIER_COLORS.length - 1)] ?? "#9aa1ab");
-      ctx.strokeStyle = "rgba(8,10,17,0.45)";
-      ctx.lineWidth = 3;
-      for (let i = 1; i <= 3; i++) {
-        const x = len * (0.3 + i * 0.16);
-        const h = thick * 0.62 * (1 - (x - len * 0.3) / (len * 0.7));
+      solid(ctx, bit);
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = "rgba(8,10,17,0.5)";
+      ctx.lineWidth = 3.5;
+      for (let i = 0; i < 4; i++) {
+        const x = L * (0.42 + i * 0.15);
         ctx.beginPath();
-        ctx.moveTo(x - 6, -h);
-        ctx.lineTo(x + 6, h);
+        ctx.moveTo(x, -T);
+        ctx.lineTo(x + T * 0.5, T);
         ctx.stroke();
       }
-      break;
-    }
-    case "chime": {
-      const h = thick * 1.25;
-      bar(ctx, 0, 0, len * 0.55, 0, 7, "#c4c8d2");
-      ctx.beginPath();
-      ctx.moveTo(len * 0.5, -h * 0.22);
-      ctx.bezierCurveTo(len * 0.7, -h * 0.3, len * 0.8, -h * 0.55, len, -h * 0.62);
-      ctx.lineTo(len, h * 0.62);
-      ctx.bezierCurveTo(len * 0.8, h * 0.55, len * 0.7, h * 0.3, len * 0.5, h * 0.22);
-      ctx.closePath();
-      fillShape(ctx, "#ffcf4a");
-      ctx.beginPath();
-      ctx.arc(len * 0.97, 0, h * 0.17, 0, Math.PI * 2);
-      fillShape(ctx, "#7a5a1e", 3);
-      break;
-    }
-    case "pylon": {
-      bar(ctx, 0, 0, len, 0, thick * 0.3, "#d3dae8");
-      for (const k of [0.35, 0.55, 0.75]) {
-        bar(ctx, len * k, -thick * 0.55, len * k, thick * 0.55, 5, "#aab4c8");
-      }
-      ctx.save();
-      ctx.shadowColor = "#7cc0ff";
-      ctx.shadowBlur = 18;
-      ctx.beginPath();
-      ctx.arc(len, 0, thick * 0.5, 0, Math.PI * 2);
-      fillShape(ctx, "#8cc8ff");
       ctx.restore();
       break;
     }
-    case "grapple": {
-      bar(ctx, 0, 0, len * 0.62, 0, thick * 0.34, "#cbc3b0");
+
+    case "chime": {
+      // hanging rod and bell
       ctx.beginPath();
-      ctx.moveTo(len * 0.6, 0);
-      ctx.quadraticCurveTo(len * 1.04, -thick * 0.25, len * 0.98, thick * 1.0);
-      ctx.quadraticCurveTo(len * 0.9, thick * 1.45, len * 0.7, thick * 1.05);
-      ctx.strokeStyle = OUTLINE;
-      ctx.lineWidth = thick * 0.34 + 6;
-      ctx.lineCap = "round";
-      ctx.stroke();
-      ctx.strokeStyle = "#e0d8c4";
-      ctx.lineWidth = thick * 0.34;
-      ctx.stroke();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(L * 0.46, 0);
+      stroke(ctx, T * 0.2, STEEL);
+      const h = T * 0.82;
+      ctx.beginPath();
+      ctx.moveTo(L * 0.4, 0);
+      ctx.bezierCurveTo(L * 0.4, -h * 0.9, L * 0.56, -h * 0.95, L * 0.7, -h * 0.8);
+      ctx.bezierCurveTo(L * 0.82, -h * 0.7, L * 0.94, -h * 0.9, L * 0.99, -h * 1.05);
+      ctx.lineTo(L * 0.99, h * 1.05);
+      ctx.bezierCurveTo(L * 0.94, h * 0.9, L * 0.82, h * 0.7, L * 0.7, h * 0.8);
+      ctx.bezierCurveTo(L * 0.56, h * 0.95, L * 0.4, h * 0.9, L * 0.4, 0);
+      ctx.closePath();
+      solid(ctx, GOLD);
+      // lip
+      rect(ctx, L * 0.94, -h * 1.1, L * 0.06, h * 2.2, 5);
+      solid(ctx, DARK_GOLD);
+      // clapper
+      ctx.beginPath();
+      ctx.arc(L * 1.0, 0, T * 0.22, 0, Math.PI * 2);
+      solid(ctx, DARK_WOOD);
       break;
     }
-    case "lance": {
-      bar(ctx, 0, 0, len * 0.84, 0, thick * 0.42, "#b9835a");
+
+    case "pylon": {
+      // coil rod
       ctx.beginPath();
-      ctx.moveTo(len * 0.8, -thick * 0.85);
-      ctx.lineTo(len, 0);
-      ctx.lineTo(len * 0.8, thick * 0.85);
-      ctx.closePath();
-      fillShape(ctx, "#e8eef7");
-      ctx.beginPath();
-      ctx.moveTo(len * 0.7, 0);
-      ctx.lineTo(len * 0.62, -thick * 0.9);
-      ctx.lineTo(len * 0.58, 0);
-      ctx.lineTo(len * 0.62, thick * 0.9);
-      ctx.closePath();
-      fillShape(ctx, "#e5483f", 3);
-      break;
-    }
-    case "maul": {
-      bar(ctx, 0, 0, len * 0.72, 0, thick * 0.34, "#8a5a34");
-      const x0 = len * 0.6;
-      const h = thick * 0.78;
-      ctx.beginPath();
-      ctx.moveTo(x0 + 8, -h);
-      ctx.lineTo(len - 8, -h);
-      ctx.quadraticCurveTo(len, -h, len, -h + 8);
-      ctx.lineTo(len, h - 8);
-      ctx.quadraticCurveTo(len, h, len - 8, h);
-      ctx.lineTo(x0 + 8, h);
-      ctx.quadraticCurveTo(x0, h, x0, h - 8);
-      ctx.lineTo(x0, -h + 8);
-      ctx.quadraticCurveTo(x0, -h, x0 + 8, -h);
-      ctx.closePath();
-      fillShape(ctx, "#9ba3b3");
-      for (const sy of [-h * 0.45, h * 0.45]) {
+      ctx.moveTo(0, 0);
+      ctx.lineTo(L * 0.86, 0);
+      stroke(ctx, T * 0.3, STEEL);
+      // growing rings
+      [0.3, 0.46, 0.62].forEach((x, i) => {
         ctx.beginPath();
-        ctx.arc((x0 + len) / 2, sy, 4.5, 0, Math.PI * 2);
-        fillShape(ctx, "#5c6577", 2);
+        ctx.ellipse(L * x, 0, L * 0.035, T * (0.5 + i * 0.12), 0, 0, Math.PI * 2);
+        solid(ctx, DARK_STEEL);
+      });
+      // energy orb
+      ctx.save();
+      ctx.shadowColor = GLOW;
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(L * 0.88, 0, T * 0.68, 0, Math.PI * 2);
+      solid(ctx, GLOW);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(L * 0.86, -T * 0.2, T * 0.17, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fill();
+      break;
+    }
+
+    case "grapple": {
+      // shaft
+      rect(ctx, 0, -T * 0.17, L * 0.6, T * 0.34, 4);
+      solid(ctx, WOOD);
+      band(ctx, L * 0.16, T * 0.6, 6, DARK_WOOD);
+      band(ctx, L * 0.32, T * 0.6, 6, DARK_WOOD);
+      band(ctx, L * 0.58, T * 0.62, 8, STEEL);
+      // three-pronged hook: centre spike plus two swept-back barbs
+      ctx.beginPath();
+      ctx.moveTo(L * 0.6, 0);
+      ctx.lineTo(L * 0.94, 0);
+      stroke(ctx, T * 0.3, STEEL);
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(L * 0.62, 0);
+        ctx.quadraticCurveTo(L * 0.96, s * T * 0.35, L * 0.9, s * T * 1.1);
+        stroke(ctx, T * 0.26, STEEL);
+      }
+      ctx.beginPath();
+      ctx.moveTo(L * 0.92, -T * 0.34);
+      ctx.lineTo(L, 0);
+      ctx.lineTo(L * 0.92, T * 0.34);
+      ctx.closePath();
+      solid(ctx, STEEL);
+      break;
+    }
+
+    case "lance": {
+      // shaft
+      rect(ctx, 0, -T * 0.3, L * 0.8, T * 0.6, 4);
+      solid(ctx, WOOD);
+      band(ctx, L * 0.2, T * 0.84, 7, DARK_WOOD);
+      band(ctx, L * 0.4, T * 0.84, 7, DARK_WOOD);
+      band(ctx, L * 0.6, T * 0.84, 7, DARK_WOOD);
+      // pennant
+      ctx.beginPath();
+      ctx.moveTo(L * 0.76, -T * 0.2);
+      ctx.lineTo(L * 0.5, -T * 1.35);
+      ctx.lineTo(L * 0.58, -T * 0.2);
+      ctx.closePath();
+      solid(ctx, RED);
+      // guard and leaf head
+      ctx.beginPath();
+      ctx.ellipse(L * 0.8, 0, L * 0.03, T * 1.0, 0, 0, Math.PI * 2);
+      solid(ctx, DARK_STEEL);
+      ctx.beginPath();
+      ctx.moveTo(L * 0.8, 0);
+      ctx.quadraticCurveTo(L * 0.87, -T * 1.1, L, 0);
+      ctx.quadraticCurveTo(L * 0.87, T * 1.1, L * 0.8, 0);
+      ctx.closePath();
+      solid(ctx, STEEL);
+      ctx.beginPath();
+      ctx.moveTo(L * 0.83, 0);
+      ctx.lineTo(L * 0.96, 0);
+      ctx.strokeStyle = "rgba(8,10,17,0.4)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      break;
+    }
+
+    case "maul": {
+      // handle
+      rect(ctx, 0, -T * 0.16, L * 0.7, T * 0.32, 4);
+      solid(ctx, WOOD);
+      band(ctx, L * 0.14, T * 0.52, 6, DARK_WOOD);
+      band(ctx, L * 0.3, T * 0.52, 6, DARK_WOOD);
+      // heavy head with metal end caps
+      const hx = L * 0.58;
+      const hw = L * 0.42;
+      const hh = T * 0.84;
+      rect(ctx, hx, -hh, hw, hh * 2, 8);
+      solid(ctx, DARK_STEEL);
+      rect(ctx, hx, -hh, hw * 0.2, hh * 2, 8);
+      solid(ctx, STEEL);
+      rect(ctx, hx + hw * 0.8, -hh, hw * 0.2, hh * 2, 8);
+      solid(ctx, STEEL);
+      for (const sy of [-hh * 0.5, hh * 0.5]) {
+        ctx.beginPath();
+        ctx.arc(hx + hw * 0.5, sy, 4.5, 0, Math.PI * 2);
+        solid(ctx, STEEL);
       }
       break;
     }
+
     default: {
-      bar(ctx, 0, 0, len, 0, thick * 0.4, "#cfd6e6");
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(L, 0);
+      stroke(ctx, T * 0.4, STEEL);
     }
   }
 
