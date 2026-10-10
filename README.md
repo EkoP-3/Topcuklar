@@ -24,7 +24,7 @@ Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlan
 | LANCE    | Şarj olur, rakibe nişan alıp hızla saplanır               |
 | MAUL     | Yavaş ve ağır, çok sert knockback                         |
 
-Silahları kendi görselinizle değiştirmek için `src/assets/weapons/<karakter-id>.png` koyun (kurallar: `src/assets/weapons/README.md`); dosya yoksa vektör çizim kullanılır.
+Silahları kendi görselinizle değiştirmek için `src/assets/weapons/<karakter-id>.png` koyun (piksel sanatı çizimleri için `python3 scripts/prepare-weapon.py <görsel> <karakter-id>` büyütüp döndürüp hazırlar) (kurallar: `src/assets/weapons/README.md`); dosya yoksa vektör çizim kullanılır.
 
 Yeni karakter eklemek: `src/sim/roster/` altına bir dosya ekleyip `index.ts`'e yazmak yeterli.
 

@@ -83,6 +83,7 @@ export function drawWeapon(
   if (img) {
     ctx.save();
     ctx.translate(from, 0);
+    ctx.imageSmoothingEnabled = false;
     const h = L * (img.naturalHeight / img.naturalWidth);
     ctx.drawImage(img, 0, -h / 2, L, h);
     ctx.restore();
@@ -261,6 +262,79 @@ export function drawWeapon(
         ctx.arc(hx + hw * 0.5, sy, 4.5, 0, Math.PI * 2);
         solid(ctx, STEEL);
       }
+      break;
+    }
+
+    case "axe": {
+      rect(ctx, 0, -T * 0.14, L * 0.78, T * 0.28, 4);
+      solid(ctx, WOOD);
+      band(ctx, L * 0.14, T * 0.5, 6, DARK_WOOD);
+      band(ctx, L * 0.3, T * 0.5, 6, DARK_WOOD);
+      // broad blade
+      ctx.beginPath();
+      ctx.moveTo(L * 0.6, -T * 0.2);
+      ctx.lineTo(L * 0.7, -T * 0.95);
+      ctx.quadraticCurveTo(L * 1.02, -T * 0.75, L * 1.0, 0);
+      ctx.quadraticCurveTo(L * 1.02, T * 0.75, L * 0.7, T * 0.95);
+      ctx.lineTo(L * 0.6, T * 0.2);
+      ctx.closePath();
+      solid(ctx, DARK_STEEL);
+      break;
+    }
+
+    case "pickaxe": {
+      rect(ctx, 0, -T * 0.15, L * 0.85, T * 0.3, 4);
+      solid(ctx, WOOD);
+      band(ctx, L * 0.2, T * 0.52, 6, DARK_WOOD);
+      // curved double-ended head across the shaft
+      ctx.beginPath();
+      ctx.moveTo(L * 0.64, -T * 1.15);
+      ctx.quadraticCurveTo(L * 1.0, -T * 0.55, L * 0.9, 0);
+      ctx.quadraticCurveTo(L * 1.0, T * 0.55, L * 0.64, T * 1.15);
+      ctx.quadraticCurveTo(L * 0.8, 0, L * 0.64, -T * 1.15);
+      ctx.closePath();
+      solid(ctx, GLOW);
+      break;
+    }
+
+    case "sword": {
+      // pommel, grip, crossguard, blade
+      ctx.beginPath();
+      ctx.arc(L * 0.04, 0, T * 0.32, 0, Math.PI * 2);
+      solid(ctx, DARK_GOLD);
+      rect(ctx, L * 0.04, -T * 0.16, L * 0.2, T * 0.32, 3);
+      solid(ctx, DARK_WOOD);
+      rect(ctx, L * 0.24, -T * 0.95, L * 0.05, T * 1.9, 4);
+      solid(ctx, GOLD);
+      ctx.beginPath();
+      ctx.moveTo(L * 0.29, -T * 0.36);
+      ctx.lineTo(L * 0.9, -T * 0.3);
+      ctx.lineTo(L, 0);
+      ctx.lineTo(L * 0.9, T * 0.3);
+      ctx.lineTo(L * 0.29, T * 0.36);
+      ctx.closePath();
+      solid(ctx, "#8fe3ee");
+      break;
+    }
+
+    case "mace": {
+      rect(ctx, 0, -T * 0.14, L * 0.7, T * 0.28, 4);
+      solid(ctx, DARK_WOOD);
+      band(ctx, L * 0.16, T * 0.46, 6, STEEL);
+      // spiked head
+      const cx = L * 0.82;
+      const r = T * 0.55;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rr = i % 2 === 0 ? r * 1.45 : r;
+        ctx.lineTo(cx + Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      solid(ctx, DARK_STEEL);
+      ctx.beginPath();
+      ctx.arc(cx, 0, r * 0.45, 0, Math.PI * 2);
+      solid(ctx, STEEL);
       break;
     }
 

@@ -377,6 +377,8 @@ export class World {
           this.freeze = Math.max(this.freeze, 0.03);
           clashA = i;
           clashB = j;
+          a.ability?.onClash?.(this, a, b);
+          b.ability?.onClash?.(this, b, a);
           this.emit({
             type: "clash",
             x: (sa.x1 + sb.x1) / 2,

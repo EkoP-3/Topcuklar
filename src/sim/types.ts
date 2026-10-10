@@ -43,6 +43,8 @@ export interface Ability {
   onTick?(world: World, self: Fighter, dt: number): void;
   onWallHit?(world: World, self: Fighter, hit: WallHit): void;
   onHitDealt?(world: World, self: Fighter, target: Fighter, damage: number): void;
+  /** Called when this fighter's weapon crosses an enemy weapon. */
+  onClash?(world: World, self: Fighter, other: Fighter): void;
   damageMultiplier?(self: Fighter): number;
   knockbackMultiplier?(self: Fighter): number;
   /** Short status text for the telemetry panel, e.g. "[CHARGING]". */
