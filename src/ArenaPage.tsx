@@ -3,6 +3,7 @@ import { createRng } from "./sim/rng";
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
 import { SIDES } from "./sim/render/palette";
+import { Sfx } from "./sim/render/sfx";
 import { ROSTER, findDef } from "./sim/roster";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
@@ -33,6 +34,14 @@ const AUTO_NEXT_DELAY = 2.6;
 /** Unknown ids in the address bar fall back to a random pick instead of an empty select. */
 function knownOrRandom(id: string | undefined): string {
   return id && findDef(id) ? id : RANDOM;
+}
+
+function readMuted(): boolean {
+  try {
+    return localStorage.getItem("arena-muted") === "1";
+  } catch {
+    return false;
+  }
 }
 
 function randomSeed(): number {
@@ -70,8 +79,44 @@ export function ArenaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef<World | null>(null);
   const fxRef = useRef<Fx | null>(null);
+  const sfxRef = useRef<Sfx | null>(null);
+  const [muted, setMuted] = useState(readMuted);
+  const [audioReady, setAudioReady] = useState(false);
+  const mutedRef = useRef(muted);
   const live = useRef({ paused, speed, auto, busy: false });
   const nextMatch = useRef(() => setSeed(randomSeed()));
+
+  // Browsers only allow sound after the first tap/click, so audio starts then.
+  useEffect(() => {
+    const start = () => {
+      if (!sfxRef.current) {
+        try {
+          sfxRef.current = new Sfx(new AudioContext());
+        } catch {
+          return;
+        }
+      }
+      sfxRef.current.setMuted(mutedRef.current);
+      sfxRef.current.resume();
+      setAudioReady(true);
+    };
+    window.addEventListener("pointerdown", start);
+    window.addEventListener("keydown", start);
+    return () => {
+      window.removeEventListener("pointerdown", start);
+      window.removeEventListener("keydown", start);
+    };
+  }, []);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+    sfxRef.current?.setMuted(muted);
+    try {
+      localStorage.setItem("arena-muted", muted ? "1" : "0");
+    } catch {
+      // storage unavailable: the choice just is not remembered
+    }
+  }, [muted]);
 
   useEffect(() => {
     live.current = { paused, speed, auto, busy: recProgress !== null };
@@ -133,6 +178,7 @@ export function ArenaPage() {
 
       if (world && fx && !busy) {
         if (!isPaused) {
+          fx.sfx = sfxRef.current;
           world.advance(dt * rate);
           fx.consume(world);
           fx.update(dt * rate, world);
@@ -308,6 +354,17 @@ export function ArenaPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button className={buttonClass} onClick={() => setMuted((m) => !m)}>
+              {muted ? "🔇 Ses kapalı" : "🔊 Ses açık"}
+            </button>
+            {!audioReady && !muted && (
+              <span className="text-xs text-neutral-500">
+                Tarayıcı sesi bir dokunuştan sonra açar; sayfaya bir kez tıklayın.
+              </span>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-sm text-neutral-300">

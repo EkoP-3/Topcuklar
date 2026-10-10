@@ -11,7 +11,7 @@ bun install      # veya: npm install
 bun run dev      # http://localhost:5173
 ```
 
-Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. **"Bu maçı video olarak kaydet"** düğmesi maçı baştan oynatıp 1080×1920 video olarak (Chrome/Edge/Safari) kendiliğinden indirir. Bir maçı link olarak paylaşmak için: `/?a=drill&b=chime&seed=7`.
+Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. **"Bu maçı video olarak kaydet"** düğmesi maçı baştan oynatıp 1080×1920 video olarak (Chrome/Edge/Safari) kendiliğinden indirir. Ses efektleri tarayıcıda üretilir (dosya gerekmez), kaydedilen videoya da girer; tarayıcılar sesi ancak bir tıklamadan sonra açtığı için sayfaya bir kez tıklamak gerekir. Bir maçı link olarak paylaşmak için: `/?a=drill&b=chime&seed=7`.
 
 ## Karakterler
 

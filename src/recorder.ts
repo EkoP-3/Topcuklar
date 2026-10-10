@@ -1,5 +1,6 @@
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
+import { Sfx } from "./sim/render/sfx";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 
@@ -27,9 +28,9 @@ interface Format {
 }
 
 const FORMATS: Format[] = [
-  { mime: "video/mp4;codecs=avc1", ext: "mp4" },
-  { mime: "video/webm;codecs=vp9", ext: "webm" },
-  { mime: "video/webm;codecs=vp8", ext: "webm" },
+  { mime: "video/mp4;codecs=avc1,mp4a.40.2", ext: "mp4" },
+  { mime: "video/webm;codecs=vp9,opus", ext: "webm" },
+  { mime: "video/webm;codecs=vp8,opus", ext: "webm" },
   { mime: "video/webm", ext: "webm" },
 ];
 
@@ -81,6 +82,18 @@ export function recordMatch(opts: RecordOptions): Recording {
     renderer.draw(world, fx);
 
     const stream = canvas.captureStream(60);
+
+    // Sound: the same effects the preview plays, recorded into the clip.
+    let audioContext: AudioContext | null = null;
+    try {
+      audioContext = new AudioContext();
+      const sfx = new Sfx(audioContext);
+      sfx.resume();
+      sfx.tap.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      fx.sfx = sfx;
+    } catch {
+      audioContext = null;
+    }
     const recorder = new MediaRecorder(stream, {
       mimeType: format.mime,
       videoBitsPerSecond: 8_000_000,
@@ -103,6 +116,7 @@ export function recordMatch(opts: RecordOptions): Recording {
         cancelAnimationFrame(raf);
         recorder.onstop = () => {
           stream.getTracks().forEach((t) => t.stop());
+          void audioContext?.close();
           if (discard) {
             resolve(null);
             return;

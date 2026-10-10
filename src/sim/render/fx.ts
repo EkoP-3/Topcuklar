@@ -3,6 +3,7 @@ import { createRng, type Rng } from "../rng";
 import type { SimEvent } from "../types";
 import type { World } from "../world";
 import { SIDES } from "./palette";
+import type { Sfx } from "./sfx";
 
 interface Particle {
   x: number;
@@ -52,6 +53,8 @@ export class Fx {
   /** White screen flash, 0..1. */
   flash = 0;
   private shake = 0;
+  /** Optional sound output; events are turned into sound as they are handled. */
+  sfx: Sfx | null = null;
   private readonly rng: Rng;
 
   constructor(seed: number) {
@@ -134,6 +137,7 @@ export class Fx {
   }
 
   private handle(world: World, e: SimEvent): void {
+    this.sfx?.play(world, e);
     switch (e.type) {
       case "hit": {
         const attacker = world.fighters[e.attacker];
