@@ -30,6 +30,11 @@ const RANDOM = "random";
 /** Seconds to show the winner before the next match starts (when auto-play is on). */
 const AUTO_NEXT_DELAY = 2.6;
 
+/** Unknown ids in the address bar fall back to a random pick instead of an empty select. */
+function knownOrRandom(id: string | undefined): string {
+  return id && findDef(id) ? id : RANDOM;
+}
+
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
@@ -49,8 +54,8 @@ export function ArenaPage() {
     document.title = "Arena — Silah Savaşı Prototipi";
   }, []);
 
-  const [a, setA] = useState(search.a ?? RANDOM);
-  const [b, setB] = useState(search.b ?? RANDOM);
+  const [a, setA] = useState(knownOrRandom(search.a));
+  const [b, setB] = useState(knownOrRandom(search.b));
   const [seed, setSeed] = useState(search.seed ?? 1);
   const [restarts, setRestarts] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -104,7 +109,17 @@ export function ArenaPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const renderer = createRenderer(canvas);
+    // Draw at the real on-screen resolution (sharp on phones) without wasting work.
+    const pickQuality = () =>
+      Math.min(1, Math.max(0.5, (canvas.clientWidth * (window.devicePixelRatio || 1)) / 1080));
+    let shownWidth = canvas.clientWidth;
+    let renderer = createRenderer(canvas, pickQuality());
+    const onResize = () => {
+      if (Math.abs(canvas.clientWidth - shownWidth) < 8) return;
+      shownWidth = canvas.clientWidth;
+      renderer = createRenderer(canvas, pickQuality());
+    };
+    window.addEventListener("resize", onResize);
     let raf = 0;
     let last = performance.now();
     let overFor = 0;
@@ -138,7 +153,10 @@ export function ArenaPage() {
     };
 
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
 
   const controlClass =

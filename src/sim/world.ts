@@ -340,7 +340,9 @@ export class World {
   /** Weapon vs weapon (clash) first, then weapon vs body (damage). */
   private weapons(): void {
     const fs = this.fighters;
-    const clashed = new Set<number>();
+    // At most one clash can happen per step, so two indices are enough.
+    let clashA = -1;
+    let clashB = -1;
 
     if (this.clashCooldown <= 0) {
       for (let i = 0; i < fs.length && this.clashCooldown <= 0; i++) {
@@ -349,6 +351,9 @@ export class World {
         for (let j = i + 1; j < fs.length; j++) {
           const b = fs[j];
           if (!b || !b.alive || b.noClash || a.side === b.side) continue;
+          // Cheap rejection: weapons can only touch when the fighters are close enough.
+          const near = a.radius + a.def.reach + b.radius + b.def.reach + 40;
+          if ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 > near * near) continue;
           const sa = weaponSegment(a);
           const sb = weaponSegment(b);
           const reach = (a.def.thickness + b.def.thickness) / 2;
@@ -370,7 +375,8 @@ export class World {
           b.vy += dy * 140;
           this.clashCooldown = CLASH_COOLDOWN;
           this.freeze = Math.max(this.freeze, 0.03);
-          clashed.add(i * 64 + j);
+          clashA = i;
+          clashB = j;
           this.emit({
             type: "clash",
             x: (sa.x1 + sb.x1) / 2,
@@ -385,7 +391,10 @@ export class World {
       if (!a.alive) continue;
       for (const t of fs) {
         if (!t.alive || a.side === t.side || (a.hitLock[t.index] ?? 0) > 0) continue;
-        if (clashed.has(Math.min(a.index, t.index) * 64 + Math.max(a.index, t.index))) continue;
+        if (Math.min(a.index, t.index) === clashA && Math.max(a.index, t.index) === clashB)
+          continue;
+        const near = a.radius + a.def.reach + t.radius + a.def.thickness;
+        if ((t.x - a.x) ** 2 + (t.y - a.y) ** 2 > near * near) continue;
         const seg = weaponSegment(a);
         const cp = closestOnSegment(t.x, t.y, seg.x0, seg.y0, seg.x1, seg.y1);
         const reach = t.radius + a.def.thickness / 2;

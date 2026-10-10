@@ -11,7 +11,7 @@ bun install      # veya: npm install
 bun run dev      # http://localhost:5173
 ```
 
-Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. Bir maçı link olarak paylaşmak için: `/?a=drill&b=chime&seed=7`.
+Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. **"Bu maçı video olarak kaydet"** düğmesi maçı baştan oynatıp 1080×1920 video olarak (Chrome/Edge/Safari) kendiliğinden indirir. Bir maçı link olarak paylaşmak için: `/?a=drill&b=chime&seed=7`.
 
 ## Karakterler
 
@@ -23,6 +23,8 @@ Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlan
 | GRAPPLE  | Duvarlardan seken kanca atar, rakibi çeker                |
 | LANCE    | Şarj olur, rakibe nişan alıp hızla saplanır               |
 | MAUL     | Yavaş ve ağır, çok sert knockback                         |
+
+Silahları kendi görselinizle değiştirmek için `src/assets/weapons/<karakter-id>.png` koyun (kurallar: `src/assets/weapons/README.md`); dosya yoksa vektör çizim kullanılır.
 
 Yeni karakter eklemek: `src/sim/roster/` altına bir dosya ekleyip `index.ts`'e yazmak yeterli.
 

@@ -1,4 +1,5 @@
 import { OUTLINE } from "./palette";
+import { weaponImage } from "./weapon-images";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -77,6 +78,17 @@ export function drawWeapon(
 ): void {
   const L = to - from;
   const T = thick;
+
+  const img = weaponImage(id);
+  if (img) {
+    ctx.save();
+    ctx.translate(from, 0);
+    const h = L * (img.naturalHeight / img.naturalWidth);
+    ctx.drawImage(img, 0, -h / 2, L, h);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(from, 0);
   ctx.lineJoin = "round";
