@@ -54,6 +54,8 @@ for (const d of ROSTER) totals.set(d.id, { wins: 0, games: 0 });
 
 let timeouts = 0;
 let closeFinishes = 0;
+let reached15 = 0;
+let reached30 = 0;
 let games = 0;
 let durationSum = 0;
 
@@ -78,6 +80,8 @@ for (const row of ROSTER) {
       games++;
       durationSum += world.time;
       if (world.time >= MATCH_LIMIT) timeouts++;
+      if (world.time >= 15) reached15++;
+      if (world.time >= 30) reached30++;
       const winner = world.fighters[world.winner];
       if (winner && winner.hp / winner.maxHp <= 0.15) closeFinishes++;
     }
@@ -100,6 +104,10 @@ console.log(
   `\nmatches: ${games}, avg fight length: ${(durationSum / games).toFixed(1)}s, ` +
     `timeouts: ${timeouts} (${((timeouts / games) * 100).toFixed(1)}%), ` +
     `winner finished <=15% HP: ${((closeFinishes / games) * 100).toFixed(1)}%`,
+);
+console.log(
+  `reached 15s: ${((reached15 / games) * 100).toFixed(1)}%, ` +
+    `reached 30s: ${((reached30 / games) * 100).toFixed(1)}%`,
 );
 
 if (failed) process.exit(1);

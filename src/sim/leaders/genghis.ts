@@ -1,18 +1,23 @@
 import type { FighterDef } from "../types";
 import { fireProjectile, leadAngle } from "../units";
-import { skill } from "./kit";
+import { fan, skill } from "./kit";
 
 const ARROW_SPEED = 1050;
-const SPREAD = 0.2;
+const ARROWS = [3, 5, 7];
+const ABILITY = { name: "HORSE ARCHERS", text: "Fast rider, fires arrow volleys" };
 
 export const genghis: FighterDef = {
   id: "genghis",
   name: "GENGHIS KHAN",
-  description: "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi üç oklu yaylım atar.",
+  description:
+    "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi oklu yaylım atar: önce 3, 15. saniyede 5, 30. saniyede 7 ok.",
   era: "c. 1162–1227",
   fact: "Founded the Mongol Empire, later the largest land empire in history.",
-  hp: 95,
-  radius: 42,
+  flag: "mongolia",
+  ability: ABILITY,
+  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 29 },
+  hp: 950,
+  radius: 52,
   mass: 0.9,
   baseSpeed: 540,
   spin: 0,
@@ -21,22 +26,23 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 3,
+  contactDamage: 21,
   contactInterval: 0.5,
   createAbility: skill({
-    label: "HORSE ARCHERS",
+    label: ABILITY.name,
+    quiet: true,
     firstAt: 1.2,
     cooldown: 1.9,
-    cast(world, self) {
+    cast(world, self, level) {
       const enemy = world.nearestEnemy(self);
       if (!enemy) return;
-      const a = leadAngle(self, enemy, ARROW_SPEED);
-      for (const off of [-SPREAD, 0, SPREAD]) {
-        fireProjectile(world, self, a + off, {
+      const count = ARROWS[level - 1] ?? 3;
+      for (const a of fan(leadAngle(self, enemy, ARROW_SPEED), count, 0.4 / Math.sqrt(count))) {
+        fireProjectile(world, self, a, {
           style: "arrow",
           speed: ARROW_SPEED,
-          radius: 7,
-          damage: 3.5,
+          radius: 9,
+          damage: 29,
           knockback: 60,
           blast: 0,
           poison: 0,

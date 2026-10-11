@@ -49,11 +49,6 @@ interface Shockwave {
 const MAX_PARTICLES = 1600;
 const POISON_GREEN = "#6ee65a";
 
-const SKILL_TEXT: Record<string, string> = {
-  legion: "LEGIONS!",
-  elephant: "WAR ELEPHANT!",
-};
-
 /**
  * Purely cosmetic effects (sparks, floating numbers, screen shake). It reads the
  * simulation's events but never feeds anything back into it.
@@ -208,7 +203,7 @@ export class Fx {
             target.y - target.radius - 14,
             `-${e.damage}`,
             "#ffffff",
-            36 + Math.min(28, e.damage * 1.3),
+            36 + Math.min(28, (e.damage / target.maxHp) * 130),
           );
         }
         this.addShake(4 + e.damage * 0.9);
@@ -261,9 +256,6 @@ export class Fx {
       case "summon": {
         const side = SIDES[world.fighters[e.fighter]?.side ?? 0];
         this.burst(e.x, e.y, 14, [side.light, "#ffffff"], 300, 0.4, 8);
-        const f = world.fighters[e.fighter];
-        const label = SKILL_TEXT[e.style];
-        if (f && label) this.text(f.x, f.y - f.radius - 30, label, side.light, 44, 0.9);
         break;
       }
       case "shoot": {
@@ -280,7 +272,6 @@ export class Fx {
           12,
         );
         this.addShake(big ? 16 : 6);
-        if (big) this.text(f.x, f.y - f.radius - 30, "GREAT BOMBARD!", "#ffb15c", 44, 0.9);
         break;
       }
       case "blast":
@@ -305,7 +296,14 @@ export class Fx {
         const f = world.fighters[e.fighter];
         if (!f) break;
         this.burst(f.x, f.y, 18, ["#ffd45e", "#fff3a0", "#ffffff"], 340, 0.45, 8);
-        this.text(f.x, f.y - f.radius - 30, "HOLD THE LINE!", "#ffd45e", 44, 0.9);
+        break;
+      }
+      case "skill": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        const color = SIDES[f.side].light;
+        if (e.small) this.text(f.x, f.y - f.radius - 34, e.name, color, 30, 0.6);
+        else this.text(f.x, f.y - f.radius - 34, `${e.name}!`, color, 46, 1);
         break;
       }
       case "stun": {

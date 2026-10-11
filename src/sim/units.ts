@@ -148,7 +148,7 @@ function updateUnit(world: World, u: UnitHazard, dt: number): void {
     const back = f.def.contactDamage ?? 0;
     if (back > 0) {
       const mul = f.ability?.damageMultiplier?.(f) ?? 1;
-      damageUnit(world, u, back * mul * VS_UNIT_DAMAGE, cx, cy);
+      damageUnit(world, u, f, back * mul * VS_UNIT_DAMAGE, cx, cy);
     }
   }
 
@@ -164,7 +164,7 @@ function updateUnit(world: World, u: UnitHazard, dt: number): void {
     const other = world.fighters[o.owner];
     if (!other || other.side === owner.side || u.lock > 0) continue;
     u.lock = u.hitInterval;
-    damageUnit(world, o, u.damage, (u.x + o.x) / 2, (u.y + o.y) / 2);
+    damageUnit(world, o, owner, u.damage, (u.x + o.x) / 2, (u.y + o.y) / 2);
   }
 }
 
@@ -215,7 +215,7 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
   for (const o of world.hazards) {
     if (o.kind !== "unit" || o.ttl <= 0 || !overlap(p, o)) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
-    damageUnit(world, o, p.damage, p.x, p.y);
+    damageUnit(world, o, owner, p.damage, p.x, p.y);
     explode(world, owner, p, null);
     p.ttl = 0;
     return;
@@ -239,14 +239,21 @@ function explode(world: World, owner: Fighter, p: ProjectileHazard, direct: Figh
     if (o.kind !== "unit" || o.ttl <= 0) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) - o.radius <= p.blast) {
-      damageUnit(world, o, p.damage * 0.5, o.x, o.y);
+      damageUnit(world, o, owner, p.damage * 0.5, o.x, o.y);
     }
   }
 }
 
-function damageUnit(world: World, u: UnitHazard, amount: number, x: number, y: number): void {
+function damageUnit(
+  world: World,
+  u: UnitHazard,
+  attacker: Fighter,
+  amount: number,
+  x: number,
+  y: number,
+): void {
   if (world.phase !== "fight" || u.ttl <= 0) return;
-  u.hp -= Math.max(1, Math.round(amount * world.enrage));
+  u.hp -= Math.max(1, Math.round(amount * world.power(attacker)));
   u.hurt = 0.15;
   world.emit({ type: "bump", x, y, strength: 500 });
   if (u.hp <= 0) {

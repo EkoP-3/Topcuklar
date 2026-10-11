@@ -3,16 +3,20 @@ import type { FighterDef } from "../types";
 import { aim, skill } from "./kit";
 
 const DASH_SPEED = 1500;
+const ABILITY = { name: "COMPANION CHARGE", text: "Aims, then charges at full gallop" };
 
 export const alexander: FighterDef = {
   id: "alexander",
   name: "ALEXANDER",
   description:
-    "Büyük İskender. Belli aralıklarla durup nişan alır ve Hetairoi süvarisi gibi rakibe hücum eder; hücumda çok sert vurur.",
+    "Büyük İskender. Belli aralıklarla durup nişan alır ve Hetairoi süvarisi gibi rakibe hücum eder; hücumda çok sert vurur. 15. saniyede art arda 2, 30. saniyede 3 hücum yapar.",
   era: "356–323 BC",
   fact: "Never lost a battle; his empire reached from Greece to India.",
-  hp: 100,
-  radius: 46,
+  flag: "vergina",
+  ability: ABILITY,
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 104 },
+  hp: 1000,
+  radius: 58,
   mass: 1.1,
   baseSpeed: 440,
   spin: 0,
@@ -21,14 +25,15 @@ export const alexander: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 4.7,
+  contactDamage: 33,
   contactInterval: 0.45,
   createAbility: skill({
-    label: "COMPANION CHARGE",
+    label: ABILITY.name,
     firstAt: 1.8,
     cooldown: 2.5,
     windup: 0.5,
     active: 0.45,
+    charges: (level) => level,
     onWindup(world, self) {
       self.speedMul = 0.2;
       self.relax = 6;

@@ -35,6 +35,16 @@ export interface FighterDef {
   era?: string;
   /** History mode: one-line English fact shown during the match. */
   fact?: string;
+  /** History mode: flag or banner id drawn next to the name (see render/flags.ts). */
+  flag?: string;
+  /** History mode: signature move, shown in the top panel. */
+  ability?: { name: string; text: string };
+  /**
+   * History mode: all damage this fighter deals grows by `perSecond` (fraction) every
+   * full second of the fight; replaces the generic enrage. `stat`/`base` describe the
+   * signature number shown growing in the bottom panel, e.g. "BOMBARD DMG" 170.
+   */
+  growth?: { perSecond: number; stat: string; base: number };
 }
 
 export interface WallHit {
@@ -59,6 +69,8 @@ export interface Ability {
   knockbackMultiplier?(self: Fighter): number;
   /** Short status text for the telemetry panel, e.g. "[CHARGING]". */
   hud?(self: Fighter): string;
+  /** Timed signature move state, for the cooldown bar (history mode). */
+  skillState?(): { progress: number; ready: boolean; level: number };
   /** 0..n, lets the renderer tint the weapon as it levels up. */
   visualLevel?(): number;
 }
@@ -209,6 +221,7 @@ export type SimEvent =
   | { type: "blast"; x: number; y: number; radius: number }
   | { type: "unitDown"; x: number; y: number; side: 0 | 1 }
   | { type: "shield"; fighter: number }
+  | { type: "skill"; fighter: number; name: string; small: boolean }
   | { type: "stun"; fighter: number }
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }

@@ -11,7 +11,9 @@ import type {
 import { ARENA, type World } from "../world";
 import type { Fx } from "./fx";
 import { DISPLAY_FONT, MONO_FONT, OUTLINE, SIDES } from "./palette";
+import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem } from "./emblems";
+import { FLAG_RATIO, drawFlag } from "./flags";
 import { portraitImage } from "./images";
 import { drawWeapon } from "./sprites";
 
@@ -104,8 +106,20 @@ function drawFighterPanel(
 
   ctx.textAlign = align;
   ctx.textBaseline = "alphabetic";
-  fitFont(ctx, f.def.name, 700, 62, w, DISPLAY_FONT);
-  outlinedText(ctx, f.def.name, edgeX, 135, side.main, 9);
+  let nameX = edgeX;
+  if (f.def.flag) {
+    const fh = 50;
+    const fw = fh * FLAG_RATIO;
+    ctx.save();
+    ctx.translate(align === "left" ? edgeX : edgeX - fw, 90);
+    drawFlag(ctx, f.def.flag, fh);
+    ctx.restore();
+    nameX = align === "left" ? edgeX + fw + 16 : edgeX - fw - 16;
+    ctx.textAlign = align;
+    ctx.textBaseline = "alphabetic";
+  }
+  fitFont(ctx, f.def.name, 700, 62, w - Math.abs(nameX - edgeX), DISPLAY_FONT);
+  outlinedText(ctx, f.def.name, nameX, 135, side.main, 9);
 
   const y = 165;
   const h = 40;
@@ -130,6 +144,13 @@ function drawFighterPanel(
   ctx.font = `600 34px ${MONO_FONT}`;
   ctx.fillStyle = "#e8ecf4";
   ctx.fillText(`HP ${Math.max(0, Math.ceil(f.hp))}`, edgeX, 256);
+  if (f.def.era) {
+    // Lifetime on the inner end of the HP bar.
+    ctx.textAlign = align === "left" ? "right" : "left";
+    ctx.font = `600 28px ${MONO_FONT}`;
+    ctx.fillStyle = "rgba(232,236,244,0.6)";
+    ctx.fillText(f.def.era, align === "left" ? x0 + w : x0, 254);
+  }
 
   if (f.def.reach > 0) {
     ctx.save();
@@ -138,10 +159,10 @@ function drawFighterPanel(
     ctx.restore();
     return;
   }
-  // Leaders: medallion + lifetime.
+  // Leaders: medallion + what their move does.
   const mx = align === "left" ? edgeX + 42 : edgeX - 42;
   ctx.save();
-  ctx.translate(mx, 330);
+  ctx.translate(mx, 338);
   ctx.beginPath();
   ctx.arc(0, 0, 42, 0, TAU);
   ctx.fillStyle = side.dark;
@@ -151,12 +172,19 @@ function drawFighterPanel(
   ctx.stroke();
   drawEmblem(ctx, f.def.id, 32);
   ctx.restore();
-  if (f.def.era) {
+  if (f.def.ability) {
+    const tx = align === "left" ? mx + 60 : mx - 60;
+    const maxW = w - 102;
     ctx.textAlign = align;
     ctx.textBaseline = "middle";
-    ctx.font = `600 32px ${MONO_FONT}`;
+    fitFont(ctx, f.def.ability.name, 700, 32, maxW, DISPLAY_FONT);
+    ctx.fillStyle = side.light;
+    ctx.fillText(f.def.ability.name, tx, 312);
+    ctx.font = `500 27px ${DISPLAY_FONT}`;
     ctx.fillStyle = "rgba(232,236,244,0.75)";
-    ctx.fillText(f.def.era, align === "left" ? mx + 60 : mx - 60, 332);
+    wrapText(ctx, f.def.ability.text, maxW)
+      .slice(0, 2)
+      .forEach((line, i) => ctx.fillText(line, tx, 348 + i * 30));
   }
 }
 
@@ -167,6 +195,11 @@ function drawBottomPanel(ctx: Ctx, world: World): void {
   ctx.font = `600 34px ${MONO_FONT}`;
   world.fighters.slice(0, 2).forEach((f, i) => {
     const left = i === 0;
+    const state = f.ability?.skillState?.();
+    if (f.alive && state && f.def.growth) {
+      drawSkillHud(ctx, world, f, state, left);
+      return;
+    }
     ctx.textAlign = left ? "left" : "right";
     ctx.fillStyle = f.alive ? SIDES[f.side].light : "rgba(232,236,244,0.3)";
     const text = f.alive ? (f.ability?.hud?.(f) ?? "").replace(/[[\]]/g, "") : "K.O.";
@@ -174,7 +207,7 @@ function drawBottomPanel(ctx: Ctx, world: World): void {
   });
 
   // History mode: one quick fact per leader.
-  let factY = y + 75;
+  let factY = y + 95;
   ctx.font = `500 30px ${DISPLAY_FONT}`;
   world.fighters.slice(0, 2).forEach((f, i) => {
     if (!f.def.fact) return;
@@ -194,6 +227,53 @@ function drawBottomPanel(ctx: Ctx, world: World): void {
   ctx.font = `500 22px ${MONO_FONT}`;
   ctx.fillStyle = "rgba(232,236,244,0.28)";
   ctx.fillText(`seed ${world.seed}`, W / 2, Math.max(y + 70, factY + 20));
+}
+
+/** Leader HUD: level badge, the growing signature number and a cooldown bar. */
+function drawSkillHud(
+  ctx: Ctx,
+  world: World,
+  f: Fighter,
+  state: { progress: number; ready: boolean; level: number },
+  left: boolean,
+): void {
+  const side = SIDES[f.side];
+  const g = f.def.growth;
+  if (!g) return;
+  const y = 1462;
+  const barW = 420;
+  const x0 = left ? AX : AX + AS - barW;
+
+  // Level badge.
+  const bw = 96;
+  const bx = left ? x0 : x0 + barW - bw;
+  roundRect(ctx, bx, y - 34, bw, 44, 10);
+  ctx.fillStyle = state.level > 1 ? "#ffd45e" : "rgba(255,255,255,0.12)";
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 28px ${MONO_FONT}`;
+  ctx.fillStyle = state.level > 1 ? OUTLINE : "#e8ecf4";
+  ctx.fillText(`LV ${state.level}`, bx + bw / 2, y - 11);
+
+  // Signature number, growing every second.
+  ctx.textAlign = left ? "left" : "right";
+  ctx.font = `700 30px ${MONO_FONT}`;
+  ctx.fillStyle = side.light;
+  const value = Math.round(g.base * world.power(f));
+  ctx.fillText(`${g.stat} ${value}`, left ? bx + bw + 16 : bx - 16, y - 11);
+
+  // Cooldown bar.
+  const by = y + 22;
+  roundRect(ctx, x0, by, barW, 14, 7);
+  ctx.fillStyle = "rgba(255,255,255,0.1)";
+  ctx.fill();
+  const p = clamp(state.progress, 0, 1);
+  if (p > 0) {
+    roundRect(ctx, left ? x0 : x0 + barW * (1 - p), by, barW * p, 14, 7);
+    ctx.fillStyle = state.ready ? "#ffd45e" : side.main;
+    ctx.fill();
+  }
 }
 
 // --- arena -----------------------------------------------------------------------
@@ -267,7 +347,10 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   for (const t of fx.texts) {
     ctx.globalAlpha = clamp(t.life / t.max, 0, 1);
     ctx.font = `800 ${Math.round(t.size / K)}px ${MONO_FONT}`;
-    outlinedText(ctx, t.text, t.x, t.y, t.color, 8 / K);
+    // Keep callouts fully inside the arena.
+    const half = ctx.measureText(t.text).width / 2 + 8;
+    const x = half * 2 < ARENA ? clamp(t.x, half, ARENA - half) : ARENA / 2;
+    outlinedText(ctx, t.text, x, Math.max(24, t.y), t.color, 8 / K);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -333,6 +416,14 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
       drawEmblem(ctx, f.def.id, f.radius * 0.6);
       ctx.restore();
     }
+  }
+
+  if (leader && f.def.flag) {
+    const fh = f.radius * 0.36;
+    ctx.save();
+    ctx.translate((-fh * FLAG_RATIO) / 2, -f.radius - fh * 0.55);
+    drawFlag(ctx, f.def.flag, fh);
+    ctx.restore();
   }
 
   if (f.poison > 0) {
@@ -429,6 +520,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
   ctx.lineJoin = "round";
   switch (p.style) {
     case "arrow": {
+      ctx.scale(p.radius / 7, p.radius / 7);
       ctx.beginPath();
       ctx.moveTo(-34, 0);
       ctx.lineTo(8, 0);
@@ -480,6 +572,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       break;
     }
     case "asp": {
+      ctx.scale(p.radius / 12, p.radius / 12);
       ctx.beginPath();
       for (let i = 0; i <= 12; i++) {
         const x = -i * 4;
@@ -625,13 +718,23 @@ function drawBanner(ctx: Ctx, world: World): void {
     case "intro":
       drawMatchCard(ctx, world);
       return;
-    case "fight":
+    case "fight": {
+      const lv = levelBanner(world);
+      if (lv) {
+        text = `LEVEL ${lv.level}`;
+        size = 150;
+        color = "#ffd45e";
+        t = lv.t;
+        alpha = 1 - clamp((lv.t - 0.8) / 0.4, 0, 1);
+        break;
+      }
       if (world.phaseTime >= 0.7) return;
       text = "FIGHT!";
       size = 180;
       color = "#ffd45e";
       alpha = 1 - clamp((world.phaseTime - 0.4) / 0.3, 0, 1);
       break;
+    }
     case "ko":
       text = world.fighters.some((f) => !f.alive) ? "K.O." : "TIME UP";
       size = 200;
@@ -660,7 +763,17 @@ function drawBanner(ctx: Ctx, world: World): void {
   ctx.restore();
 }
 
-/** Intro: both names in their team colours with "VS" between them. */
+/** "LEVEL 2" banner for 1.2 s after each level-up time (history mode only). */
+function levelBanner(world: World): { level: number; t: number } | null {
+  if (!world.fighters.some((f) => f.def.growth)) return null;
+  for (let i = 0; i < LEVEL_TIMES.length; i++) {
+    const t = world.time - (LEVEL_TIMES[i] ?? 0);
+    if (t >= 0 && t < 1.2) return { level: i + 2, t };
+  }
+  return null;
+}
+
+/** Intro: both names (with flags) in their team colours and "VS" between them. */
 function drawMatchCard(ctx: Ctx, world: World): void {
   const [a, b] = world.fighters;
   if (!a || !b) return;
@@ -670,13 +783,29 @@ function drawMatchCard(ctx: Ctx, world: World): void {
   ctx.scale(s, s);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  fitFont(ctx, a.def.name, 800, 120, AS - 80, DISPLAY_FONT);
-  outlinedText(ctx, a.def.name, 0, -150, SIDES[a.side].main, 16);
+  cardName(ctx, a, -150);
+  ctx.textAlign = "center";
   ctx.font = `800 96px ${DISPLAY_FONT}`;
   outlinedText(ctx, "VS", 0, 0, "#f4f6fb", 14);
-  fitFont(ctx, b.def.name, 800, 120, AS - 80, DISPLAY_FONT);
-  outlinedText(ctx, b.def.name, 0, 150, SIDES[b.side].main, 16);
+  cardName(ctx, b, 150);
   ctx.restore();
+}
+
+function cardName(ctx: Ctx, f: Fighter, y: number): void {
+  const fh = 76;
+  const fw = f.def.flag ? fh * FLAG_RATIO + 26 : 0;
+  fitFont(ctx, f.def.name, 800, 120, AS - 80 - fw, DISPLAY_FONT);
+  const total = fw + ctx.measureText(f.def.name).width;
+  const x = -total / 2;
+  if (f.def.flag) {
+    ctx.save();
+    ctx.translate(x, y - fh / 2);
+    drawFlag(ctx, f.def.flag, fh);
+    ctx.restore();
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  outlinedText(ctx, f.def.name, x + fw, y, SIDES[f.side].main, 16);
 }
 
 // --- overlay ---------------------------------------------------------------------

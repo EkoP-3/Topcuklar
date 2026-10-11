@@ -1,19 +1,23 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
 import { fireProjectile, leadAngle } from "../units";
-import { aim, skill } from "./kit";
+import { aim, fan, skill } from "./kit";
 
 const BALL_SPEED = 760;
+const ABILITY = { name: "GREAT BOMBARD", text: "Giant cannonball that explodes" };
 
 export const mehmed: FighterDef = {
   id: "mehmed",
   name: "MEHMED II",
   description:
-    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev bir gülle atar; gülle çarptığı yerde patlar.",
+    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
   era: "1432–1481",
   fact: "Took Constantinople in 1453 with the help of giant bombards.",
-  hp: 105,
-  radius: 47,
+  flag: "turkey",
+  ability: ABILITY,
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 104 },
+  hp: 1050,
+  radius: 59,
   mass: 1.2,
   baseSpeed: 420,
   spin: 0,
@@ -22,10 +26,10 @@ export const mehmed: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 3.5,
+  contactDamage: 24,
   contactInterval: 0.5,
   createAbility: skill({
-    label: "GREAT BOMBARD",
+    label: ABILITY.name,
     firstAt: 2.2,
     cooldown: 3.4,
     windup: 0.8,
@@ -37,23 +41,25 @@ export const mehmed: FighterDef = {
     whileWindup(world, self) {
       self.angle = aim(world, self);
     },
-    cast(world, self) {
+    cast(world, self, level) {
       self.speedMul = 1;
       self.relax = DEFAULT_RELAX;
       const enemy = world.nearestEnemy(self);
       const a = enemy ? leadAngle(self, enemy, BALL_SPEED) : self.angle;
-      fireProjectile(world, self, a, {
-        style: "bombard",
-        speed: BALL_SPEED,
-        radius: 22,
-        damage: 17,
-        knockback: 600,
-        blast: 110,
-        poison: 0,
-        poisonDps: 0,
-        bounces: 0,
-        ttl: 3,
-      });
+      for (const angle of fan(a, level, 0.38)) {
+        fireProjectile(world, self, angle, {
+          style: "bombard",
+          speed: BALL_SPEED,
+          radius: 27,
+          damage: 104,
+          knockback: 600,
+          blast: 130,
+          poison: 0,
+          poisonDps: 0,
+          bounces: 0,
+          ttl: 3,
+        });
+      }
       // Recoil.
       self.vx -= Math.cos(a) * 500;
       self.vy -= Math.sin(a) * 500;

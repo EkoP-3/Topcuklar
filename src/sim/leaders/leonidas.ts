@@ -1,15 +1,21 @@
 import type { FighterDef } from "../types";
-import { steerToward, skill } from "./kit";
+import { skill, steerToward } from "./kit";
+
+const SHIELD_TIME = [2.2, 3, 4];
+const ABILITY = { name: "HOLD THE LINE", text: "Shield up: -60% damage, hard bash" };
 
 export const leonidas: FighterDef = {
   id: "leonidas",
   name: "LEONIDAS",
   description:
-    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırır: aldığı hasar %60 azalır, kalkanla çarptığında sert vurur.",
+    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırıp rakibe yürür: aldığı hasar %60 azalır, kalkanla sert vurur. Kalkan önce 2,2 sn, 15. saniyede 3 sn, 30. saniyede 4 sn sürer.",
   era: "c. 540–480 BC",
   fact: "Led the 300 Spartans at Thermopylae in 480 BC.",
-  hp: 120,
-  radius: 48,
+  flag: "greece",
+  ability: ABILITY,
+  growth: { perSecond: 0.015, stat: "BASH DMG", base: 89 },
+  hp: 1200,
+  radius: 60,
   mass: 1.4,
   baseSpeed: 420,
   spin: 0,
@@ -18,13 +24,13 @@ export const leonidas: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 5.5,
+  contactDamage: 41,
   contactInterval: 0.45,
   createAbility: skill({
-    label: "HOLD THE LINE",
+    label: ABILITY.name,
     firstAt: 2,
     cooldown: 3.8,
-    active: 2.2,
+    active: (level) => SHIELD_TIME[level - 1] ?? 2.2,
     cast(world, self) {
       self.damageTakenMul = 0.4;
       self.shielded = true;

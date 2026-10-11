@@ -20,6 +20,8 @@ const MAX_SPEED = 1900;
 export const DEFAULT_RELAX = 2.2;
 const HURT_FLASH = 0.18;
 const CLASH_COOLDOWN = 0.2;
+/** Seconds between poison damage ticks. */
+const POISON_TICK = 0.25;
 /** Stunned fighters cruise at this fraction of their speed. */
 const STUN_SLOW = 0.3;
 const MAX_STEPS_PER_ADVANCE = 96;
@@ -123,6 +125,12 @@ export class World {
     return 1 + Math.max(0, this.time - ENRAGE_START) * 0.1;
   }
 
+  /** Multiplier on everything `f` deals: its own growth if it has one, else enrage. */
+  power(f: Fighter): number {
+    const g = f.def.growth;
+    return g ? 1 + g.perSecond * Math.floor(this.time) : this.enrage;
+  }
+
   /**
    * The one place damage is applied: HP, flash, knockback, hit-stop and the event.
    * Returns the damage actually dealt (0 outside the fight phase).
@@ -137,7 +145,7 @@ export class World {
     opts: DamageOptions = {},
   ): number {
     if (this.phase !== "fight" || !target.alive) return 0;
-    const dmg = Math.max(1, Math.round(amount * this.enrage * target.damageTakenMul));
+    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * target.damageTakenMul));
     target.hp -= dmg;
     target.hurt = HURT_FLASH;
     this.damageDealt[attacker.index] = (this.damageDealt[attacker.index] ?? 0) + dmg;
@@ -266,12 +274,13 @@ export class World {
     if (f.stun > 0) f.stun = Math.max(0, f.stun - dt);
     if (f.poison <= 0) return;
     f.poison = Math.max(0, f.poison - dt);
-    // Poison ticks 1 HP at a time, as often as its damage per second allows.
+    // Poison builds up and is dealt in whole points about four times a second.
     f.poisonAcc += f.poisonDps * dt;
-    if (f.poisonAcc >= 1) {
-      f.poisonAcc -= 1;
+    if (f.poisonAcc >= Math.max(1, f.poisonDps * POISON_TICK)) {
+      const amount = Math.floor(f.poisonAcc);
+      f.poisonAcc -= amount;
       const by = this.fighters[f.poisonBy];
-      if (by) this.dealDamage(by, f, 1, f.x, f.y, 0, { dot: true });
+      if (by) this.dealDamage(by, f, amount, f.x, f.y, 0, { dot: true });
     }
     if (f.poison === 0) f.poisonAcc = 0;
   }

@@ -29,6 +29,8 @@ Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlan
 | Mehmed II           | 1432–1481     | Great Bombard: şarjlı dev gülle, çarptığı yerde patlar  |
 | Cleopatra           | 69–30 BC      | Asp: zehirleyen engerek                                 |
 
+Her liderin canı 1000 civarındadır. Liderlerin hasarı her saniye %1,5 artar (alt panelde imza sayısı büyür). 15. saniyede seviye 2, 30. saniyede seviye 3 olurlar; yetenek bir kademe güçlenir (Mehmed II 1→2→3 gülle, Genghis 3→5→7 ok, Caesar 2→3→4 lejyoner, Leonidas'ın kalkanı uzar vb.). İsimlerin yanında bayrak vardır: bilinen yerde bugünkü ülke bayrağı, tartışmalı ya da tanınmayan yerde tarihi sancak (Alexander: Makedon güneşi, Caesar: SPQR).
+
 Portre eklemek için `src/assets/leaders/<lider-id>.png` (veya .jpg/.webp) koyun; top üzerinde daire şeklinde gösterilir. Dosya yoksa kodla çizilmiş simge kullanılır. Yeni lider: `src/sim/leaders/` altına bir dosya (yetenek kalıbı `kit.ts` içindeki `skill()`), sonra `index.ts`.
 
 ## Silah karakterleri
