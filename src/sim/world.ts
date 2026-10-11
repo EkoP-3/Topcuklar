@@ -1,13 +1,14 @@
 import { TAU, clamp, closestOnSegment, segmentDistanceSq } from "./geom";
 import { createRng, type Rng } from "./rng";
 import type { Fighter, FighterDef, Hazard, Phase, SimEvent, WallHit } from "./types";
+import { updateUnits } from "./units";
 
 /** Arena is a square of ARENA x ARENA world units. */
 export const ARENA = 720;
 /** Fixed physics step. Frames are rendered at ~60 fps, so ~4 steps per frame. */
 export const STEP = 1 / 240;
 
-const INTRO_TIME = 1.6;
+const INTRO_TIME = 0.8;
 const KO_TIME = 0.5;
 const KO_TIME_SCALE = 0.3;
 /** Matches that last this long are decided on remaining HP. */
@@ -19,6 +20,8 @@ const MAX_SPEED = 1900;
 export const DEFAULT_RELAX = 2.2;
 const HURT_FLASH = 0.18;
 const CLASH_COOLDOWN = 0.2;
+/** Stunned fighters cruise at this fraction of their speed. */
+const STUN_SLOW = 0.3;
 const MAX_STEPS_PER_ADVANCE = 96;
 
 /**
@@ -80,6 +83,13 @@ export class World {
         relax: DEFAULT_RELAX,
         noClash: false,
         trail: false,
+        damageTakenMul: 1,
+        shielded: false,
+        stun: 0,
+        poison: 0,
+        poisonDps: 0,
+        poisonBy: -1,
+        poisonAcc: 0,
       });
     });
   }
@@ -124,17 +134,28 @@ export class World {
     x: number,
     y: number,
     knockback = 0,
+    opts: DamageOptions = {},
   ): number {
     if (this.phase !== "fight" || !target.alive) return 0;
-    const dmg = Math.max(1, Math.round(amount * this.enrage));
+    const dmg = Math.max(1, Math.round(amount * this.enrage * target.damageTakenMul));
     target.hp -= dmg;
     target.hurt = HURT_FLASH;
     this.damageDealt[attacker.index] = (this.damageDealt[attacker.index] ?? 0) + dmg;
-    this.emit({ type: "hit", attacker: attacker.index, target: target.index, damage: dmg, x, y });
+    this.emit({
+      type: "hit",
+      attacker: attacker.index,
+      target: target.index,
+      damage: dmg,
+      x,
+      y,
+      ...(opts.dot ? { dot: true } : {}),
+    });
+    target.ability?.onDamaged?.(this, target, attacker, dmg);
+    if (opts.dot) return dmg;
 
     if (knockback > 0) {
-      let dx = target.x - attacker.x;
-      let dy = target.y - attacker.y;
+      let dx = target.x - (opts.fromX ?? attacker.x);
+      let dy = target.y - (opts.fromY ?? attacker.y);
       const d = Math.hypot(dx, dy) || 1;
       dx /= d;
       dy /= d;
@@ -202,12 +223,15 @@ export class World {
     if (this.phase === "fight") this.time += dt;
 
     for (const f of this.fighters) {
-      if (f.alive && f.ability?.onTick) f.ability.onTick(this, f, dt);
+      if (f.alive) this.statusEffects(f, dt);
+      // A stunned fighter's ability is frozen in place.
+      if (f.alive && f.stun <= 0 && f.ability?.onTick) f.ability.onTick(this, f, dt);
     }
     for (const f of this.fighters) if (f.alive) this.move(f, dt);
     for (const f of this.fighters) if (f.alive) this.bounceWalls(f);
     this.collideBodies();
     if (this.phase === "fight") this.weapons();
+    updateUnits(this, dt);
 
     this.clashCooldown = Math.max(0, this.clashCooldown - dt);
     for (const f of this.fighters) {
@@ -238,9 +262,23 @@ export class World {
     this.emit({ type: "fight" });
   }
 
+  private statusEffects(f: Fighter, dt: number): void {
+    if (f.stun > 0) f.stun = Math.max(0, f.stun - dt);
+    if (f.poison <= 0) return;
+    f.poison = Math.max(0, f.poison - dt);
+    // Poison ticks 1 HP at a time, as often as its damage per second allows.
+    f.poisonAcc += f.poisonDps * dt;
+    if (f.poisonAcc >= 1) {
+      f.poisonAcc -= 1;
+      const by = this.fighters[f.poisonBy];
+      if (by) this.dealDamage(by, f, 1, f.x, f.y, 0, { dot: true });
+    }
+    if (f.poison === 0) f.poisonAcc = 0;
+  }
+
   private move(f: Fighter, dt: number): void {
     const speed = Math.hypot(f.vx, f.vy);
-    const target = f.def.baseSpeed * f.speedMul;
+    const target = f.def.baseSpeed * f.speedMul * (f.stun > 0 ? STUN_SLOW : 1);
     const next = speed + (target - speed) * Math.min(1, f.relax * dt);
     if (speed < 1e-3) {
       f.vx = Math.cos(f.angle) * next;
@@ -289,7 +327,7 @@ export class World {
     }
   }
 
-  /** Bodies bounce off each other like billiard balls. No damage from this. */
+  /** Bodies bounce off each other like billiard balls; weaponless fighters hurt on contact. */
   private collideBodies(): void {
     const fs = this.fighters;
     for (let i = 0; i < fs.length; i++) {
@@ -315,6 +353,13 @@ export class World {
         b.x += dx * overlap * (invB / (invA + invB));
         b.y += dy * overlap * (invB / (invA + invB));
 
+        if (this.phase === "fight" && a.side !== b.side) {
+          const cx = a.x + dx * a.radius;
+          const cy = a.y + dy * a.radius;
+          this.touch(a, b, cx, cy);
+          this.touch(b, a, cx, cy);
+        }
+
         const closing = (b.vx - a.vx) * dx + (b.vy - a.vy) * dy;
         if (closing < 0) {
           const impulse = (-2 * closing) / (invA + invB);
@@ -337,6 +382,18 @@ export class World {
     }
   }
 
+  /** Contact damage from `a` to `b`, if `a` has any and is not on cooldown. */
+  private touch(a: Fighter, b: Fighter, x: number, y: number): void {
+    const base = a.def.contactDamage;
+    if (!base || !a.alive || (a.hitLock[b.index] ?? 0) > 0) return;
+    const ab = a.ability;
+    const dmg = base * (ab?.damageMultiplier?.(a) ?? 1);
+    const kb = a.def.knockback * (ab?.knockbackMultiplier?.(a) ?? 1);
+    const dealt = this.dealDamage(a, b, dmg, x, y, kb);
+    a.hitLock[b.index] = a.def.contactInterval ?? 0.5;
+    if (dealt > 0) ab?.onHitDealt?.(this, a, b, dealt);
+  }
+
   /** Weapon vs weapon (clash) first, then weapon vs body (damage). */
   private weapons(): void {
     const fs = this.fighters;
@@ -347,10 +404,10 @@ export class World {
     if (this.clashCooldown <= 0) {
       for (let i = 0; i < fs.length && this.clashCooldown <= 0; i++) {
         const a = fs[i];
-        if (!a || !a.alive || a.noClash) continue;
+        if (!a || !a.alive || a.noClash || a.def.reach <= 0) continue;
         for (let j = i + 1; j < fs.length; j++) {
           const b = fs[j];
-          if (!b || !b.alive || b.noClash || a.side === b.side) continue;
+          if (!b || !b.alive || b.noClash || b.def.reach <= 0 || a.side === b.side) continue;
           // Cheap rejection: weapons can only touch when the fighters are close enough.
           const near = a.radius + a.def.reach + b.radius + b.def.reach + 40;
           if ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 > near * near) continue;
@@ -390,7 +447,7 @@ export class World {
     }
 
     for (const a of fs) {
-      if (!a.alive) continue;
+      if (!a.alive || a.def.reach <= 0) continue;
       for (const t of fs) {
         if (!t.alive || a.side === t.side || (a.hitLock[t.index] ?? 0) > 0) continue;
         if (Math.min(a.index, t.index) === clashA && Math.max(a.index, t.index) === clashB)
@@ -461,6 +518,14 @@ export class World {
   }
 }
 
+export interface DamageOptions {
+  /** Knockback pushes away from this point instead of from the attacker. */
+  fromX?: number;
+  fromY?: number;
+  /** Damage over time: no knockback, no hit-stop. */
+  dot?: boolean;
+}
+
 function weaponSegment(f: Fighter): { x0: number; y0: number; x1: number; y1: number } {
   const c = Math.cos(f.angle);
   const s = Math.sin(f.angle);
@@ -472,7 +537,7 @@ function weaponSegment(f: Fighter): { x0: number; y0: number; x1: number; y1: nu
   };
 }
 
-function limitSpeed(f: Fighter): void {
+export function limitSpeed(f: { vx: number; vy: number }): void {
   const speed = Math.hypot(f.vx, f.vy);
   if (speed > MAX_SPEED) {
     f.vx = (f.vx / speed) * MAX_SPEED;

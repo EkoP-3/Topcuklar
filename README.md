@@ -1,8 +1,11 @@
 # top-uklar
 
-Silahlı topların bir karede otomatik olarak savaştığı, her vuruşun hasar verdiği bir simülasyon. Kısa video (Shorts/Reels) üretimi için tasarlandı.
+Topların bir karede otomatik olarak savaştığı bir simülasyon. Kısa video (Shorts/Reels) üretimi için tasarlandı.
 
-Şu an: **M0 prototipi** — simülasyon çekirdeği, 6 özgün karakter ve tarayıcıda canlı izlenen arena.
+İki kadro var:
+
+- **Tarih (liderler, varsayılan):** toplar tarihi komutanları temsil eder, silah tutmaz; çarpışınca hasar verir ve belli aralıklarla liderin ünlü özelliğine dayanan bir yetenek kullanır. Videodaki yazılar İngilizcedir.
+- **Silahlar:** dönen silahlı toplar (10 karakter).
 
 ## Çalıştırma
 
@@ -11,9 +14,24 @@ bun install      # veya: npm install
 bun run dev      # http://localhost:5173
 ```
 
-Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. **"Bu maçı video olarak kaydet"** düğmesi maçı baştan oynatıp 1080×1920 video olarak (Chrome/Edge/Safari) kendiliğinden indirir. Ses efektleri tarayıcıda üretilir (dosya gerekmez), kaydedilen videoya da girer; tarayıcılar sesi ancak bir tıklamadan sonra açtığı için sayfaya bir kez tıklamak gerekir. Bir maçı link olarak paylaşmak için: `/?a=drill&b=chime&seed=7`.
+Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlandırabilirsiniz. **"Bu maçı video olarak kaydet"** düğmesi maçı baştan oynatıp 1080×1920 video olarak (Chrome/Edge/Safari) kendiliğinden indirir. Ses efektleri tarayıcıda üretilir (dosya gerekmez), kaydedilen videoya da girer; tarayıcılar sesi ancak bir tıklamadan sonra açtığı için sayfaya bir kez tıklamak gerekir. Bir maçı link olarak paylaşmak için: `/?mode=leaders&a=caesar&b=hannibal&seed=7` (silahlar için `mode=weapons`).
 
-## Karakterler
+## Liderler
+
+| Lider               | Dönem         | Yetenek                                                 |
+| ------------------- | ------------- | ------------------------------------------------------- |
+| Alexander the Great | 356–323 BC    | Companion Charge: durup nişan alır, sert hücum          |
+| Genghis Khan        | c. 1162–1227  | Horse Archers: hızlı gövde, 3 oklu yaylım               |
+| Julius Caesar       | 100–44 BC     | Legions: rakibi kovalayan 2 lejyoner çağırır            |
+| Hannibal            | 247–c. 183 BC | War Elephant: savuran ve sersemleten savaş fili         |
+| Napoleon            | 1769–1821     | Grand Battery: duvardan seken top güllesi               |
+| Leonidas            | c. 540–480 BC | Hold the Line: %60 hasar azaltan kalkan, kalkanla vuruş |
+| Mehmed II           | 1432–1481     | Great Bombard: şarjlı dev gülle, çarptığı yerde patlar  |
+| Cleopatra           | 69–30 BC      | Asp: zehirleyen engerek                                 |
+
+Portre eklemek için `src/assets/leaders/<lider-id>.png` (veya .jpg/.webp) koyun; top üzerinde daire şeklinde gösterilir. Dosya yoksa kodla çizilmiş simge kullanılır. Yeni lider: `src/sim/leaders/` altına bir dosya (yetenek kalıbı `kit.ts` içindeki `skill()`), sonra `index.ts`.
+
+## Silah karakterleri
 
 | Karakter | Özellik                                                   |
 | -------- | --------------------------------------------------------- |
@@ -31,7 +49,7 @@ Yeni karakter eklemek: `src/sim/roster/` altına bir dosya ekleyip `index.ts`'e 
 ## Testler
 
 ```sh
-bun scripts/sim-check.ts 100
+bun scripts/sim-check.ts 100 leaders   # veya: weapons
 ```
 
 Aynı seed'in birebir aynı maçı verdiğini (determinizm) ve karakterlerin kazanma oranlarını (denge) kontrol eder.
@@ -39,7 +57,8 @@ Aynı seed'in birebir aynı maçı verdiğini (determinizm) ve karakterlerin kaz
 ## Yapı
 
 - `src/sim/` — simülasyon çekirdeği (DOM'dan bağımsız, seed'li rastgelelik, sabit zaman adımı)
-- `src/sim/roster/` — karakterler
+- `src/sim/leaders/` — liderler (tarih modu), `src/sim/units.ts` — çağrılan birlikler ve mermiler
+- `src/sim/roster/` — silah karakterleri
 - `src/sim/render/` — Canvas çizimi, efektler
 - `src/ArenaPage.tsx` — arayüz
 - `docs/analiz-ve-plan.md` — kanal analizi ve yol haritası

@@ -11,7 +11,7 @@ export const pylon: FighterDef = {
   name: "PYLON",
   description:
     "Duvara her çarptığında duvara bir direk diker. Direkler arasında elektrik yayı çakar; yay ne kadar çok direk varsa o kadar sert vurur.",
-  hp: 100,
+  hp: 95,
   radius: 44,
   mass: 1,
   baseSpeed: 500,

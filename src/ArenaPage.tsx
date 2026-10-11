@@ -4,23 +4,26 @@ import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
 import { SIDES } from "./sim/render/palette";
 import { Sfx } from "./sim/render/sfx";
-import { ROSTER, findDef } from "./sim/roster";
+import { ROSTERS, ROSTER_LABELS, findIn, isRosterId, type RosterId } from "./sim/rosters";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 import { canRecord, recordMatch, type Recording } from "./recorder";
 
 interface ArenaSearch {
+  mode: RosterId | undefined;
   a: string | undefined;
   b: string | undefined;
   seed: number | undefined;
 }
 
-/** Reads ?a=&b=&seed= from the address bar so a match can be shared as a link. */
+/** Reads ?mode=&a=&b=&seed= from the address bar so a match can be shared as a link. */
 function readSearch(): ArenaSearch {
   const q = new URLSearchParams(window.location.search);
   const rawSeed = q.get("seed");
   const seed = Number(rawSeed);
+  const mode = q.get("mode");
   return {
+    mode: isRosterId(mode) ? mode : undefined,
     a: q.get("a") ?? undefined,
     b: q.get("b") ?? undefined,
     seed: rawSeed !== null && Number.isFinite(seed) ? Math.abs(Math.trunc(seed)) : undefined,
@@ -32,8 +35,8 @@ const RANDOM = "random";
 const AUTO_NEXT_DELAY = 2.6;
 
 /** Unknown ids in the address bar fall back to a random pick instead of an empty select. */
-function knownOrRandom(id: string | undefined): string {
-  return id && findDef(id) ? id : RANDOM;
+function knownOrRandom(mode: RosterId, id: string | undefined): string {
+  return id && findIn(mode, id) ? id : RANDOM;
 }
 
 function readMuted(): boolean {
@@ -49,10 +52,16 @@ function randomSeed(): number {
 }
 
 /** "random" picks from the roster using the seed, so a match is still fully repeatable. */
-function resolveFighters(seed: number, a: string, b: string): [FighterDef, FighterDef] {
+function resolveFighters(
+  seed: number,
+  mode: RosterId,
+  a: string,
+  b: string,
+): [FighterDef, FighterDef] {
+  const roster = ROSTERS[mode];
   const rng = createRng(seed ^ 0x2545f491);
-  const defA = findDef(a) ?? rng.pick(ROSTER);
-  const defB = findDef(b) ?? rng.pick(ROSTER.filter((d) => d.id !== defA.id));
+  const defA = findIn(mode, a) ?? rng.pick(roster);
+  const defB = findIn(mode, b) ?? rng.pick(roster.filter((d) => d.id !== defA.id));
   return [defA, defB];
 }
 
@@ -63,8 +72,16 @@ export function ArenaPage() {
     document.title = "Arena Prototipi";
   }, []);
 
-  const [a, setA] = useState(knownOrRandom(search.a));
-  const [b, setB] = useState(knownOrRandom(search.b));
+  const [mode, setModeState] = useState<RosterId>(search.mode ?? "leaders");
+  const [a, setA] = useState(knownOrRandom(mode, search.a));
+  const [b, setB] = useState(knownOrRandom(mode, search.b));
+  const roster = ROSTERS[mode];
+  const setMode = (next: RosterId) => {
+    if (next === mode) return;
+    setModeState(next);
+    setA(RANDOM);
+    setB(RANDOM);
+  };
   const [seed, setSeed] = useState(search.seed ?? 1);
   const [restarts, setRestarts] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -124,7 +141,7 @@ export function ArenaPage() {
 
   const startRecording = () => {
     if (recording.current) return;
-    const fighters = resolveFighters(seed, a, b);
+    const fighters = resolveFighters(seed, mode, a, b);
     setRecMessage(null);
     setRecProgress(0);
     const job = recordMatch({ seed, fighters, onProgress: setRecProgress });
@@ -144,11 +161,11 @@ export function ArenaPage() {
 
   // Start a fresh match whenever the setup changes.
   useEffect(() => {
-    const [defA, defB] = resolveFighters(seed, a, b);
+    const [defA, defB] = resolveFighters(seed, mode, a, b);
     worldRef.current = new World(seed, [defA, defB]);
     fxRef.current = new Fx(seed);
     setMatchup([defA.name, defB.name]);
-  }, [a, b, seed, restarts]);
+  }, [mode, a, b, seed, restarts]);
 
   // Animation loop: step the simulation, then draw it.
   useEffect(() => {
@@ -238,6 +255,20 @@ export function ArenaPage() {
             )}
           </div>
 
+          <div className="flex overflow-hidden rounded-lg border border-white/15">
+            {(Object.keys(ROSTERS) as RosterId[]).map((id) => (
+              <button
+                key={id}
+                onClick={() => setMode(id)}
+                className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                  mode === id ? "bg-white/25 text-white" : "bg-white/5 text-neutral-300"
+                }`}
+              >
+                {ROSTER_LABELS[id]}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-xs text-neutral-400">
               1. Karakter
@@ -249,7 +280,7 @@ export function ArenaPage() {
                 <option className="bg-[#0d1224]" value={RANDOM}>
                   🎲 Rastgele
                 </option>
-                {ROSTER.map((d) => (
+                {roster.map((d) => (
                   <option className="bg-[#0d1224]" key={d.id} value={d.id}>
                     {d.name}
                   </option>
@@ -266,7 +297,7 @@ export function ArenaPage() {
                 <option className="bg-[#0d1224]" value={RANDOM}>
                   🎲 Rastgele
                 </option>
-                {ROSTER.map((d) => (
+                {roster.map((d) => (
                   <option className="bg-[#0d1224]" key={d.id} value={d.id}>
                     {d.name}
                   </option>
@@ -381,23 +412,23 @@ export function ArenaPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">
               Karakterler
             </h2>
-            {ROSTER.map((d) => (
+            {roster.map((d) => (
               <div key={d.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="flex items-baseline justify-between">
-                  <span className="font-mono text-sm font-bold">{d.name}</span>
-                  <span className="font-mono text-xs text-neutral-500">
-                    HP {d.hp} · HASAR {d.damage}
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-mono text-sm font-bold">
+                    {d.name}
+                    {d.era && <span className="ml-2 font-normal text-neutral-500">{d.era}</span>}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-neutral-500">
+                    HP {d.hp}
+                    {d.reach > 0 && ` · HASAR ${d.damage}`}
                   </span>
                 </div>
                 <p className="mt-1 text-sm leading-snug text-neutral-400">{d.description}</p>
+                {d.fact && <p className="mt-1 text-xs italic text-neutral-500">“{d.fact}”</p>}
               </div>
             ))}
           </div>
-
-          <p className="text-xs leading-relaxed text-neutral-500">
-            Bu M0 prototipidir: ses, boss'lar, elementler ve video kaydı sonraki adımlarda
-            eklenecek.
-          </p>
         </div>
       </div>
     </div>

@@ -1,8 +1,18 @@
 import { TAU, clamp } from "../geom";
-import type { ArcHazard, Fighter, HookHazard, PylonHazard, RingHazard } from "../types";
+import type {
+  ArcHazard,
+  Fighter,
+  HookHazard,
+  ProjectileHazard,
+  PylonHazard,
+  RingHazard,
+  UnitHazard,
+} from "../types";
 import { ARENA, type World } from "../world";
 import type { Fx } from "./fx";
 import { DISPLAY_FONT, MONO_FONT, OUTLINE, SIDES } from "./palette";
+import { drawEmblem } from "./emblems";
+import { portraitImage } from "./images";
 import { drawWeapon } from "./sprites";
 
 /** The video frame is laid out in a fixed 1080x1920 (9:16) space and scaled to the canvas. */
@@ -94,7 +104,7 @@ function drawFighterPanel(
 
   ctx.textAlign = align;
   ctx.textBaseline = "alphabetic";
-  ctx.font = `700 62px ${DISPLAY_FONT}`;
+  fitFont(ctx, f.def.name, 700, 62, w, DISPLAY_FONT);
   outlinedText(ctx, f.def.name, edgeX, 135, side.main, 9);
 
   const y = 165;
@@ -121,10 +131,33 @@ function drawFighterPanel(
   ctx.fillStyle = "#e8ecf4";
   ctx.fillText(`HP ${Math.max(0, Math.ceil(f.hp))}`, edgeX, 256);
 
+  if (f.def.reach > 0) {
+    ctx.save();
+    ctx.translate(align === "left" ? edgeX : edgeX - 150, 330);
+    drawWeapon(ctx, f.def.id, 0, 150, f.def.thickness * 1.1, f.ability?.visualLevel?.() ?? 0);
+    ctx.restore();
+    return;
+  }
+  // Leaders: medallion + lifetime.
+  const mx = align === "left" ? edgeX + 42 : edgeX - 42;
   ctx.save();
-  ctx.translate(align === "left" ? edgeX : edgeX - 150, 330);
-  drawWeapon(ctx, f.def.id, 0, 150, f.def.thickness * 1.1, f.ability?.visualLevel?.() ?? 0);
+  ctx.translate(mx, 330);
+  ctx.beginPath();
+  ctx.arc(0, 0, 42, 0, TAU);
+  ctx.fillStyle = side.dark;
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = side.main;
+  ctx.stroke();
+  drawEmblem(ctx, f.def.id, 32);
   ctx.restore();
+  if (f.def.era) {
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.font = `600 32px ${MONO_FONT}`;
+    ctx.fillStyle = "rgba(232,236,244,0.75)";
+    ctx.fillText(f.def.era, align === "left" ? mx + 60 : mx - 60, 332);
+  }
 }
 
 /** One quiet line per fighter: just the ability state. Names and HP are already up top. */
@@ -140,10 +173,27 @@ function drawBottomPanel(ctx: Ctx, world: World): void {
     ctx.fillText(text, left ? AX : AX + AS, y);
   });
 
+  // History mode: one quick fact per leader.
+  let factY = y + 75;
+  ctx.font = `500 30px ${DISPLAY_FONT}`;
+  world.fighters.slice(0, 2).forEach((f, i) => {
+    if (!f.def.fact) return;
+    const left = i === 0;
+    ctx.textAlign = left ? "left" : "right";
+    ctx.fillStyle = SIDES[f.side].light;
+    ctx.globalAlpha = 0.8;
+    for (const line of wrapText(ctx, f.def.fact, AS * 0.8)) {
+      ctx.fillText(line, left ? AX : AX + AS, factY);
+      factY += 40;
+    }
+    ctx.globalAlpha = 1;
+    factY += 22;
+  });
+
   ctx.textAlign = "center";
   ctx.font = `500 22px ${MONO_FONT}`;
   ctx.fillStyle = "rgba(232,236,244,0.28)";
-  ctx.fillText(`seed ${world.seed}`, W / 2, y + 70);
+  ctx.fillText(`seed ${world.seed}`, W / 2, Math.max(y + 70, factY + 20));
 }
 
 // --- arena -----------------------------------------------------------------------
@@ -182,10 +232,28 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
       case "hook":
         drawHook(ctx, h, world);
         break;
+      case "unit":
+        drawUnit(ctx, h, world);
+        break;
+      case "projectile":
+        break;
     }
   }
 
-  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f);
+  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world.time);
+  // Projectiles fly over bodies.
+  for (const h of world.hazards) if (h.kind === "projectile") drawProjectile(ctx, h, world.time);
+
+  for (const r of fx.rings) {
+    const k = r.life / r.max;
+    ctx.globalAlpha = clamp(k, 0, 1);
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 4 + 14 * k;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.radius * (1 - k * k * 0.7), 0, TAU);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 
   for (const p of fx.particles) {
     ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
@@ -213,22 +281,25 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   ctx.stroke();
 }
 
-function drawFighter(ctx: Ctx, f: Fighter): void {
+function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
   const side = SIDES[f.side];
+  const leader = f.def.reach <= 0;
   ctx.save();
   ctx.translate(f.x, f.y);
 
-  ctx.save();
-  ctx.rotate(f.angle);
-  drawWeapon(
-    ctx,
-    f.def.id,
-    f.radius * 0.3,
-    f.radius + f.def.reach,
-    f.def.thickness,
-    f.ability?.visualLevel?.() ?? 0,
-  );
-  ctx.restore();
+  if (!leader) {
+    ctx.save();
+    ctx.rotate(f.angle);
+    drawWeapon(
+      ctx,
+      f.def.id,
+      f.radius * 0.3,
+      f.radius + f.def.reach,
+      f.def.thickness,
+      f.ability?.visualLevel?.() ?? 0,
+    );
+    ctx.restore();
+  }
 
   ctx.beginPath();
   ctx.arc(0, 0, f.radius, 0, TAU);
@@ -243,6 +314,34 @@ function drawFighter(ctx: Ctx, f: Fighter): void {
   ctx.strokeStyle = "rgba(255,255,255,0.3)";
   ctx.stroke();
 
+  if (leader) {
+    const portrait = portraitImage(f.def.id);
+    if (portrait) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, f.radius - 6, 0, TAU);
+      ctx.clip();
+      const s = (f.radius - 6) * 2;
+      const scale = Math.max(s / portrait.naturalWidth, s / portrait.naturalHeight);
+      const w = portrait.naturalWidth * scale;
+      const h = portrait.naturalHeight * scale;
+      ctx.drawImage(portrait, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.translate(0, -f.radius * 0.14);
+      drawEmblem(ctx, f.def.id, f.radius * 0.6);
+      ctx.restore();
+    }
+  }
+
+  if (f.poison > 0) {
+    ctx.beginPath();
+    ctx.arc(0, 0, f.radius, 0, TAU);
+    ctx.fillStyle = `rgba(110,230,90,${0.22 + 0.12 * Math.sin(time * 12)})`;
+    ctx.fill();
+  }
+
   if (f.hurt > 0) {
     ctx.beginPath();
     ctx.arc(0, 0, f.radius, 0, TAU);
@@ -252,10 +351,174 @@ function drawFighter(ctx: Ctx, f: Fighter): void {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `700 ${Math.round(f.radius * 0.5)}px ${MONO_FONT}`;
-  outlinedText(ctx, String(Math.max(0, Math.ceil(f.hp))), 0, 2, "#ffffff", 4);
+  const hp = String(Math.max(0, Math.ceil(f.hp)));
+  if (leader) {
+    ctx.font = `800 ${Math.round(f.radius * 0.4)}px ${MONO_FONT}`;
+    outlinedText(ctx, hp, 0, f.radius * 0.6, "#ffffff", 5);
+  } else {
+    ctx.font = `700 ${Math.round(f.radius * 0.5)}px ${MONO_FONT}`;
+    outlinedText(ctx, hp, 0, 2, "#ffffff", 4);
+  }
+
+  if (f.shielded) {
+    ctx.beginPath();
+    ctx.arc(0, 0, f.radius + 11, 0, TAU);
+    ctx.fillStyle = "rgba(255,212,94,0.14)";
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = `rgba(255,212,94,${0.75 + 0.25 * Math.sin(time * 18)})`;
+    ctx.stroke();
+  }
+
+  if (f.stun > 0) {
+    for (let i = 0; i < 3; i++) {
+      const a = time * 6 + (i / 3) * TAU;
+      star(ctx, Math.cos(a) * f.radius * 0.7, -f.radius - 10 + Math.sin(a) * 8, 9, "#ffd45e");
+    }
+  }
 
   ctx.restore();
+}
+
+function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
+  const side = SIDES[world.fighters[u.owner]?.side ?? 0];
+  ctx.save();
+  ctx.translate(u.x, u.y);
+  ctx.globalAlpha = clamp(u.ttl / 0.4, 0, 1);
+  ctx.beginPath();
+  ctx.arc(0, 0, u.radius, 0, TAU);
+  ctx.fillStyle = u.style === "elephant" ? "#5b6170" : side.main;
+  ctx.fill();
+  ctx.lineWidth = u.style === "elephant" ? 6 : 4;
+  ctx.strokeStyle = u.style === "elephant" ? side.main : side.dark;
+  ctx.stroke();
+
+  if (u.style === "elephant") {
+    if (u.vx < 0) ctx.scale(-1, 1);
+    drawEmblem(ctx, "hannibal", u.radius * 0.8);
+  } else {
+    // Legionary: red scutum with a gold boss.
+    ctx.beginPath();
+    roundRectPath(ctx, -u.radius * 0.45, -u.radius * 0.6, u.radius * 0.9, u.radius * 1.2, 4);
+    ctx.fillStyle = "#b8322b";
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, u.radius * 0.2, 0, TAU);
+    ctx.fillStyle = "#ffd45e";
+    ctx.fill();
+  }
+
+  if (u.hurt > 0) {
+    ctx.beginPath();
+    ctx.arc(0, 0, u.radius, 0, TAU);
+    ctx.fillStyle = `rgba(255,255,255,${clamp(u.hurt / 0.15, 0, 0.8)})`;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
+  const a = Math.atan2(p.vy, p.vx);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(a);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  switch (p.style) {
+    case "arrow": {
+      ctx.beginPath();
+      ctx.moveTo(-34, 0);
+      ctx.lineTo(8, 0);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#e8d8b0";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(18, 0);
+      ctx.lineTo(4, -8);
+      ctx.lineTo(4, 8);
+      ctx.closePath();
+      ctx.fillStyle = "#dfe4ee";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-36, -8);
+      ctx.lineTo(-26, 0);
+      ctx.lineTo(-36, 8);
+      ctx.fillStyle = "#e05a4a";
+      ctx.fill();
+      break;
+    }
+    case "ball":
+    case "bombard": {
+      const big = p.style === "bombard";
+      // smoke trail
+      ctx.fillStyle = "rgba(200,200,210,0.25)";
+      for (let i = 1; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.arc(-i * p.radius * 1.1, 0, p.radius * (1 - i * 0.22), 0, TAU);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius, 0, TAU);
+      ctx.fillStyle = big ? "#3a3530" : "#2a2d36";
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = big ? "#ff9a3c" : "#c9ced8";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(-p.radius * 0.3, -p.radius * 0.3, p.radius * 0.3, 0, TAU);
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fill();
+      break;
+    }
+    case "asp": {
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const x = -i * 4;
+        const y = Math.sin(time * 22 + i * 0.8) * 6 * (i / 12);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineWidth = 11;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "#6ee65a";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(4, 0, 11, 8, 0, 0, TAU);
+      ctx.fillStyle = "#6ee65a";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+function star(ctx: Ctx, x: number, y: number, r: number, color: string): void {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * TAU - Math.PI / 2;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
 }
 
 function drawRing(ctx: Ctx, h: RingHazard, world: World): void {
@@ -360,8 +623,8 @@ function drawBanner(ctx: Ctx, world: World): void {
 
   switch (world.phase) {
     case "intro":
-      text = "READY...";
-      break;
+      drawMatchCard(ctx, world);
+      return;
     case "fight":
       if (world.phaseTime >= 0.7) return;
       text = "FIGHT!";
@@ -394,6 +657,25 @@ function drawBanner(ctx: Ctx, world: World): void {
   ctx.textBaseline = "middle";
   ctx.font = `800 ${size}px ${DISPLAY_FONT}`;
   outlinedText(ctx, text, 0, 0, color, 16);
+  ctx.restore();
+}
+
+/** Intro: both names in their team colours with "VS" between them. */
+function drawMatchCard(ctx: Ctx, world: World): void {
+  const [a, b] = world.fighters;
+  if (!a || !b) return;
+  const s = easeOutBack(clamp(world.phaseTime / 0.25, 0, 1));
+  ctx.save();
+  ctx.translate(AS / 2, AS / 2);
+  ctx.scale(s, s);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  fitFont(ctx, a.def.name, 800, 120, AS - 80, DISPLAY_FONT);
+  outlinedText(ctx, a.def.name, 0, -150, SIDES[a.side].main, 16);
+  ctx.font = `800 96px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "VS", 0, 0, "#f4f6fb", 14);
+  fitFont(ctx, b.def.name, 800, 120, AS - 80, DISPLAY_FONT);
+  outlinedText(ctx, b.def.name, 0, 150, SIDES[b.side].main, 16);
   ctx.restore();
 }
 
@@ -482,8 +764,43 @@ function makeScanlines(ctx: Ctx, quality: number): CanvasPattern | null {
 
 // --- helpers ---------------------------------------------------------------------
 
+/** Sets the largest font (up to `size`) at which `text` fits in `maxWidth`. */
+function fitFont(
+  ctx: Ctx,
+  text: string,
+  weight: number,
+  size: number,
+  maxWidth: number,
+  family: string,
+): void {
+  ctx.font = `${weight} ${size}px ${family}`;
+  const w = ctx.measureText(text).width;
+  if (w > maxWidth) ctx.font = `${weight} ${Math.floor((size * maxWidth) / w)}px ${family}`;
+}
+
+/** Splits text into lines no wider than `maxWidth` with the current font. */
+function wrapText(ctx: Ctx, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
+  roundRectPath(ctx, x, y, w, h, r);
+}
+
+function roundRectPath(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
   ctx.arcTo(x + w, y + h, x, y + h, r);

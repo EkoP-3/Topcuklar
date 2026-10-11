@@ -1,5 +1,5 @@
 import { OUTLINE } from "./palette";
-import { weaponImage } from "./weapon-images";
+import { weaponImage } from "./images";
 
 type Ctx = CanvasRenderingContext2D;
 

@@ -1,0 +1,291 @@
+import type { Fighter, Hazard, ProjectileHazard, UnitHazard } from "./types";
+import { ARENA, limitSpeed, type World } from "./world";
+
+/** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
+const UNIT_STEER = 3;
+/** Units hit by a fighter take this much of the fighter's contact damage. */
+const VS_UNIT_DAMAGE = 1.5;
+
+export type UnitSpec = Omit<
+  UnitHazard,
+  "kind" | "owner" | "x" | "y" | "vx" | "vy" | "maxHp" | "lock" | "hurt"
+>;
+export type ProjectileSpec = Omit<ProjectileHazard, "kind" | "owner" | "x" | "y" | "vx" | "vy"> & {
+  speed: number;
+};
+
+/** Puts a unit next to its owner, heading `angle`. */
+export function spawnUnit(world: World, owner: Fighter, spec: UnitSpec, angle: number): UnitHazard {
+  const d = owner.radius + spec.radius + 4;
+  const unit: UnitHazard = {
+    kind: "unit",
+    owner: owner.index,
+    ...spec,
+    x: clampInside(owner.x + Math.cos(angle) * d, spec.radius),
+    y: clampInside(owner.y + Math.sin(angle) * d, spec.radius),
+    vx: Math.cos(angle) * spec.speed,
+    vy: Math.sin(angle) * spec.speed,
+    maxHp: spec.hp,
+    lock: 0.3,
+    hurt: 0,
+  };
+  world.hazards.push(unit);
+  world.emit({ type: "summon", fighter: owner.index, style: spec.style, x: unit.x, y: unit.y });
+  return unit;
+}
+
+/** Launches a projectile from the edge of its owner's body. */
+export function fireProjectile(
+  world: World,
+  owner: Fighter,
+  angle: number,
+  spec: ProjectileSpec,
+): ProjectileHazard {
+  const { speed, ...rest } = spec;
+  const d = owner.radius + spec.radius;
+  const p: ProjectileHazard = {
+    kind: "projectile",
+    owner: owner.index,
+    ...rest,
+    x: owner.x + Math.cos(angle) * d,
+    y: owner.y + Math.sin(angle) * d,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+  };
+  world.hazards.push(p);
+  return p;
+}
+
+/** Angle from `from` to where `target` will roughly be when a shot of `speed` arrives. */
+export function leadAngle(from: Fighter, target: Fighter, speed: number, lead = 0.6): number {
+  const t = (Math.hypot(target.x - from.x, target.y - from.y) / speed) * lead;
+  return Math.atan2(target.y + target.vy * t - from.y, target.x + target.vx * t - from.x);
+}
+
+export function countUnits(world: World, owner: Fighter, style: UnitHazard["style"]): number {
+  let n = 0;
+  for (const h of world.hazards)
+    if (h.kind === "unit" && h.owner === owner.index && h.style === style) n++;
+  return n;
+}
+
+/** Moves every unit and projectile one step. Called by the world. */
+export function updateUnits(world: World, dt: number): void {
+  let removed = false;
+  for (const h of world.hazards) {
+    if (h.kind === "unit") updateUnit(world, h, dt);
+    else if (h.kind === "projectile") updateProjectile(world, h, dt);
+    else continue;
+    if (h.ttl <= 0) removed = true;
+  }
+  if (removed) world.hazards = world.hazards.filter((h) => !isGone(h));
+}
+
+function isGone(h: Hazard): boolean {
+  return (h.kind === "unit" || h.kind === "projectile") && h.ttl <= 0;
+}
+
+function updateUnit(world: World, u: UnitHazard, dt: number): void {
+  const owner = world.fighters[u.owner];
+  if (!owner || u.ttl <= 0) return;
+  u.ttl -= dt;
+  u.hurt = Math.max(0, u.hurt - dt);
+  u.lock = Math.max(0, u.lock - dt);
+
+  const enemy = nearestEnemyFighter(world, owner.side, u.x, u.y);
+  if (enemy) {
+    const a = Math.atan2(enemy.y - u.y, enemy.x - u.x);
+    const k = Math.min(1, UNIT_STEER * dt);
+    u.vx += (Math.cos(a) * u.speed - u.vx) * k;
+    u.vy += (Math.sin(a) * u.speed - u.vy) * k;
+  }
+  u.x += u.vx * dt;
+  u.y += u.vy * dt;
+  if (u.x < u.radius || u.x > ARENA - u.radius) {
+    u.x = clampInside(u.x, u.radius);
+    u.vx = -u.vx;
+  }
+  if (u.y < u.radius || u.y > ARENA - u.radius) {
+    u.y = clampInside(u.y, u.radius);
+    u.vy = -u.vy;
+  }
+
+  for (const f of world.fighters) {
+    if (!f.alive) continue;
+    const n = overlap(u, f);
+    if (!n) continue;
+    const invU = 1 / u.mass;
+    const invF = 1 / f.def.mass;
+    const share = n.depth / (invU + invF);
+    u.x -= n.nx * share * invU;
+    u.y -= n.ny * share * invU;
+    f.x += n.nx * share * invF;
+    f.y += n.ny * share * invF;
+    if (f.side === owner.side) continue;
+
+    const closing = (f.vx - u.vx) * n.nx + (f.vy - u.vy) * n.ny;
+    if (closing < 0) {
+      const impulse = (-2 * closing) / (invU + invF);
+      u.vx -= impulse * invU * n.nx;
+      u.vy -= impulse * invU * n.ny;
+      f.vx += impulse * invF * n.nx;
+      f.vy += impulse * invF * n.ny;
+      limitSpeed(f);
+    }
+    if (u.lock > 0) continue;
+    u.lock = u.hitInterval;
+    const cx = u.x + n.nx * u.radius;
+    const cy = u.y + n.ny * u.radius;
+    const dealt = world.dealDamage(owner, f, u.damage, cx, cy, u.knockback, {
+      fromX: u.x,
+      fromY: u.y,
+    });
+    if (dealt > 0 && u.stun > 0) {
+      f.stun = Math.max(f.stun, u.stun);
+      world.emit({ type: "stun", fighter: f.index });
+    }
+    // The fighter hits back.
+    const back = f.def.contactDamage ?? 0;
+    if (back > 0) {
+      const mul = f.ability?.damageMultiplier?.(f) ?? 1;
+      damageUnit(world, u, back * mul * VS_UNIT_DAMAGE, cx, cy);
+    }
+  }
+
+  // Enemy units grind each other down; friendly ones just keep apart.
+  for (const o of world.hazards) {
+    if (o === u || o.kind !== "unit" || o.ttl <= 0) continue;
+    const n = overlap(u, o);
+    if (!n) continue;
+    u.x -= n.nx * n.depth * 0.5;
+    u.y -= n.ny * n.depth * 0.5;
+    o.x += n.nx * n.depth * 0.5;
+    o.y += n.ny * n.depth * 0.5;
+    const other = world.fighters[o.owner];
+    if (!other || other.side === owner.side || u.lock > 0) continue;
+    u.lock = u.hitInterval;
+    damageUnit(world, o, u.damage, (u.x + o.x) / 2, (u.y + o.y) / 2);
+  }
+}
+
+function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
+  const owner = world.fighters[p.owner];
+  if (!owner || p.ttl <= 0) return;
+  p.ttl -= dt;
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
+
+  const outX = p.x < p.radius || p.x > ARENA - p.radius;
+  const outY = p.y < p.radius || p.y > ARENA - p.radius;
+  if (outX || outY) {
+    if (p.bounces > 0) {
+      p.bounces--;
+      if (outX) p.vx = -p.vx;
+      if (outY) p.vy = -p.vy;
+      p.x = clampInside(p.x, p.radius);
+      p.y = clampInside(p.y, p.radius);
+      world.emit({ type: "wall", fighter: owner.index, x: p.x, y: p.y });
+    } else {
+      explode(world, owner, p, null);
+      p.ttl = 0;
+    }
+    return;
+  }
+
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === owner.side || !overlap(p, f)) continue;
+    const speed = Math.hypot(p.vx, p.vy) || 1;
+    const hx = f.x - (p.vx / speed) * f.radius;
+    const hy = f.y - (p.vy / speed) * f.radius;
+    const dealt = world.dealDamage(owner, f, p.damage, hx, hy, p.knockback, {
+      fromX: f.x - p.vx,
+      fromY: f.y - p.vy,
+    });
+    if (dealt > 0 && p.poison > 0) {
+      f.poison = Math.max(f.poison, p.poison);
+      f.poisonDps = p.poisonDps;
+      f.poisonBy = owner.index;
+      world.emit({ type: "poison", fighter: f.index });
+    }
+    explode(world, owner, p, f);
+    p.ttl = 0;
+    return;
+  }
+
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0 || !overlap(p, o)) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    damageUnit(world, o, p.damage, p.x, p.y);
+    explode(world, owner, p, null);
+    p.ttl = 0;
+    return;
+  }
+}
+
+/** Splash damage around a projectile's impact (skips the fighter it hit directly). */
+function explode(world: World, owner: Fighter, p: ProjectileHazard, direct: Fighter | null): void {
+  if (p.blast <= 0) return;
+  world.emit({ type: "blast", x: p.x, y: p.y, radius: p.blast });
+  for (const f of world.fighters) {
+    if (f === direct || !f.alive || f.side === owner.side) continue;
+    const d = Math.hypot(f.x - p.x, f.y - p.y) - f.radius;
+    if (d > p.blast) continue;
+    world.dealDamage(owner, f, p.damage * 0.5, f.x, f.y, p.knockback * 0.6, {
+      fromX: p.x,
+      fromY: p.y,
+    });
+  }
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    if (Math.hypot(o.x - p.x, o.y - p.y) - o.radius <= p.blast) {
+      damageUnit(world, o, p.damage * 0.5, o.x, o.y);
+    }
+  }
+}
+
+function damageUnit(world: World, u: UnitHazard, amount: number, x: number, y: number): void {
+  if (world.phase !== "fight" || u.ttl <= 0) return;
+  u.hp -= Math.max(1, Math.round(amount * world.enrage));
+  u.hurt = 0.15;
+  world.emit({ type: "bump", x, y, strength: 500 });
+  if (u.hp <= 0) {
+    u.ttl = 0;
+    world.emit({ type: "unitDown", x: u.x, y: u.y, side: world.fighters[u.owner]?.side ?? 0 });
+  }
+}
+
+function nearestEnemyFighter(world: World, side: number, x: number, y: number): Fighter | null {
+  let best: Fighter | null = null;
+  let bestD = Infinity;
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === side) continue;
+    const d = (f.x - x) ** 2 + (f.y - y) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = f;
+    }
+  }
+  return best;
+}
+
+interface Circle {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+/** Contact normal (from a to b) and penetration depth, or null when apart. */
+function overlap(a: Circle, b: Circle): { nx: number; ny: number; depth: number } | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const min = a.radius + b.radius;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= min * min) return null;
+  const d = Math.sqrt(d2) || 0.001;
+  return { nx: dx / d, ny: dy / d, depth: min - d };
+}
+
+function clampInside(v: number, r: number): number {
+  return Math.min(ARENA - r, Math.max(r, v));
+}

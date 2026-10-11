@@ -1,14 +1,19 @@
 /**
- * Headless checks for the simulation core. Run with:  bun scripts/sim-check.ts [matchesPerPair]
+ * Headless checks for the simulation core. Run with:
+ *   bun scripts/sim-check.ts [matchesPerPair] [leaders|weapons]
  *
  *  1. Determinism: the same seed must produce the identical match.
  *  2. Balance: every pairing is played many times and win rates / durations are printed.
  */
-import { ROSTER } from "../src/sim/roster";
+import { ROSTERS, isRosterId } from "../src/sim/rosters";
 import type { FighterDef } from "../src/sim/types";
 import { MATCH_LIMIT, World } from "../src/sim/world";
 
 const FRAME = 1 / 60;
+const rosterArg = process.argv[3] ?? "leaders";
+if (!isRosterId(rosterArg)) throw new Error(`unknown roster: ${rosterArg}`);
+const ROSTER = ROSTERS[rosterArg];
+const NAME_W = Math.max(8, ...ROSTER.map((d) => d.name.length)) + 1;
 
 function play(seed: number, a: FighterDef, b: FighterDef): World {
   const world = new World(seed, [a, b]);
@@ -52,11 +57,11 @@ let closeFinishes = 0;
 let games = 0;
 let durationSum = 0;
 
-console.log(`\nwin rate of ROW against COLUMN (${perPair} matches per pair)`);
-console.log(["".padEnd(8), ...ROSTER.map((d) => d.name.padStart(8))].join(" "));
+console.log(`\n${rosterArg}: win rate of ROW against COLUMN (${perPair} matches per pair)`);
+console.log(["".padEnd(NAME_W), ...ROSTER.map((d) => d.name.slice(0, 8).padStart(8))].join(" "));
 
 for (const row of ROSTER) {
-  const cells: string[] = [row.name.padEnd(8)];
+  const cells: string[] = [row.name.padEnd(NAME_W)];
   for (const col of ROSTER) {
     if (row.id === col.id) {
       cells.push("-".padStart(8));
@@ -89,7 +94,7 @@ for (const row of ROSTER) {
 console.log("\noverall win rate");
 for (const d of ROSTER) {
   const t = totals.get(d.id);
-  if (t) console.log(`  ${d.name.padEnd(8)} ${Math.round((t.wins / t.games) * 100)}%`);
+  if (t) console.log(`  ${d.name.padEnd(NAME_W)} ${Math.round((t.wins / t.games) * 100)}%`);
 }
 console.log(
   `\nmatches: ${games}, avg fight length: ${(durationSum / games).toFixed(1)}s, ` +

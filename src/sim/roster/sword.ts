@@ -8,7 +8,7 @@ export const sword: FighterDef = {
   name: "SWORD",
   description:
     "Dengeli düellocu. Rakibin silahını savuşturduğu anda karşı vuruş hakkı kazanır; ilk isabeti iki kattan fazla vurur.",
-  hp: 115,
+  hp: 122,
   radius: 44,
   mass: 1,
   baseSpeed: 500,

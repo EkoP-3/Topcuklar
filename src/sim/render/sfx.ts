@@ -73,10 +73,16 @@ export class Sfx {
     if (this.ctx.state !== "running") return;
     switch (e.type) {
       case "hit": {
+        if (e.dot) {
+          if (!this.allow("dot", 0.25)) return;
+          this.tone(520, 0.06, { type: "sine", gain: 0.06, slideTo: 380 });
+          return;
+        }
         if (!this.allow("hit", 0.03)) return;
         const attacker = world.fighters[e.attacker];
         const power = clamp(0.3 + e.damage / 28, 0.3, 1);
-        if (attacker && BLUNT.has(attacker.def.id)) this.thud(power);
+        // Leaders hit with their bodies, units and projectiles: heavy impacts.
+        if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.reach <= 0)) this.thud(power);
         else this.clang(power);
         break;
       }
@@ -128,6 +134,53 @@ export class Sfx {
         break;
       case "dash":
         this.noise(0.3, { filter: "bandpass", freq: 3000, slideTo: 500, q: 1.2, gain: 0.5 });
+        break;
+      case "summon":
+        if (e.style === "elephant") {
+          this.tone(330, 0.5, { type: "sawtooth", gain: 0.12, slideTo: 620, attack: 0.05 });
+          this.tone(660, 0.45, { type: "square", gain: 0.04, slideTo: 1240, attack: 0.05 });
+        } else {
+          [196, 294].forEach((f, i) =>
+            this.tone(f, 0.32, { type: "sawtooth", gain: 0.1, delay: i * 0.14, attack: 0.03 }),
+          );
+        }
+        break;
+      case "shoot":
+        if (e.style === "arrow") {
+          this.noise(0.12, { filter: "bandpass", freq: 2600, slideTo: 900, q: 2, gain: 0.35 });
+          this.tone(880, 0.07, { type: "triangle", gain: 0.12, slideTo: 420 });
+        } else if (e.style === "asp") {
+          this.noise(0.35, { filter: "highpass", freq: 4500, gain: 0.25 });
+        } else {
+          const big = e.style === "bombard";
+          this.tone(big ? 70 : 110, big ? 0.6 : 0.35, {
+            type: "sine",
+            gain: big ? 0.8 : 0.55,
+            slideTo: big ? 28 : 45,
+          });
+          this.noise(big ? 0.5 : 0.25, { filter: "lowpass", freq: 1400, slideTo: 150, gain: 0.6 });
+        }
+        break;
+      case "blast":
+        this.tone(60, 0.9, { type: "sine", gain: 0.8, slideTo: 24 });
+        this.noise(0.9, { filter: "lowpass", freq: 2200, slideTo: 100, gain: 0.8 });
+        break;
+      case "unitDown":
+        if (!this.allow("unitDown", 0.08)) return;
+        this.thud(0.5);
+        break;
+      case "shield":
+        this.tone(660, 0.5, { type: "triangle", gain: 0.18 });
+        this.tone(990, 0.45, { type: "triangle", gain: 0.12, delay: 0.03 });
+        this.noise(0.08, { filter: "highpass", freq: 3500, gain: 0.25 });
+        break;
+      case "stun":
+        [1200, 950, 750].forEach((f, i) =>
+          this.tone(f, 0.08, { type: "triangle", gain: 0.12, delay: i * 0.07 }),
+        );
+        break;
+      case "poison":
+        this.noise(0.4, { filter: "bandpass", freq: 4200, q: 3, gain: 0.3 });
         break;
       case "ko":
         this.tone(120, 0.9, { type: "sawtooth", gain: 0.45, slideTo: 30 });

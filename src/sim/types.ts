@@ -27,6 +27,14 @@ export interface FighterDef {
   hitInterval: number;
   /** Creates a fresh per-match ability instance (holds its own state). */
   createAbility?: () => Ability;
+  /** Damage dealt by touching an enemy body (weaponless fighters). */
+  contactDamage?: number;
+  /** Minimum seconds between two contact hits on the same victim. */
+  contactInterval?: number;
+  /** History mode: lifetime shown under the name, e.g. "356–323 BC". */
+  era?: string;
+  /** History mode: one-line English fact shown during the match. */
+  fact?: string;
 }
 
 export interface WallHit {
@@ -43,6 +51,8 @@ export interface Ability {
   onTick?(world: World, self: Fighter, dt: number): void;
   onWallHit?(world: World, self: Fighter, hit: WallHit): void;
   onHitDealt?(world: World, self: Fighter, target: Fighter, damage: number): void;
+  /** Called after this fighter took damage (after reductions). */
+  onDamaged?(world: World, self: Fighter, attacker: Fighter, damage: number): void;
   /** Called when this fighter's weapon crosses an enemy weapon. */
   onClash?(world: World, self: Fighter, other: Fighter): void;
   damageMultiplier?(self: Fighter): number;
@@ -84,6 +94,18 @@ export interface Fighter {
   noClash: boolean;
   /** Renderer hint: draw a motion trail. */
   trail: boolean;
+  /** Incoming damage is multiplied by this (shields lower it). */
+  damageTakenMul: number;
+  /** Renderer hint: draw a shield bubble. */
+  shielded: boolean;
+  /** Seconds left stunned: slowed and the ability timer is frozen. */
+  stun: number;
+  /** Seconds of poison left, its damage per second and who applied it. */
+  poison: number;
+  poisonDps: number;
+  poisonBy: number;
+  /** Poison damage built up but not yet dealt. */
+  poisonAcc: number;
 }
 
 /** Things that live in the arena besides fighters. Abilities own and update them. */
@@ -102,7 +124,56 @@ export type Hazard =
       /** Index of the fighter the hook is attached to, or -1. */
       attached: number;
     }
-  | { kind: "ring"; owner: number; x: number; y: number; radius: number; maxRadius: number };
+  | { kind: "ring"; owner: number; x: number; y: number; radius: number; maxRadius: number }
+  | UnitHazard
+  | ProjectileHazard;
+
+/** A summoned soldier/animal that chases the nearest enemy and hurts on contact. */
+export interface UnitHazard {
+  kind: "unit";
+  owner: number;
+  style: "legion" | "elephant";
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  mass: number;
+  speed: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
+  knockback: number;
+  /** Seconds the victim is stunned by a hit. */
+  stun: number;
+  hitInterval: number;
+  /** Seconds until it may hit fighter / unit again (shared lock). */
+  lock: number;
+  ttl: number;
+  hurt: number;
+}
+
+/** Arrow, cannonball or similar: flies straight, hurts the first enemy it touches. */
+export interface ProjectileHazard {
+  kind: "projectile";
+  owner: number;
+  style: "arrow" | "ball" | "bombard" | "asp";
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  damage: number;
+  knockback: number;
+  /** Explosion radius on impact (0 = none). Nearby enemies take half damage. */
+  blast: number;
+  /** Poison applied on hit: seconds and damage per second. */
+  poison: number;
+  poisonDps: number;
+  /** Wall bounces left; the next wall touch after that removes it. */
+  bounces: number;
+  ttl: number;
+}
 
 export type PylonHazard = Extract<Hazard, { kind: "pylon" }>;
 export type ArcHazard = Extract<Hazard, { kind: "arc" }>;
@@ -112,7 +183,16 @@ export type RingHazard = Extract<Hazard, { kind: "ring" }>;
 /** Things that happened during a step. The renderer turns these into effects. */
 export type SimEvent =
   | { type: "fight" }
-  | { type: "hit"; attacker: number; target: number; damage: number; x: number; y: number }
+  | {
+      type: "hit";
+      attacker: number;
+      target: number;
+      damage: number;
+      x: number;
+      y: number;
+      /** Damage over time (poison tick): no hit-stop, quieter effects. */
+      dot?: boolean;
+    }
   | { type: "clash"; x: number; y: number }
   | { type: "wall"; fighter: number; x: number; y: number }
   | { type: "bump"; x: number; y: number; strength: number }
@@ -124,6 +204,13 @@ export type SimEvent =
   | { type: "hookAttach"; fighter: number; x: number; y: number }
   | { type: "charge"; fighter: number }
   | { type: "dash"; fighter: number }
+  | { type: "summon"; fighter: number; style: UnitHazard["style"]; x: number; y: number }
+  | { type: "shoot"; fighter: number; style: ProjectileHazard["style"] }
+  | { type: "blast"; x: number; y: number; radius: number }
+  | { type: "unitDown"; x: number; y: number; side: 0 | 1 }
+  | { type: "shield"; fighter: number }
+  | { type: "stun"; fighter: number }
+  | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }
   | { type: "timeUp" };
 

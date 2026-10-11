@@ -37,7 +37,22 @@ interface TrailDot {
   side: 0 | 1;
 }
 
+interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  max: number;
+  color: string;
+}
+
 const MAX_PARTICLES = 1600;
+const POISON_GREEN = "#6ee65a";
+
+const SKILL_TEXT: Record<string, string> = {
+  legion: "LEGIONS!",
+  elephant: "WAR ELEPHANT!",
+};
 
 /**
  * Purely cosmetic effects (sparks, floating numbers, screen shake). It reads the
@@ -47,6 +62,8 @@ export class Fx {
   particles: Particle[] = [];
   texts: FloatText[] = [];
   trail: TrailDot[] = [];
+  /** Expanding rings (explosions). */
+  rings: Shockwave[] = [];
   /** Current screen shake offset in arena units. */
   shakeX = 0;
   shakeY = 0;
@@ -74,6 +91,23 @@ export class Fx {
       }
     }
 
+    for (const f of world.fighters) {
+      if (f.alive && f.poison > 0 && this.rng.next() < dt * 14) {
+        const a = this.rng.range(0, TAU);
+        this.particles.push({
+          x: f.x + Math.cos(a) * f.radius * 0.8,
+          y: f.y + Math.sin(a) * f.radius * 0.8,
+          vx: 0,
+          vy: -60,
+          life: 0.5,
+          max: 0.5,
+          size: 7,
+          color: POISON_GREEN,
+          drag: 1,
+        });
+      }
+    }
+
     for (const p of this.particles) {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
@@ -89,6 +123,9 @@ export class Fx {
       t.life -= dt;
     }
     this.texts = this.texts.filter((t) => t.life > 0);
+
+    for (const r of this.rings) r.life -= dt;
+    this.rings = this.rings.filter((r) => r.life > 0);
 
     for (const d of this.trail) d.life -= dt;
     this.trail = this.trail.filter((d) => d.life > 0);
@@ -142,6 +179,19 @@ export class Fx {
       case "hit": {
         const attacker = world.fighters[e.attacker];
         const target = world.fighters[e.target];
+        if (e.dot) {
+          if (target) {
+            this.text(
+              target.x,
+              target.y - target.radius - 10,
+              `-${e.damage}`,
+              POISON_GREEN,
+              30,
+              0.6,
+            );
+          }
+          break;
+        }
         const side = SIDES[attacker?.side ?? 0];
         this.burst(
           e.x,
@@ -206,6 +256,68 @@ export class Fx {
         const f = world.fighters[e.fighter];
         if (f) this.burst(f.x, f.y, 16, [SIDES[f.side].light, "#ffffff"], 420, 0.35, 8);
         this.addShake(9);
+        break;
+      }
+      case "summon": {
+        const side = SIDES[world.fighters[e.fighter]?.side ?? 0];
+        this.burst(e.x, e.y, 14, [side.light, "#ffffff"], 300, 0.4, 8);
+        const f = world.fighters[e.fighter];
+        const label = SKILL_TEXT[e.style];
+        if (f && label) this.text(f.x, f.y - f.radius - 30, label, side.light, 44, 0.9);
+        break;
+      }
+      case "shoot": {
+        const f = world.fighters[e.fighter];
+        if (!f || e.style === "arrow" || e.style === "asp") break;
+        const big = e.style === "bombard";
+        this.burst(
+          f.x,
+          f.y,
+          big ? 26 : 12,
+          ["#d8d8de", "#9a9aa5", "#ffb15c"],
+          big ? 380 : 240,
+          0.6,
+          12,
+        );
+        this.addShake(big ? 16 : 6);
+        if (big) this.text(f.x, f.y - f.radius - 30, "GREAT BOMBARD!", "#ffb15c", 44, 0.9);
+        break;
+      }
+      case "blast":
+        this.burst(e.x, e.y, 46, ["#ffb15c", "#ffd45e", "#ff6a3c", "#ffffff"], 640, 0.7, 13);
+        this.rings.push({
+          x: e.x,
+          y: e.y,
+          radius: e.radius,
+          life: 0.4,
+          max: 0.4,
+          color: "#ffb15c",
+        });
+        this.flash = Math.max(this.flash, 0.4);
+        this.addShake(26);
+        break;
+      case "unitDown": {
+        const side = SIDES[e.side];
+        this.burst(e.x, e.y, 18, [side.main, side.light, "#ffffff"], 320, 0.5, 9);
+        break;
+      }
+      case "shield": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.burst(f.x, f.y, 18, ["#ffd45e", "#fff3a0", "#ffffff"], 340, 0.45, 8);
+        this.text(f.x, f.y - f.radius - 30, "HOLD THE LINE!", "#ffd45e", 44, 0.9);
+        break;
+      }
+      case "stun": {
+        const f = world.fighters[e.fighter];
+        if (f) this.text(f.x, f.y - f.radius - 44, "STUNNED", "#ffd45e", 38, 0.8);
+        break;
+      }
+      case "poison": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.burst(f.x, f.y, 16, [POISON_GREEN, "#c8ffb8"], 280, 0.45, 8);
+        this.text(f.x, f.y - f.radius - 44, "POISONED", POISON_GREEN, 38, 0.8);
         break;
       }
       case "ko": {
