@@ -25,21 +25,27 @@ interface NoiseOptions {
  * Sound effects synthesized with the Web Audio API (no audio files). Purely
  * cosmetic: it listens to simulation events and never feeds anything back.
  *
- * Sound goes to the speakers (unless muted) and, when `recordTap` is read, to a
- * stream that a video recorder can add to the clip.
+ * Sound goes to the context's destination: the speakers for a live `AudioContext`
+ * (unless muted), or the rendered buffer for an `OfflineAudioContext` (video export).
+ * With `{ tap: true }` it is also sent to a MediaStream a recorder can add to a clip.
  */
 export class Sfx {
-  readonly ctx: AudioContext;
-  /** Audio stream for video recording; always carries sound, even when muted. */
-  readonly tap: MediaStreamAudioDestinationNode;
+  readonly ctx: BaseAudioContext;
+  /** Audio stream for real-time video recording; always carries sound, even when muted. */
+  readonly tap: MediaStreamAudioDestinationNode | null;
+  /**
+   * Offline rendering: the time (seconds) at which sounds played now should start.
+   * Null means "right now" on a live context.
+   */
+  clock: number | null = null;
   private readonly bus: GainNode;
   private readonly monitor: GainNode;
   private readonly noiseBuffer: AudioBuffer;
   private readonly lastPlayed = new Map<string, number>();
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext, opts: { tap?: boolean } = {}) {
     this.ctx = ctx;
-    this.tap = ctx.createMediaStreamDestination();
+    this.tap = opts.tap && ctx instanceof AudioContext ? ctx.createMediaStreamDestination() : null;
 
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.value = -14;
@@ -52,7 +58,7 @@ export class Sfx {
     this.monitor = ctx.createGain();
     compressor.connect(this.monitor);
     this.monitor.connect(ctx.destination);
-    compressor.connect(this.tap);
+    if (this.tap) compressor.connect(this.tap);
 
     const length = ctx.sampleRate;
     this.noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -65,12 +71,16 @@ export class Sfx {
   }
 
   resume(): void {
-    if (this.ctx.state === "suspended") void this.ctx.resume();
+    if (this.ctx instanceof AudioContext && this.ctx.state === "suspended") void this.ctx.resume();
+  }
+
+  private now(): number {
+    return this.clock ?? this.ctx.currentTime;
   }
 
   /** Plays the sound for one simulation event. */
   play(world: World, e: SimEvent): void {
-    if (this.ctx.state !== "running") return;
+    if (this.clock === null && this.ctx.state !== "running") return;
     switch (e.type) {
       case "hit": {
         if (e.dot) {
@@ -213,14 +223,14 @@ export class Sfx {
 
   /** Skips a sound that played less than `gap` seconds ago (avoids machine-gun stacking). */
   private allow(key: string, gap: number): boolean {
-    const now = this.ctx.currentTime;
+    const now = this.now();
     if (now - (this.lastPlayed.get(key) ?? -1) < gap) return false;
     this.lastPlayed.set(key, now);
     return true;
   }
 
   private tone(freq: number, dur: number, o: ToneOptions = {}): void {
-    const t0 = this.ctx.currentTime + (o.delay ?? 0);
+    const t0 = this.now() + (o.delay ?? 0);
     const osc = this.ctx.createOscillator();
     osc.type = o.type ?? "sine";
     osc.frequency.setValueAtTime(freq, t0);
@@ -236,7 +246,7 @@ export class Sfx {
   }
 
   private noise(dur: number, o: NoiseOptions = {}): void {
-    const t0 = this.ctx.currentTime + (o.delay ?? 0);
+    const t0 = this.now() + (o.delay ?? 0);
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     src.loop = true;
@@ -249,7 +259,7 @@ export class Sfx {
     g.gain.setValueAtTime(o.gain ?? 0.3, t0);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(filter).connect(g).connect(this.bus);
-    src.start(t0, Math.random() * 0.5);
+    src.start(Math.max(0, t0), Math.random() * 0.5);
     src.stop(t0 + dur + 0.05);
   }
 }

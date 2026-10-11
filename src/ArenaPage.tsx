@@ -337,7 +337,7 @@ export function ArenaPage() {
             ) : (
               <div className="space-y-2 rounded-lg border border-white/15 bg-white/5 p-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Kaydediliyor… %{Math.round(recProgress * 100)}</span>
+                  <span>Hazırlanıyor… %{Math.round(recProgress * 100)}</span>
                   <button
                     className="text-neutral-400 underline"
                     onClick={() => recording.current?.cancel()}
@@ -352,8 +352,8 @@ export function ArenaPage() {
                   />
                 </div>
                 <p className="text-xs text-neutral-400">
-                  Gerçek zamanlı kaydediliyor (~30 sn). Bu sekmeyi açık tutun; bitince dosya
-                  kendiliğinden iner.
+                  Video hazırlanıyor. Cihazınızın hızına göre birkaç saniye ile bir dakika
+                  sürebilir; bu sekmeyi açık tutun, bitince dosya kendiliğinden iner.
                 </p>
               </div>
             )}
