@@ -336,21 +336,19 @@ export class Fx {
       case "skill": {
         const f = world.fighters[e.fighter];
         if (!f) break;
-        const color = SIDES[f.side].light;
-        if (e.small) this.text(f.x, f.y - f.radius - 34, e.name, color, 30, 0.6);
-        else this.text(f.x, f.y - f.radius - 34, `${e.name}!`, color, 46, 1);
+        // No text: the move itself shows what happens. Just a little sparkle.
+        this.burst(f.x, f.y, e.small ? 6 : 14, [SIDES[f.side].light, "#ffffff"], 260, 0.35, 7);
         break;
       }
       case "stun": {
         const f = world.fighters[e.fighter];
-        if (f) this.text(f.x, f.y - f.radius - 44, "STUNNED", "#ffd45e", 38, 0.8);
+        if (f) this.burst(f.x, f.y - f.radius, 10, ["#ffd45e", "#fff3a0"], 220, 0.4, 7);
         break;
       }
       case "poison": {
         const f = world.fighters[e.fighter];
         if (!f) break;
         this.burst(f.x, f.y, 16, [POISON_GREEN, "#c8ffb8"], 280, 0.45, 8);
-        this.text(f.x, f.y - f.radius - 44, "POISONED", POISON_GREEN, 38, 0.8);
         break;
       }
       case "ko": {
