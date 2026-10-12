@@ -1,4 +1,5 @@
 import type { FighterDef } from "../types";
+import { ARENA } from "../world";
 import { spawnUnit, countUnits } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
@@ -64,8 +65,8 @@ export const caesar: FighterDef = {
         if (!enemy) return;
         const a = Math.atan2(self.y - enemy.y, self.x - enemy.x);
         const d = self.radius + enemy.radius + 6;
-        self.x = Math.min(720 - self.radius, Math.max(self.radius, enemy.x + Math.cos(a) * d));
-        self.y = Math.min(720 - self.radius, Math.max(self.radius, enemy.y + Math.sin(a) * d));
+        self.x = Math.min(ARENA - self.radius, Math.max(self.radius, enemy.x + Math.cos(a) * d));
+        self.y = Math.min(ARENA - self.radius, Math.max(self.radius, enemy.y + Math.sin(a) * d));
         self.vx = 0;
         self.vy = 0;
         world.emit({ type: "callout", fighter: self.index, text: "VENI" });

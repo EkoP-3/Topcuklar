@@ -47,6 +47,11 @@ function readMuted(): boolean {
   }
 }
 
+/** A leader's ultimate name (read from a fresh ability instance), or "". */
+function ultimateName(def: FighterDef): string {
+  return def.growth ? (def.createAbility?.().skillState?.().ultName ?? "") : "";
+}
+
 function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
@@ -426,6 +431,16 @@ export function ArenaPage() {
                 </div>
                 <p className="mt-1 text-sm leading-snug text-neutral-400">{d.description}</p>
                 {d.title && <p className="mt-0.5 text-xs text-neutral-300">{d.title}</p>}
+                {d.ability && (
+                  <p className="mt-1 text-xs text-neutral-300">
+                    <span className="font-semibold">{d.ability.name}</span> — {d.ability.text}
+                  </p>
+                )}
+                {ultimateName(d) && (
+                  <p className="mt-0.5 text-xs text-amber-300">
+                    ULTIMATE (%30 can): {ultimateName(d)}
+                  </p>
+                )}
                 {d.fact && <p className="mt-1 text-xs italic text-neutral-500">“{d.fact}”</p>}
               </div>
             ))}

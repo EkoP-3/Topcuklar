@@ -216,15 +216,9 @@ function drawSkillCards(ctx: Ctx, world: World): void {
     ctx.fillText(f.def.ability.name, tx, y + 44);
     // What it does.
     ctx.fillStyle = "rgba(232,236,244,0.8)";
-    let size = 30;
-    let lines: string[] = [];
-    // Shrink until it fits in two lines.
-    for (; size >= 20; size -= 2) {
-      ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
-      lines = wrapLines(ctx, f.def.ability.text, right - tx);
-      if (lines.length <= 2) break;
-    }
-    lines.slice(0, 2).forEach((line, k) => ctx.fillText(line, tx, y + 88 + k * (size + 4)));
+    const { size, lines } = fitTwoLines(ctx, f.def.ability.text, right - tx);
+    ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
+    lines.forEach((line, k) => ctx.fillText(line, tx, y + 88 + k * (size + 4)));
     // Level and ultimate: [LV 2] [ULT] NAME
     if (state.ult) {
       let px = x + 18;
@@ -1078,6 +1072,25 @@ function fitFont(
   ctx.font = `${weight} ${size}px ${family}`;
   const w = ctx.measureText(text).width;
   if (w > maxWidth) ctx.font = `${weight} ${Math.floor((size * maxWidth) / w)}px ${family}`;
+}
+
+const twoLineCache = new Map<string, { size: number; lines: string[] }>();
+
+/** Largest font size (30 down to 20) at which `text` fits in two lines; cached per text. */
+function fitTwoLines(ctx: Ctx, text: string, maxWidth: number): { size: number; lines: string[] } {
+  const key = `${maxWidth}|${text}`;
+  const hit = twoLineCache.get(key);
+  if (hit) return hit;
+  let size = 30;
+  let lines: string[] = [];
+  for (; size >= 20; size -= 2) {
+    ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
+    lines = wrapLines(ctx, text, maxWidth);
+    if (lines.length <= 2) break;
+  }
+  const result = { size: Math.max(size, 20), lines: lines.slice(0, 2) };
+  twoLineCache.set(key, result);
+  return result;
 }
 
 /** Splits text into lines no wider than `maxWidth` with the current font. */
