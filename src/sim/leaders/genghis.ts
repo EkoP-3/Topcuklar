@@ -1,5 +1,5 @@
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle } from "../units";
+import { fireProjectile, leadAngle, spawnSweep } from "../units";
 import { fan, skill } from "./kit";
 
 const ARROW_SPEED = 1050;
@@ -13,9 +13,10 @@ export const genghis: FighterDef = {
     "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi oklu yaylım atar: önce 3, 15. saniyede 5, 30. saniyede 7 ok.",
   era: "c. 1162–1227",
   fact: "Founded the Mongol Empire, later the largest land empire in history.",
+  title: "Great Khan of the Mongols",
   flag: "mongolia",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 29 },
+  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 27 },
   hp: 950,
   radius: 52,
   mass: 0.9,
@@ -26,7 +27,7 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 21,
+  contactDamage: 19,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -42,7 +43,7 @@ export const genghis: FighterDef = {
           style: "arrow",
           speed: ARROW_SPEED,
           radius: 9,
-          damage: 29,
+          damage: 27,
           knockback: 60,
           blast: 0,
           poison: 0,
@@ -52,6 +53,20 @@ export const genghis: FighterDef = {
         });
       }
       world.emit({ type: "shoot", fighter: self.index, style: "arrow" });
+    },
+    ultimate: {
+      name: "MONGOL HORDE",
+      cast(world, self) {
+        spawnSweep(world, self, {
+          style: "rider",
+          speed: 760,
+          depth: 70,
+          count: 7,
+          itemHalf: 42,
+          damage: 152,
+          knockback: 700,
+        });
+      },
     },
   }),
 };

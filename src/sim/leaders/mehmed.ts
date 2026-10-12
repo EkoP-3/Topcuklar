@@ -1,6 +1,6 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle } from "../units";
+import { fireProjectile, leadAngle, spawnSweep } from "../units";
 import { aim, fan, skill } from "./kit";
 
 const BALL_SPEED = 760;
@@ -13,9 +13,10 @@ export const mehmed: FighterDef = {
     "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
   era: "1432–1481",
   fact: "Took Constantinople in 1453 with the help of giant bombards.",
+  title: "Ottoman Sultan",
   flag: "turkey",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 104 },
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 93 },
   hp: 1050,
   radius: 59,
   mass: 1.2,
@@ -26,7 +27,7 @@ export const mehmed: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 24,
+  contactDamage: 22,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -51,7 +52,7 @@ export const mehmed: FighterDef = {
           style: "bombard",
           speed: BALL_SPEED,
           radius: 27,
-          damage: 104,
+          damage: 93,
           knockback: 600,
           blast: 130,
           poison: 0,
@@ -64,6 +65,20 @@ export const mehmed: FighterDef = {
       self.vx -= Math.cos(a) * 500;
       self.vy -= Math.sin(a) * 500;
       world.emit({ type: "shoot", fighter: self.index, style: "bombard" });
+    },
+    ultimate: {
+      name: "SHIPS OVER LAND",
+      cast(world, self) {
+        spawnSweep(world, self, {
+          style: "ship",
+          speed: 520,
+          depth: 110,
+          count: 3,
+          itemHalf: 120,
+          damage: 178,
+          knockback: 900,
+        });
+      },
     },
   }),
 };

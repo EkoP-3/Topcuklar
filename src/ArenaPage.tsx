@@ -425,6 +425,7 @@ export function ArenaPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-sm leading-snug text-neutral-400">{d.description}</p>
+                {d.title && <p className="mt-0.5 text-xs text-neutral-300">{d.title}</p>}
                 {d.fact && <p className="mt-1 text-xs italic text-neutral-500">“{d.fact}”</p>}
               </div>
             ))}

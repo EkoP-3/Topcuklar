@@ -90,7 +90,9 @@ export class Sfx {
         }
         if (!this.allow("hit", 0.03)) return;
         const attacker = world.fighters[e.attacker];
-        const power = clamp(0.3 + e.damage / 28, 0.3, 1);
+        const target = world.fighters[e.target];
+        const rel = target ? (e.damage / target.maxHp) * 100 : e.damage;
+        const power = clamp(0.3 + rel / 28, 0.3, 1);
         // Leaders hit with their bodies, units and projectiles: heavy impacts.
         if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.reach <= 0)) this.thud(power);
         else this.clang(power);
@@ -191,6 +193,28 @@ export class Sfx {
         break;
       case "poison":
         this.noise(0.4, { filter: "bandpass", freq: 4200, q: 3, gain: 0.3 });
+        break;
+      case "ultimate":
+        // Rising tension while the name is on screen.
+        this.tone(110, 1.4, { type: "sawtooth", gain: 0.16, slideTo: 880, attack: 0.3 });
+        this.tone(55, 1.4, { type: "sine", gain: 0.4, slideTo: 110, attack: 0.2 });
+        this.noise(1.3, { filter: "bandpass", freq: 300, slideTo: 4000, q: 0.8, gain: 0.35 });
+        break;
+      case "ultimateCast":
+        this.tone(48, 1.4, { type: "sine", gain: 0.9, slideTo: 22 });
+        this.noise(1.2, { filter: "lowpass", freq: 2600, slideTo: 90, gain: 0.9 });
+        [262, 330, 392, 523].forEach((f) =>
+          this.tone(f, 0.9, { type: "sawtooth", gain: 0.07, attack: 0.02 }),
+        );
+        break;
+      case "sweepHit":
+        this.thud(1);
+        this.noise(0.4, { filter: "lowpass", freq: 1200, slideTo: 100, gain: 0.7 });
+        break;
+      case "slam":
+        this.tone(70, 0.8, { type: "sine", gain: 0.9, slideTo: 25 });
+        this.noise(0.15, { filter: "highpass", freq: 2500, gain: 0.6 });
+        this.noise(0.6, { filter: "lowpass", freq: 1500, slideTo: 80, gain: 0.8 });
         break;
       case "ko":
         this.tone(120, 0.9, { type: "sawtooth", gain: 0.45, slideTo: 30 });

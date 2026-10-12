@@ -22,6 +22,11 @@ const HURT_FLASH = 0.18;
 const CLASH_COOLDOWN = 0.2;
 /** Seconds between poison damage ticks. */
 const POISON_TICK = 0.25;
+/** Ultimate intro: the world runs at ULT_TIME_SCALE for ULT_CINEMATIC sim-seconds. */
+export const ULT_CINEMATIC = 0.3;
+const ULT_TIME_SCALE = 0.2;
+/** Fraction of max HP at which a leader's ultimate fires. */
+export const ULT_HP = 0.3;
 /** Stunned fighters cruise at this fraction of their speed. */
 const STUN_SLOW = 0.3;
 const MAX_STEPS_PER_ADVANCE = 96;
@@ -49,6 +54,8 @@ export class World {
   winner = -1;
   /** 1 = normal speed; the KO moment slows time. */
   timeScale = 1;
+  /** An ultimate's slow-motion intro in progress (history mode). */
+  cinematic: { fighter: number; name: string; t: number; cast: () => void } | null = null;
   private freeze = 0;
   private acc = 0;
   private clashCooldown = 0;
@@ -92,6 +99,9 @@ export class World {
         poisonDps: 0,
         poisonBy: -1,
         poisonAcc: 0,
+        slam: 0,
+        slamBy: -1,
+        slamDamage: 0,
       });
     });
   }
@@ -179,6 +189,18 @@ export class World {
     return dmg;
   }
 
+  /**
+   * Starts an ultimate: slow motion while the name is shown, then `cast` runs.
+   * Returns false when another ultimate is already playing.
+   */
+  beginUltimate(f: Fighter, name: string, cast: () => void): boolean {
+    if (this.cinematic || this.phase !== "fight") return false;
+    this.cinematic = { fighter: f.index, name, t: 0, cast };
+    this.timeScale = ULT_TIME_SCALE;
+    this.emit({ type: "ultimate", fighter: f.index, name });
+    return true;
+  }
+
   /** Advance by real time. Runs as many fixed steps as fit. */
   advance(dt: number): void {
     this.acc += dt * this.timeScale;
@@ -249,6 +271,22 @@ export class World {
       }
     }
 
+    if (this.cinematic) {
+      const c = this.cinematic;
+      c.t += dt;
+      if (c.t >= ULT_CINEMATIC || this.phase !== "fight") {
+        this.cinematic = null;
+        if (this.phase === "fight") {
+          this.timeScale = 1;
+          const caster = this.fighters[c.fighter];
+          if (caster?.alive) {
+            c.cast();
+            this.emit({ type: "ultimateCast", fighter: c.fighter, name: c.name });
+          }
+        }
+      }
+    }
+
     if (this.phase === "fight") this.checkEnd();
     else if (this.phase === "ko" && this.phaseTime >= KO_TIME) {
       this.phase = "over";
@@ -272,6 +310,7 @@ export class World {
 
   private statusEffects(f: Fighter, dt: number): void {
     if (f.stun > 0) f.stun = Math.max(0, f.stun - dt);
+    if (f.slam > 0) f.slam = Math.max(0, f.slam - dt);
     if (f.poison <= 0) return;
     f.poison = Math.max(0, f.poison - dt);
     // Poison builds up and is dealt in whole points about four times a second.
@@ -332,6 +371,14 @@ export class World {
     }
     if (hit) {
       this.emit({ type: "wall", fighter: f.index, x: hit.x, y: hit.y });
+      const by = this.fighters[f.slamBy];
+      if (f.slam > 0 && by) {
+        f.slam = 0;
+        this.dealDamage(by, f, f.slamDamage, hit.x, hit.y);
+        f.stun = Math.max(f.stun, 1);
+        this.emit({ type: "slam", fighter: f.index, x: hit.x, y: hit.y });
+        this.emit({ type: "stun", fighter: f.index });
+      }
       f.ability?.onWallHit?.(this, f, hit);
     }
   }

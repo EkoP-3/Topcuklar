@@ -24,13 +24,13 @@ export function drawEmblem(ctx: Ctx, id: string, r: number): void {
       bow(ctx, r, lw);
       break;
     case "caesar":
-      laurel(ctx, r, lw);
+      gladius(ctx, r, lw);
       break;
     case "hannibal":
       elephant(ctx, r, lw);
       break;
     case "napoleon":
-      bicorne(ctx, r, lw);
+      monogram(ctx, r, lw);
       break;
     case "leonidas":
       hoplon(ctx, r, lw);
@@ -39,7 +39,7 @@ export function drawEmblem(ctx: Ctx, id: string, r: number): void {
       cannon(ctx, r, lw);
       break;
     case "cleopatra":
-      cobra(ctx, r, lw);
+      pyramid(ctx, r, lw);
       break;
   }
   ctx.restore();
@@ -122,6 +122,75 @@ function bow(ctx: Ctx, r: number, lw: number): void {
   paint(ctx, "#e05a4a", lw * 0.7);
 }
 
+/** Roman short sword, point up. */
+function gladius(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.95);
+  ctx.lineTo(r * 0.17, -r * 0.7);
+  ctx.lineTo(r * 0.15, r * 0.25);
+  ctx.lineTo(-r * 0.15, r * 0.25);
+  ctx.lineTo(-r * 0.17, -r * 0.7);
+  ctx.closePath();
+  paint(ctx, "#dfe4ee", lw);
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.8);
+  ctx.lineTo(0, r * 0.2);
+  ctx.lineWidth = lw * 0.5;
+  ctx.strokeStyle = "rgba(8,10,17,0.35)";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.32, r * 0.42, r * 0.11, 0, 0, TAU);
+  paint(ctx, GOLD, lw);
+  ctx.beginPath();
+  ctx.rect(-r * 0.1, r * 0.42, r * 0.2, r * 0.36);
+  paint(ctx, "#8a5a32", lw);
+  ctx.beginPath();
+  ctx.arc(0, r * 0.86, r * 0.14, 0, TAU);
+  paint(ctx, GOLD, lw);
+}
+
+/** Napoleon's imperial "N" inside a laurel wreath. */
+function monogram(ctx: Ctx, r: number, lw: number): void {
+  laurel(ctx, r, lw);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${Math.round(r * 1.05)}px Georgia, "Times New Roman", serif`;
+  ctx.lineWidth = lw * 1.4;
+  ctx.strokeStyle = OUTLINE;
+  ctx.strokeText("N", 0, r * 0.08);
+  ctx.fillStyle = GOLD;
+  ctx.fillText("N", 0, r * 0.08);
+}
+
+/** Pyramid with the sun behind it. */
+function pyramid(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.arc(r * 0.35, -r * 0.35, r * 0.32, 0, TAU);
+  paint(ctx, "#ffb15c", lw);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.05, -r * 0.7);
+  ctx.lineTo(r * 0.85, r * 0.6);
+  ctx.lineTo(-r * 0.95, r * 0.6);
+  ctx.closePath();
+  paint(ctx, "#e8c27a", lw);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.05, -r * 0.7);
+  ctx.lineTo(r * 0.15, r * 0.6);
+  ctx.lineTo(r * 0.85, r * 0.6);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(8,10,17,0.22)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(8,10,17,0.3)";
+  ctx.lineWidth = lw * 0.5;
+  for (const k of [0.25, 0.5, 0.75]) {
+    const y = -r * 0.7 + r * 1.3 * k;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.05 - r * 0.9 * k, y);
+    ctx.lineTo(-r * 0.05 + r * 0.9 * k, y);
+    ctx.stroke();
+  }
+}
+
 /** Laurel wreath, open at the top. */
 function laurel(ctx: Ctx, r: number, lw: number): void {
   for (const side of [-1, 1]) {
@@ -198,33 +267,6 @@ function elephant(ctx: Ctx, r: number, lw: number): void {
   ctx.fill();
 }
 
-/** Bicorne hat with a tricolour cockade. */
-function bicorne(ctx: Ctx, r: number, lw: number): void {
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.95, r * 0.25);
-  ctx.quadraticCurveTo(-r * 0.45, -r * 0.75, 0, -r * 0.62);
-  ctx.quadraticCurveTo(r * 0.45, -r * 0.75, r * 0.95, r * 0.25);
-  ctx.quadraticCurveTo(0, -r * 0.02, -r * 0.95, r * 0.25);
-  ctx.closePath();
-  paint(ctx, "#20263a", lw);
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.8, r * 0.17);
-  ctx.quadraticCurveTo(0, -r * 0.1, r * 0.8, r * 0.17);
-  ctx.lineWidth = lw * 0.8;
-  ctx.strokeStyle = GOLD;
-  ctx.stroke();
-  const rings: [number, string][] = [
-    [0.24, "#e0453a"],
-    [0.16, "#f4f6fb"],
-    [0.08, "#2f5bd3"],
-  ];
-  for (const [k, color] of rings) {
-    ctx.beginPath();
-    ctx.arc(0, -r * 0.3, r * k, 0, TAU);
-    paint(ctx, color, lw * 0.6);
-  }
-}
-
 /** Round hoplite shield with the Spartan lambda. */
 function hoplon(ctx: Ctx, r: number, lw: number): void {
   ctx.beginPath();
@@ -280,40 +322,4 @@ function cannon(ctx: Ctx, r: number, lw: number): void {
   ctx.lineWidth = lw * 0.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
-}
-
-/** Rearing cobra (the royal uraeus). */
-function cobra(ctx: Ctx, r: number, lw: number): void {
-  // coiled body
-  ctx.beginPath();
-  ctx.moveTo(0, r * 0.25);
-  ctx.bezierCurveTo(r * 0.1, r * 0.55, -r * 0.7, r * 0.5, -r * 0.4, r * 0.82);
-  ctx.moveTo(-r * 0.75, r * 0.82);
-  ctx.lineTo(r * 0.7, r * 0.82);
-  ctx.lineWidth = lw * 3.2;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.lineWidth = lw * 1.7;
-  ctx.strokeStyle = GOLD;
-  ctx.stroke();
-  // hood
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.9);
-  ctx.bezierCurveTo(r * 0.55, -r * 0.75, r * 0.5, r * 0.1, 0, r * 0.35);
-  ctx.bezierCurveTo(-r * 0.5, r * 0.1, -r * 0.55, -r * 0.75, 0, -r * 0.9);
-  ctx.closePath();
-  paint(ctx, GOLD, lw);
-  // hood pattern
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.55);
-  ctx.bezierCurveTo(r * 0.22, -r * 0.4, r * 0.18, 0, 0, r * 0.15);
-  ctx.bezierCurveTo(-r * 0.18, 0, -r * 0.22, -r * 0.4, 0, -r * 0.55);
-  paint(ctx, "#2f8f88", lw * 0.6);
-  // eyes
-  ctx.fillStyle = OUTLINE;
-  for (const x of [-0.1, 0.1]) {
-    ctx.beginPath();
-    ctx.arc(r * x, -r * 0.66, r * 0.045, 0, TAU);
-    ctx.fill();
-  }
 }

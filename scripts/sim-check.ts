@@ -15,11 +15,16 @@ if (!isRosterId(rosterArg)) throw new Error(`unknown roster: ${rosterArg}`);
 const ROSTER = ROSTERS[rosterArg];
 const NAME_W = Math.max(8, ...ROSTER.map((d) => d.name.length)) + 1;
 
+/** Fighters that fired their ultimate in the last played match. */
+let ultUsers: number[] = [];
+
 function play(seed: number, a: FighterDef, b: FighterDef): World {
   const world = new World(seed, [a, b]);
+  ultUsers = [];
   let frames = 0;
   while (world.phase !== "over" && frames < 60 * 200) {
     world.advance(FRAME);
+    for (const e of world.events) if (e.type === "ultimate") ultUsers.push(e.fighter);
     world.events.length = 0;
     frames++;
   }
@@ -56,6 +61,9 @@ let timeouts = 0;
 let closeFinishes = 0;
 let reached15 = 0;
 let reached30 = 0;
+let ultCount = 0;
+let ultMatches = 0;
+let ultWins = 0;
 let games = 0;
 let durationSum = 0;
 
@@ -82,6 +90,9 @@ for (const row of ROSTER) {
       if (world.time >= MATCH_LIMIT) timeouts++;
       if (world.time >= 15) reached15++;
       if (world.time >= 30) reached30++;
+      ultCount += ultUsers.length;
+      if (ultUsers.length > 0) ultMatches++;
+      ultWins += ultUsers.filter((i) => i === world.winner).length;
       const winner = world.fighters[world.winner];
       if (winner && winner.hp / winner.maxHp <= 0.15) closeFinishes++;
     }
@@ -109,5 +120,12 @@ console.log(
   `reached 15s: ${((reached15 / games) * 100).toFixed(1)}%, ` +
     `reached 30s: ${((reached30 / games) * 100).toFixed(1)}%`,
 );
+if (ultCount > 0) {
+  console.log(
+    `ultimates: ${(ultCount / games).toFixed(2)} per match, ` +
+      `in ${((ultMatches / games) * 100).toFixed(1)}% of matches, ` +
+      `user won ${((ultWins / ultCount) * 100).toFixed(1)}%`,
+  );
+}
 
 if (failed) process.exit(1);

@@ -35,6 +35,8 @@ export interface FighterDef {
   era?: string;
   /** History mode: one-line English fact shown during the match. */
   fact?: string;
+  /** History mode: English title, e.g. "Ottoman Sultan". */
+  title?: string;
   /** History mode: flag or banner id drawn next to the name (see render/flags.ts). */
   flag?: string;
   /** History mode: signature move, shown in the top panel. */
@@ -118,6 +120,10 @@ export interface Fighter {
   poisonBy: number;
   /** Poison damage built up but not yet dealt. */
   poisonAcc: number;
+  /** Seconds during which hitting a wall hurts (after a huge knockback), by whom and how much. */
+  slam: number;
+  slamBy: number;
+  slamDamage: number;
 }
 
 /** Things that live in the arena besides fighters. Abilities own and update them. */
@@ -138,7 +144,42 @@ export type Hazard =
     }
   | { kind: "ring"; owner: number; x: number; y: number; radius: number; maxRadius: number }
   | UnitHazard
-  | ProjectileHazard;
+  | ProjectileHazard
+  | SweepHazard;
+
+/**
+ * A row of things (ships, riders, elephants, a phalanx, a flood) crossing the whole
+ * arena from one edge to the other. Hits each enemy once.
+ */
+export interface SweepHazard {
+  kind: "sweep";
+  owner: number;
+  style: "ship" | "rider" | "elephant" | "phalanx" | "flood";
+  /** Centre of the row. */
+  x: number;
+  y: number;
+  /** Unit direction of travel. */
+  dx: number;
+  dy: number;
+  speed: number;
+  /** Thickness of the row along the direction of travel. */
+  depth: number;
+  /** Item centres, as offsets across the row (perpendicular to travel). */
+  items: number[];
+  /** Half the width of one item across the row. */
+  itemHalf: number;
+  damage: number;
+  knockback: number;
+  stun: number;
+  poison: number;
+  poisonDps: number;
+  /** Fighters already hit (by index). */
+  hit: boolean[];
+  /** Distance travelled so far and in total. */
+  travelled: number;
+  distance: number;
+  ttl: number;
+}
 
 /** A summoned soldier/animal that chases the nearest enemy and hurts on contact. */
 export interface UnitHazard {
@@ -222,6 +263,10 @@ export type SimEvent =
   | { type: "unitDown"; x: number; y: number; side: 0 | 1 }
   | { type: "shield"; fighter: number }
   | { type: "skill"; fighter: number; name: string; small: boolean }
+  | { type: "ultimate"; fighter: number; name: string }
+  | { type: "ultimateCast"; fighter: number; name: string }
+  | { type: "sweepHit"; fighter: number; x: number; y: number }
+  | { type: "slam"; fighter: number; x: number; y: number }
   | { type: "stun"; fighter: number }
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }

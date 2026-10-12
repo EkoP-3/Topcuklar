@@ -1,4 +1,4 @@
-import type { Fighter, Hazard, ProjectileHazard, UnitHazard } from "./types";
+import type { Fighter, Hazard, ProjectileHazard, SweepHazard, UnitHazard } from "./types";
 import { ARENA, limitSpeed, type World } from "./world";
 
 /** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
@@ -14,15 +14,21 @@ export type ProjectileSpec = Omit<ProjectileHazard, "kind" | "owner" | "x" | "y"
   speed: number;
 };
 
-/** Puts a unit next to its owner, heading `angle`. */
-export function spawnUnit(world: World, owner: Fighter, spec: UnitSpec, angle: number): UnitHazard {
+/** Puts a unit next to its owner (or at `at`), heading `angle`. */
+export function spawnUnit(
+  world: World,
+  owner: Fighter,
+  spec: UnitSpec,
+  angle: number,
+  at?: { x: number; y: number },
+): UnitHazard {
   const d = owner.radius + spec.radius + 4;
   const unit: UnitHazard = {
     kind: "unit",
     owner: owner.index,
     ...spec,
-    x: clampInside(owner.x + Math.cos(angle) * d, spec.radius),
-    y: clampInside(owner.y + Math.sin(angle) * d, spec.radius),
+    x: clampInside(at ? at.x : owner.x + Math.cos(angle) * d, spec.radius),
+    y: clampInside(at ? at.y : owner.y + Math.sin(angle) * d, spec.radius),
     vx: Math.cos(angle) * spec.speed,
     vy: Math.sin(angle) * spec.speed,
     maxHp: spec.hp,
@@ -34,12 +40,13 @@ export function spawnUnit(world: World, owner: Fighter, spec: UnitSpec, angle: n
   return unit;
 }
 
-/** Launches a projectile from the edge of its owner's body. */
+/** Launches a projectile from the edge of its owner's body (or from `from`). */
 export function fireProjectile(
   world: World,
   owner: Fighter,
   angle: number,
   spec: ProjectileSpec,
+  from?: { x: number; y: number },
 ): ProjectileHazard {
   const { speed, ...rest } = spec;
   const d = owner.radius + spec.radius;
@@ -47,8 +54,8 @@ export function fireProjectile(
     kind: "projectile",
     owner: owner.index,
     ...rest,
-    x: owner.x + Math.cos(angle) * d,
-    y: owner.y + Math.sin(angle) * d,
+    x: from ? from.x : owner.x + Math.cos(angle) * d,
+    y: from ? from.y : owner.y + Math.sin(angle) * d,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
   };
@@ -60,6 +67,69 @@ export function fireProjectile(
 export function leadAngle(from: Fighter, target: Fighter, speed: number, lead = 0.6): number {
   const t = (Math.hypot(target.x - from.x, target.y - from.y) / speed) * lead;
   return Math.atan2(target.y + target.vy * t - from.y, target.x + target.vx * t - from.x);
+}
+
+export interface SweepSpec {
+  style: SweepHazard["style"];
+  speed: number;
+  depth: number;
+  /** Number of items spread evenly across the arena, each `itemHalf` wide (half). */
+  count: number;
+  itemHalf: number;
+  damage: number;
+  knockback: number;
+  stun?: number;
+  poison?: number;
+  poisonDps?: number;
+  /** Travel toward the owner (starting behind the enemy) instead of away from it. */
+  toward?: boolean;
+}
+
+/**
+ * Sends a row across the whole arena along the axis that points most toward the
+ * nearest enemy, starting just outside the edge on the owner's side.
+ */
+export function spawnSweep(world: World, owner: Fighter, spec: SweepSpec): SweepHazard | null {
+  const enemy = world.nearestEnemy(owner);
+  if (!enemy) return null;
+  const ex = enemy.x - owner.x;
+  const ey = enemy.y - owner.y;
+  let dx = 0;
+  let dy = 0;
+  if (Math.abs(ex) >= Math.abs(ey)) dx = ex >= 0 ? 1 : -1;
+  else dy = ey >= 0 ? 1 : -1;
+  if (spec.toward) {
+    dx = -dx;
+    dy = -dy;
+  }
+  const half = ARENA / 2;
+  const start = half + spec.depth;
+  const step = ARENA / spec.count;
+  const items = Array.from({ length: spec.count }, (_, i) => -half + step * (i + 0.5));
+  const sweep: SweepHazard = {
+    kind: "sweep",
+    owner: owner.index,
+    style: spec.style,
+    x: half - dx * start,
+    y: half - dy * start,
+    dx,
+    dy,
+    speed: spec.speed,
+    depth: spec.depth,
+    items,
+    itemHalf: spec.itemHalf,
+    damage: spec.damage,
+    knockback: spec.knockback,
+    stun: spec.stun ?? 0,
+    poison: spec.poison ?? 0,
+    poisonDps: spec.poisonDps ?? 0,
+    hit: world.fighters.map(() => false),
+    travelled: 0,
+    distance: start * 2,
+    ttl: 10,
+  };
+  world.hazards.push(sweep);
+  return sweep;
 }
 
 export function countUnits(world: World, owner: Fighter, style: UnitHazard["style"]): number {
@@ -75,6 +145,7 @@ export function updateUnits(world: World, dt: number): void {
   for (const h of world.hazards) {
     if (h.kind === "unit") updateUnit(world, h, dt);
     else if (h.kind === "projectile") updateProjectile(world, h, dt);
+    else if (h.kind === "sweep") updateSweep(world, h, dt);
     else continue;
     if (h.ttl <= 0) removed = true;
   }
@@ -82,7 +153,56 @@ export function updateUnits(world: World, dt: number): void {
 }
 
 function isGone(h: Hazard): boolean {
-  return (h.kind === "unit" || h.kind === "projectile") && h.ttl <= 0;
+  return (h.kind === "unit" || h.kind === "projectile" || h.kind === "sweep") && h.ttl <= 0;
+}
+
+function updateSweep(world: World, s: SweepHazard, dt: number): void {
+  const owner = world.fighters[s.owner];
+  if (!owner || s.ttl <= 0) return;
+  const move = s.speed * dt;
+  s.x += s.dx * move;
+  s.y += s.dy * move;
+  s.travelled += move;
+  if (s.travelled >= s.distance) {
+    s.ttl = 0;
+    return;
+  }
+  // Across-the-row axis.
+  const px = -s.dy;
+  const py = s.dx;
+  const touches = (x: number, y: number, r: number): boolean => {
+    const along = (x - s.x) * s.dx + (y - s.y) * s.dy;
+    if (Math.abs(along) > s.depth / 2 + r) return false;
+    const across = (x - s.x) * px + (y - s.y) * py;
+    return s.items.some((o) => Math.abs(across - o) <= s.itemHalf + r);
+  };
+
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === owner.side || s.hit[f.index]) continue;
+    if (!touches(f.x, f.y, f.radius)) continue;
+    s.hit[f.index] = true;
+    const dealt = world.dealDamage(owner, f, s.damage, f.x, f.y, s.knockback, {
+      fromX: f.x - s.dx * 100,
+      fromY: f.y - s.dy * 100,
+    });
+    world.emit({ type: "sweepHit", fighter: f.index, x: f.x, y: f.y });
+    if (dealt <= 0) continue;
+    if (s.stun > 0) {
+      f.stun = Math.max(f.stun, s.stun);
+      world.emit({ type: "stun", fighter: f.index });
+    }
+    if (s.poison > 0) {
+      f.poison = Math.max(f.poison, s.poison);
+      f.poisonDps = s.poisonDps;
+      f.poisonBy = owner.index;
+      world.emit({ type: "poison", fighter: f.index });
+    }
+  }
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    if (touches(o.x, o.y, o.radius)) damageUnit(world, o, owner, o.hp + 1, o.x, o.y);
+  }
 }
 
 function updateUnit(world: World, u: UnitHazard, dt: number): void {

@@ -1,5 +1,5 @@
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle } from "../units";
+import { fireProjectile, leadAngle, spawnSweep } from "../units";
 import { fan, skill } from "./kit";
 
 const ASP_SPEED = 700;
@@ -12,9 +12,10 @@ export const cleopatra: FighterDef = {
     "Kleopatra. Belli aralıklarla rakibe engerek fırlatır; ısırılan rakip birkaç saniye zehirlenip can kaybeder. Önce 1, 15. saniyede 2, 30. saniyede 3 engerek.",
   era: "69–30 BC",
   fact: "The last active ruler of Ptolemaic Egypt.",
+  title: "Queen of Egypt",
   flag: "egypt",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "POISON/S", base: 27 },
+  growth: { perSecond: 0.015, stat: "POISON/S", base: 26 },
   hp: 1000,
   radius: 55,
   mass: 1,
@@ -40,16 +41,32 @@ export const cleopatra: FighterDef = {
           style: "asp",
           speed: ASP_SPEED,
           radius: 15,
-          damage: 19,
+          damage: 18,
           knockback: 80,
           blast: 0,
           poison: 4,
-          poisonDps: 27,
+          poisonDps: 26,
           bounces: 1,
           ttl: 3,
         });
       }
       world.emit({ type: "shoot", fighter: self.index, style: "asp" });
+    },
+    ultimate: {
+      name: "NILE FLOOD",
+      cast(world, self) {
+        spawnSweep(world, self, {
+          style: "flood",
+          speed: 430,
+          depth: 130,
+          count: 1,
+          itemHalf: 360,
+          damage: 87,
+          knockback: 700,
+          poison: 6,
+          poisonDps: 54,
+        });
+      },
     },
   }),
 };

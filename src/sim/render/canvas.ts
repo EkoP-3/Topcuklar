@@ -6,14 +6,16 @@ import type {
   ProjectileHazard,
   PylonHazard,
   RingHazard,
+  SweepHazard,
   UnitHazard,
 } from "../types";
-import { ARENA, type World } from "../world";
+import { ARENA, ULT_CINEMATIC, ULT_HP, type World } from "../world";
 import type { Fx } from "./fx";
 import { DISPLAY_FONT, MONO_FONT, OUTLINE, SIDES } from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem } from "./emblems";
 import { FLAG_RATIO, drawFlag } from "./flags";
+import { drawHeadgear } from "./headgear";
 import { portraitImage } from "./images";
 import { drawWeapon } from "./sprites";
 
@@ -140,16 +142,25 @@ function drawFighterPanel(
   ctx.strokeStyle = "rgba(255,255,255,0.85)";
   ctx.lineWidth = 3;
   ctx.stroke();
+  if (f.def.growth) {
+    // Where the ultimate fires.
+    const tx = align === "left" ? x0 + w * ULT_HP : x0 + w * (1 - ULT_HP);
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(tx - 4, y - 8, 8, h + 16);
+    ctx.fillStyle = "#ffd45e";
+    ctx.fillRect(tx - 2, y - 6, 4, h + 12);
+  }
 
   ctx.font = `600 34px ${MONO_FONT}`;
   ctx.fillStyle = "#e8ecf4";
   ctx.fillText(`HP ${Math.max(0, Math.ceil(f.hp))}`, edgeX, 256);
-  if (f.def.era) {
-    // Lifetime on the inner end of the HP bar.
+  const sub = f.def.title ?? f.def.era;
+  if (sub) {
+    // Title on the inner end of the HP bar.
     ctx.textAlign = align === "left" ? "right" : "left";
-    ctx.font = `600 28px ${MONO_FONT}`;
-    ctx.fillStyle = "rgba(232,236,244,0.6)";
-    ctx.fillText(f.def.era, align === "left" ? x0 + w : x0, 254);
+    fitFont(ctx, sub, 600, 28, w - 170, DISPLAY_FONT);
+    ctx.fillStyle = "rgba(232,236,244,0.75)";
+    ctx.fillText(sub, align === "left" ? x0 + w : x0, 254);
   }
 
   if (f.def.reach > 0) {
@@ -321,7 +332,8 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   }
 
   for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world.time);
-  // Projectiles fly over bodies.
+  // Armies and projectiles go over bodies.
+  for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world, world.time);
   for (const h of world.hazards) if (h.kind === "projectile") drawProjectile(ctx, h, world.time);
 
   for (const r of fx.rings) {
@@ -353,6 +365,7 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
     outlinedText(ctx, t.text, x, Math.max(24, t.y), t.color, 8 / K);
   }
   ctx.globalAlpha = 1;
+  drawSpotlight(ctx, world);
   ctx.restore();
 
   drawBanner(ctx, world);
@@ -418,14 +431,6 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
     }
   }
 
-  if (leader && f.def.flag) {
-    const fh = f.radius * 0.36;
-    ctx.save();
-    ctx.translate((-fh * FLAG_RATIO) / 2, -f.radius - fh * 0.55);
-    drawFlag(ctx, f.def.flag, fh);
-    ctx.restore();
-  }
-
   if (f.poison > 0) {
     ctx.beginPath();
     ctx.arc(0, 0, f.radius, 0, TAU);
@@ -451,6 +456,8 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
     outlinedText(ctx, hp, 0, 2, "#ffffff", 4);
   }
 
+  if (leader) drawHeadgear(ctx, f.def.id, f.radius);
+
   if (f.shielded) {
     ctx.beginPath();
     ctx.arc(0, 0, f.radius + 11, 0, TAU);
@@ -464,7 +471,8 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
   if (f.stun > 0) {
     for (let i = 0; i < 3; i++) {
       const a = time * 6 + (i / 3) * TAU;
-      star(ctx, Math.cos(a) * f.radius * 0.7, -f.radius - 10 + Math.sin(a) * 8, 9, "#ffd45e");
+      const sy = leader ? -f.radius * 1.65 : -f.radius - 10;
+      star(ctx, Math.cos(a) * f.radius * 0.7, sy + Math.sin(a) * 8, 9, "#ffd45e");
     }
   }
 
@@ -599,6 +607,179 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
   ctx.restore();
 }
 
+function drawSweep(ctx: Ctx, s: SweepHazard, world: World, time: number): void {
+  const side = SIDES[world.fighters[s.owner]?.side ?? 0];
+  const px = -s.dy;
+  const py = s.dx;
+  const angle = Math.atan2(s.dy, s.dx);
+  for (const o of s.items) {
+    ctx.save();
+    ctx.translate(s.x + px * o, s.y + py * o);
+    ctx.rotate(angle);
+    // Keep pictures upright when travelling left.
+    if (s.dx < 0) ctx.scale(1, -1);
+    switch (s.style) {
+      case "ship":
+        drawShip(ctx, s, side.main);
+        break;
+      case "rider":
+        drawRider(ctx, s, side.main);
+        break;
+      case "elephant":
+        ctx.beginPath();
+        ctx.arc(0, 0, s.itemHalf * 0.95, 0, TAU);
+        ctx.fillStyle = "#5b6170";
+        ctx.fill();
+        ctx.lineWidth = 7;
+        ctx.strokeStyle = side.main;
+        ctx.stroke();
+        drawEmblem(ctx, "hannibal", s.itemHalf * 0.85);
+        break;
+      case "phalanx":
+        drawPhalanx(ctx, s, side.main);
+        break;
+      case "flood":
+        drawFlood(ctx, s, time);
+        break;
+    }
+    ctx.restore();
+  }
+}
+
+function drawShip(ctx: Ctx, s: SweepHazard, accent: string): void {
+  const L = s.depth * 1.7;
+  const B = s.itemHalf * 0.8;
+  // oars
+  ctx.strokeStyle = "#5a3a1e";
+  ctx.lineWidth = 5;
+  for (let i = -3; i <= 3; i++) {
+    const x = (i / 3) * L * 0.32;
+    ctx.beginPath();
+    ctx.moveTo(x, -B / 2);
+    ctx.lineTo(x - 14, -s.itemHalf);
+    ctx.moveTo(x, B / 2);
+    ctx.lineTo(x - 14, s.itemHalf);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-L / 2, -B / 2);
+  ctx.lineTo(L / 2 - B * 0.6, -B / 2);
+  ctx.quadraticCurveTo(L / 2, -B * 0.3, L / 2 + 10, 0);
+  ctx.quadraticCurveTo(L / 2, B * 0.3, L / 2 - B * 0.6, B / 2);
+  ctx.lineTo(-L / 2, B / 2);
+  ctx.closePath();
+  ctx.fillStyle = "#7a4a28";
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.beginPath();
+  roundRectPath(ctx, -L / 2 + 10, -B / 2 + 10, L - B * 0.6 - 10, B - 20, 8);
+  ctx.fillStyle = "#a8743f";
+  ctx.fill();
+  // red sail with crescent and star
+  ctx.beginPath();
+  roundRectPath(ctx, -12, -B * 0.85, 24, B * 1.7, 6);
+  ctx.fillStyle = "#c8202a";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 9, 0, TAU);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(3, 0, 7, 0, TAU);
+  ctx.fillStyle = "#c8202a";
+  ctx.fill();
+  // team pennant at the stern
+  ctx.fillStyle = accent;
+  ctx.fillRect(-L / 2 - 4, -8, 22, 16);
+}
+
+function drawRider(ctx: Ctx, s: SweepHazard, accent: string): void {
+  const L = s.depth * 1.7;
+  const B = s.itemHalf * 1.1;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, L / 2, B / 2, 0, 0, TAU);
+  ctx.fillStyle = "#8a5a32";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(L / 2 + 6, 0, 14, 9, 0, 0, TAU);
+  ctx.fillStyle = "#8a5a32";
+  ctx.fill();
+  ctx.stroke();
+  // spear
+  ctx.beginPath();
+  ctx.moveTo(-6, -B * 0.2);
+  ctx.lineTo(L / 2 + 34, -B * 0.25);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#e8d8b0";
+  ctx.stroke();
+  // rider
+  ctx.beginPath();
+  ctx.arc(-4, 0, B * 0.36, 0, TAU);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+}
+
+function drawPhalanx(ctx: Ctx, s: SweepHazard, accent: string): void {
+  for (const y of [-s.itemHalf * 0.5, s.itemHalf * 0.5]) {
+    ctx.beginPath();
+    ctx.moveTo(0, y - 8);
+    ctx.lineTo(s.depth * 1.4, y - 8);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#e8d8b0";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, y, s.itemHalf * 0.48, 0, TAU);
+    ctx.fillStyle = "#d9a441";
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = accent;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, y, s.itemHalf * 0.2, 0, TAU);
+    ctx.fillStyle = "#a3201f";
+    ctx.fill();
+  }
+}
+
+function drawFlood(ctx: Ctx, s: SweepHazard, time: number): void {
+  const d = s.depth;
+  const h = s.itemHalf;
+  const g = ctx.createLinearGradient(-d, 0, d / 2, 0);
+  g.addColorStop(0, "rgba(40,110,200,0)");
+  g.addColorStop(0.5, "rgba(50,130,220,0.75)");
+  g.addColorStop(1, "rgba(120,200,255,0.95)");
+  ctx.beginPath();
+  ctx.moveTo(-d * 1.5, -h);
+  for (let y = -h; y <= h; y += 20) {
+    ctx.lineTo(d / 2 + Math.sin(y * 0.05 + time * 10) * 14, y);
+  }
+  ctx.lineTo(-d * 1.5, h);
+  ctx.closePath();
+  ctx.fillStyle = g;
+  ctx.fill();
+  // foam
+  ctx.beginPath();
+  for (let y = -h; y <= h; y += 20) {
+    const x = d / 2 + Math.sin(y * 0.05 + time * 10) * 14;
+    if (y === -h) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.stroke();
+}
+
 function star(ctx: Ctx, x: number, y: number, r: number, color: string): void {
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
@@ -714,6 +895,19 @@ function drawBanner(ctx: Ctx, world: World): void {
   let t = world.phaseTime;
   let alpha = 1;
 
+  const leaders = world.fighters.some((f) => f.def.growth);
+  if (world.cinematic) {
+    drawUltimateBanner(ctx, world);
+    return;
+  }
+  if (leaders && (world.phase === "intro" || world.phase === "fight")) {
+    const t = world.phase === "intro" ? world.phaseTime : 0.8 + world.phaseTime;
+    if (t < INTRO_CARD_TIME) {
+      drawLeaderCards(ctx, world, t);
+      return;
+    }
+  }
+
   switch (world.phase) {
     case "intro":
       drawMatchCard(ctx, world);
@@ -760,6 +954,99 @@ function drawBanner(ctx: Ctx, world: World): void {
   ctx.textBaseline = "middle";
   ctx.font = `800 ${size}px ${DISPLAY_FONT}`;
   outlinedText(ctx, text, 0, 0, color, 16);
+  ctx.restore();
+}
+
+/** Seconds (from the very start) the leader intro cards stay up; the fight starts under them. */
+const INTRO_CARD_TIME = 1.9;
+
+/** History intro: "WHO WINS?" and a card per leader (flag, name, title, lifetime). */
+function drawLeaderCards(ctx: Ctx, world: World, t: number): void {
+  const [a, b] = world.fighters;
+  if (!a || !b) return;
+  const fade = 1 - clamp((t - (INTRO_CARD_TIME - 0.45)) / 0.45, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = "rgba(5,6,10,0.62)";
+  ctx.fillRect(0, 0, AS, AS);
+  const s = easeOutBack(clamp(t / 0.25, 0, 1));
+  ctx.translate(AS / 2, 0);
+  ctx.scale(s, s);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 64px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "WHO WINS?", 0, 90, "#ffd45e", 12);
+  leaderCard(ctx, a, 255);
+  ctx.textAlign = "center";
+  ctx.font = `800 84px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "VS", 0, 495, "#f4f6fb", 12);
+  leaderCard(ctx, b, 640);
+  ctx.restore();
+}
+
+function leaderCard(ctx: Ctx, f: Fighter, y: number): void {
+  cardName(ctx, f, y);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (f.def.title) {
+    fitFont(ctx, f.def.title, 700, 44, AS - 100, DISPLAY_FONT);
+    outlinedText(ctx, f.def.title, 0, y + 78, SIDES[f.side].light, 8);
+  }
+  if (f.def.era) {
+    ctx.font = `600 32px ${MONO_FONT}`;
+    outlinedText(ctx, f.def.era, 0, y + 128, "rgba(232,236,244,0.8)", 6);
+  }
+}
+
+/** Ultimate intro: dark arena with a spotlight on the caster. */
+function drawSpotlight(ctx: Ctx, world: World): void {
+  const c = world.cinematic;
+  const f = c ? world.fighters[c.fighter] : null;
+  if (!c || !f) return;
+  const p = clamp(c.t / ULT_CINEMATIC, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = 0.7 * clamp(p * 5, 0, 1);
+  ctx.beginPath();
+  ctx.rect(0, 0, ARENA, ARENA);
+  ctx.arc(f.x, f.y, f.radius * 2, 0, TAU, true);
+  ctx.fillStyle = "#000000";
+  ctx.fill("evenodd");
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(f.x, f.y, f.radius * 2, 0, TAU);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "#ffd45e";
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** "ULTIMATE" + the move's name, huge, while the world is in slow motion. */
+function drawUltimateBanner(ctx: Ctx, world: World): void {
+  const c = world.cinematic;
+  const f = c ? world.fighters[c.fighter] : null;
+  if (!c || !f) return;
+  const p = clamp(c.t / ULT_CINEMATIC, 0, 1);
+  const s = easeOutBack(clamp(p * 4, 0, 1));
+  // Keep the text away from the caster: top half unless they are up there.
+  const y = f.y * K < AS / 2 ? AS * 0.7 : AS * 0.28;
+  ctx.save();
+  ctx.translate(AS / 2, y);
+  ctx.scale(s, s);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (f.def.flag) {
+    const fh = 56;
+    ctx.save();
+    ctx.translate((-fh * FLAG_RATIO) / 2, -150);
+    drawFlag(ctx, f.def.flag, fh);
+    ctx.restore();
+  }
+  ctx.font = `800 58px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "ULTIMATE", 0, -70, "#ffd45e", 12);
+  fitFont(ctx, c.name, 800, 120, AS - 60, DISPLAY_FONT);
+  outlinedText(ctx, c.name, 0, 20, SIDES[f.side].main, 16);
+  ctx.font = `700 44px ${DISPLAY_FONT}`;
+  outlinedText(ctx, f.def.name, 0, 105, "#f4f6fb", 9);
   ctx.restore();
 }
 

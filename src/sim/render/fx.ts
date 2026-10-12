@@ -188,25 +188,29 @@ export class Fx {
           break;
         }
         const side = SIDES[attacker?.side ?? 0];
+        // Damage on a 0..100 scale, whatever the target's max HP is.
+        const rel = target ? (e.damage / target.maxHp) * 100 : e.damage;
+        const big = rel >= 10;
         this.burst(
           e.x,
           e.y,
-          8 + Math.min(16, e.damage),
-          ["#ffffff", side.light, side.main],
-          260 + e.damage * 9,
+          8 + Math.min(big ? 30 : 16, rel * (big ? 2 : 1)),
+          big ? ["#ffffff", "#ffd45e", side.light] : ["#ffffff", side.light, side.main],
+          260 + Math.min(rel, 30) * 9,
           0.5,
-          9,
+          big ? 12 : 9,
         );
         if (target) {
           this.text(
             target.x,
             target.y - target.radius - 14,
             `-${e.damage}`,
-            "#ffffff",
-            36 + Math.min(28, (e.damage / target.maxHp) * 130),
+            big ? "#ffd45e" : "#ffffff",
+            36 + Math.min(big ? 48 : 28, rel * 1.3 * (big ? 1.6 : 1)),
+            big ? 1.1 : 0.8,
           );
         }
-        this.addShake(4 + e.damage * 0.9);
+        this.addShake(4 + Math.min(rel, 30) * (big ? 1.4 : 0.9));
         break;
       }
       case "clash":
@@ -296,6 +300,37 @@ export class Fx {
         const f = world.fighters[e.fighter];
         if (!f) break;
         this.burst(f.x, f.y, 18, ["#ffd45e", "#fff3a0", "#ffffff"], 340, 0.45, 8);
+        break;
+      }
+      case "ultimate": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.burst(f.x, f.y, 40, ["#ffd45e", "#fff3a0", SIDES[f.side].light], 520, 0.9, 11);
+        this.rings.push({ x: f.x, y: f.y, radius: 220, life: 0.5, max: 0.5, color: "#ffd45e" });
+        this.flash = Math.max(this.flash, 0.4);
+        this.addShake(14);
+        break;
+      }
+      case "ultimateCast": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.burst(f.x, f.y, 70, ["#ffffff", "#ffd45e", SIDES[f.side].main], 900, 1, 14);
+        this.rings.push({ x: f.x, y: f.y, radius: 420, life: 0.6, max: 0.6, color: "#ffffff" });
+        this.flash = 1;
+        this.addShake(40);
+        break;
+      }
+      case "sweepHit":
+        this.burst(e.x, e.y, 36, ["#ffffff", "#ffd45e", "#ffb15c"], 700, 0.7, 13);
+        this.addShake(30);
+        this.flash = Math.max(this.flash, 0.4);
+        break;
+      case "slam": {
+        this.burst(e.x, e.y, 50, ["#ffffff", "#ffd45e", "#c8202a"], 800, 0.8, 14);
+        this.rings.push({ x: e.x, y: e.y, radius: 200, life: 0.4, max: 0.4, color: "#ffd45e" });
+        this.text(e.x, e.y, "SLAM!", "#ffd45e", 64, 1);
+        this.flash = Math.max(this.flash, 0.6);
+        this.addShake(46);
         break;
       }
       case "skill": {

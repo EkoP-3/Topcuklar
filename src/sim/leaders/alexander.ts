@@ -1,6 +1,7 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
-import { aim, skill } from "./kit";
+import { spawnSweep } from "../units";
+import { aim, skill, steerToward } from "./kit";
 
 const DASH_SPEED = 1500;
 const ABILITY = { name: "COMPANION CHARGE", text: "Aims, then charges at full gallop" };
@@ -12,9 +13,10 @@ export const alexander: FighterDef = {
     "Büyük İskender. Belli aralıklarla durup nişan alır ve Hetairoi süvarisi gibi rakibe hücum eder; hücumda çok sert vurur. 15. saniyede art arda 2, 30. saniyede 3 hücum yapar.",
   era: "356–323 BC",
   fact: "Never lost a battle; his empire reached from Greece to India.",
+  title: "King of Macedon",
   flag: "vergina",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 104 },
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 90 },
   hp: 1000,
   radius: 58,
   mass: 1.1,
@@ -25,7 +27,7 @@ export const alexander: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 33,
+  contactDamage: 29,
   contactInterval: 0.45,
   createAbility: skill({
     label: ABILITY.name,
@@ -59,5 +61,35 @@ export const alexander: FighterDef = {
     },
     damageMultiplier: (p) => (p === "active" ? 3.2 : 1),
     knockbackMultiplier: (p) => (p === "active" ? 3 : 1),
+    ultimate: {
+      name: "HAMMER AND ANVIL",
+      active: 2,
+      cast(world, self) {
+        // The anvil: a phalanx comes from behind the enemy, pushing it toward the hammer.
+        spawnSweep(world, self, {
+          style: "phalanx",
+          speed: 480,
+          depth: 50,
+          count: 6,
+          itemHalf: 60,
+          damage: 60,
+          knockback: 600,
+          toward: true,
+        });
+        self.speedMul = 3;
+        self.relax = 10;
+        self.trail = true;
+      },
+      whileActive(world, self, dt) {
+        steerToward(world, self, 8 * dt);
+      },
+      onEnd(_world, self) {
+        self.speedMul = 1;
+        self.relax = DEFAULT_RELAX;
+        self.trail = false;
+      },
+      damageMultiplier: 2.2,
+      knockbackMultiplier: 2.5,
+    },
   }),
 };

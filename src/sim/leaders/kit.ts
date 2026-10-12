@@ -1,5 +1,5 @@
 import type { Ability, Fighter } from "../types";
-import type { World } from "../world";
+import { ULT_HP, type World } from "../world";
 
 export type SkillPhase = "cooldown" | "windup" | "active";
 
@@ -36,6 +36,22 @@ export interface SkillSpec {
   damageMultiplier?(phase: SkillPhase): number;
   knockbackMultiplier?(phase: SkillPhase): number;
   onDamaged?: Ability["onDamaged"];
+  /** Once-per-match super move, fired when HP drops to ULT_HP of max. */
+  ultimate?: UltimateSpec;
+}
+
+export interface UltimateSpec {
+  /** Shown huge on screen, e.g. "SHIPS OVER LAND". */
+  name: string;
+  /** Seconds the ultimate keeps going after the cast (default 0). */
+  active?: number;
+  cast(world: World, self: Fighter): void;
+  whileActive?(world: World, self: Fighter, dt: number): void;
+  /** Contact hit landed while the ultimate is active. */
+  onHit?(world: World, self: Fighter, target: Fighter): void;
+  onEnd?(world: World, self: Fighter): void;
+  damageMultiplier?: number;
+  knockbackMultiplier?: number;
 }
 
 export function skill(spec: SkillSpec): () => Ability {
@@ -45,10 +61,27 @@ export function skill(spec: SkillSpec): () => Ability {
     let span = spec.firstAt;
     let level = 1;
     let chargesLeft = 0;
+    const ult = spec.ultimate;
+    let ultUsed = false;
+    let ultActive = 0;
 
     const ability: Ability = {
       onTick(world, self, dt) {
         if (world.phase !== "fight") return;
+        if (ult && !ultUsed && self.hp <= self.maxHp * ULT_HP) {
+          ultUsed = world.beginUltimate(self, ult.name, () => {
+            ult.cast(world, self);
+            ultActive = ult.active ?? 0;
+          });
+        }
+        if (ultActive > 0) {
+          // The regular move waits while the ultimate plays out.
+          ultActive -= dt;
+          ult?.whileActive?.(world, self, dt);
+          if (ultActive <= 0) ult?.onEnd?.(world, self);
+          return;
+        }
+        if (world.cinematic) return;
         const reached = 1 + LEVEL_TIMES.filter((t) => world.time >= t).length;
         if (reached > level) {
           level = reached;
@@ -82,15 +115,15 @@ export function skill(spec: SkillSpec): () => Ability {
         ready: phase !== "cooldown",
         level,
       }),
+      damageMultiplier: () =>
+        (spec.damageMultiplier?.(phase) ?? 1) * (ultActive > 0 ? (ult?.damageMultiplier ?? 1) : 1),
+      knockbackMultiplier: () =>
+        (spec.knockbackMultiplier?.(phase) ?? 1) *
+        (ultActive > 0 ? (ult?.knockbackMultiplier ?? 1) : 1),
+      onHitDealt: (world, self, target) => {
+        if (ultActive > 0) ult?.onHit?.(world, self, target);
+      },
     };
-    if (spec.damageMultiplier) {
-      const f = spec.damageMultiplier;
-      ability.damageMultiplier = () => f(phase);
-    }
-    if (spec.knockbackMultiplier) {
-      const f = spec.knockbackMultiplier;
-      ability.knockbackMultiplier = () => f(phase);
-    }
     if (spec.onDamaged) ability.onDamaged = spec.onDamaged;
 
     function startWindup(world: World, self: Fighter, seconds: number): void {
