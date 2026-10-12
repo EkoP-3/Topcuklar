@@ -161,6 +161,12 @@ export class Sfx {
         if (e.style === "arrow") {
           this.noise(0.12, { filter: "bandpass", freq: 2600, slideTo: 900, q: 2, gain: 0.35 });
           this.tone(880, 0.07, { type: "triangle", gain: 0.12, slideTo: 420 });
+        } else if (e.style === "musket") {
+          // Volley: a crackle of shots.
+          for (let i = 0; i < 5; i++) {
+            this.noise(0.12, { filter: "highpass", freq: 1800, gain: 0.5, delay: i * 0.018 });
+          }
+          this.tone(140, 0.25, { type: "sine", gain: 0.4, slideTo: 60 });
         } else if (e.style === "asp") {
           this.noise(0.35, { filter: "highpass", freq: 4500, gain: 0.25 });
         } else {
@@ -206,6 +212,30 @@ export class Sfx {
         [262, 330, 392, 523].forEach((f) =>
           this.tone(f, 0.9, { type: "sawtooth", gain: 0.07, attack: 0.02 }),
         );
+        break;
+      case "strike":
+        if (e.style === "shell") {
+          if (!this.allow("shell", 0.06)) return;
+          const big = e.radius > 120;
+          this.tone(big ? 45 : 70, big ? 1.2 : 0.6, {
+            type: "sine",
+            gain: big ? 0.9 : 0.6,
+            slideTo: 25,
+          });
+          this.noise(big ? 1 : 0.5, { filter: "lowpass", freq: 2000, slideTo: 100, gain: 0.7 });
+        } else {
+          if (!this.allow("arrowHit", 0.05)) return;
+          this.tone(380 * rand(0.9, 1.1), 0.05, { type: "triangle", gain: 0.12, slideTo: 200 });
+        }
+        break;
+      case "stomp":
+        this.thud(1);
+        this.tone(55, 0.5, { type: "sine", gain: 0.6, slideTo: 30 });
+        break;
+      case "callout":
+        this.tone(98, 0.6, { type: "sawtooth", gain: 0.15, attack: 0.01 });
+        this.tone(147, 0.6, { type: "sawtooth", gain: 0.1, attack: 0.01 });
+        this.thud(1);
         break;
       case "sweepHit":
         this.thud(1);

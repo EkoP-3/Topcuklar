@@ -72,7 +72,15 @@ export interface Ability {
   /** Short status text for the telemetry panel, e.g. "[CHARGING]". */
   hud?(self: Fighter): string;
   /** Timed signature move state, for the cooldown bar (history mode). */
-  skillState?(): { progress: number; ready: boolean; level: number };
+  skillState?(): {
+    progress: number;
+    ready: boolean;
+    /** Seconds until the next use (0 while it is happening). */
+    remaining: number;
+    level: number;
+    ult: "ready" | "active" | "used" | null;
+    ultName: string;
+  };
   /** 0..n, lets the renderer tint the weapon as it levels up. */
   visualLevel?(): number;
 }
@@ -145,7 +153,25 @@ export type Hazard =
   | { kind: "ring"; owner: number; x: number; y: number; radius: number; maxRadius: number }
   | UnitHazard
   | ProjectileHazard
-  | SweepHazard;
+  | SweepHazard
+  | StrikeHazard;
+
+/** A marked spot that explodes after `delay` seconds (artillery shell, falling arrow). */
+export interface StrikeHazard {
+  kind: "strike";
+  owner: number;
+  style: "shell" | "arrow";
+  x: number;
+  y: number;
+  radius: number;
+  delay: number;
+  /** Seconds since it was placed. */
+  t: number;
+  damage: number;
+  knockback: number;
+  stun: number;
+  ttl: number;
+}
 
 /**
  * A row of things (ships, riders, elephants, a phalanx, a flood) crossing the whole
@@ -154,7 +180,7 @@ export type Hazard =
 export interface SweepHazard {
   kind: "sweep";
   owner: number;
-  style: "ship" | "rider" | "elephant" | "phalanx" | "flood";
+  style: "elephant";
   /** Centre of the row. */
   x: number;
   y: number;
@@ -185,7 +211,7 @@ export interface SweepHazard {
 export interface UnitHazard {
   kind: "unit";
   owner: number;
-  style: "legion" | "elephant";
+  style: "legion" | "elephant" | "guard";
   x: number;
   y: number;
   vx: number;
@@ -210,7 +236,7 @@ export interface UnitHazard {
 export interface ProjectileHazard {
   kind: "projectile";
   owner: number;
-  style: "arrow" | "ball" | "bombard" | "asp";
+  style: "arrow" | "ball" | "bombard" | "asp" | "musket";
   x: number;
   y: number;
   vx: number;
@@ -267,6 +293,9 @@ export type SimEvent =
   | { type: "ultimateCast"; fighter: number; name: string }
   | { type: "sweepHit"; fighter: number; x: number; y: number }
   | { type: "slam"; fighter: number; x: number; y: number }
+  | { type: "strike"; style: StrikeHazard["style"]; x: number; y: number; radius: number }
+  | { type: "stomp"; fighter: number; x: number; y: number; radius: number }
+  | { type: "callout"; fighter: number; text: string }
   | { type: "stun"; fighter: number }
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }

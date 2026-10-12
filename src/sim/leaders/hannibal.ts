@@ -1,5 +1,5 @@
 import type { FighterDef } from "../types";
-import { countUnits, spawnSweep, spawnUnit } from "../units";
+import { spawnSweep, spawnUnit, countUnits } from "../units";
 import { aim, fan, skill } from "./kit";
 
 const ABILITY = { name: "WAR ELEPHANT", text: "Elephants trample and stun" };
@@ -14,7 +14,7 @@ export const hannibal: FighterDef = {
   title: "General of Carthage",
   flag: "tunisia",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "TRAMPLE DMG", base: 40 },
+  growth: { perSecond: 0.015, stat: "TRAMPLE DMG", base: 38 },
   hp: 1000,
   radius: 58,
   mass: 1.1,
@@ -25,7 +25,7 @@ export const hannibal: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 23,
+  contactDamage: 22,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -43,7 +43,7 @@ export const hannibal: FighterDef = {
             mass: 2.4,
             speed: 300,
             hp: 180,
-            damage: 40,
+            damage: 38,
             knockback: 520,
             stun: 0.6,
             hitInterval: 0.9,
@@ -56,16 +56,25 @@ export const hannibal: FighterDef = {
     ultimate: {
       name: "CROSSING THE ALPS",
       cast(world, self) {
-        spawnSweep(world, self, {
-          style: "elephant",
-          speed: 460,
-          depth: 100,
-          count: 4,
-          itemHalf: 50,
-          damage: 161,
-          knockback: 800,
-          stun: 1.2,
-        });
+        // Elephants charge in from all four sides at once.
+        for (const dir of [
+          { dx: 1, dy: 0 },
+          { dx: -1, dy: 0 },
+          { dx: 0, dy: 1 },
+          { dx: 0, dy: -1 },
+        ]) {
+          spawnSweep(world, self, {
+            style: "elephant",
+            speed: 400,
+            depth: 90,
+            count: 3,
+            itemHalf: 46,
+            damage: 33,
+            knockback: 600,
+            stun: 0.25,
+            dir,
+          });
+        }
       },
     },
   }),

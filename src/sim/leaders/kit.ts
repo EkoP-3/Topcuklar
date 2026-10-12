@@ -46,7 +46,8 @@ export interface UltimateSpec {
   /** Seconds the ultimate keeps going after the cast (default 0). */
   active?: number;
   cast(world: World, self: Fighter): void;
-  whileActive?(world: World, self: Fighter, dt: number): void;
+  /** `t` = seconds since the cast, for timed steps (see `ticks`). */
+  whileActive?(world: World, self: Fighter, dt: number, t: number): void;
   /** Contact hit landed while the ultimate is active. */
   onHit?(world: World, self: Fighter, target: Fighter): void;
   onEnd?(world: World, self: Fighter): void;
@@ -64,6 +65,7 @@ export function skill(spec: SkillSpec): () => Ability {
     const ult = spec.ultimate;
     let ultUsed = false;
     let ultActive = 0;
+    let ultTime = 0;
 
     const ability: Ability = {
       onTick(world, self, dt) {
@@ -72,12 +74,14 @@ export function skill(spec: SkillSpec): () => Ability {
           ultUsed = world.beginUltimate(self, ult.name, () => {
             ult.cast(world, self);
             ultActive = ult.active ?? 0;
+            ultTime = 0;
           });
         }
         if (ultActive > 0) {
           // The regular move waits while the ultimate plays out.
           ultActive -= dt;
-          ult?.whileActive?.(world, self, dt);
+          ultTime += dt;
+          ult?.whileActive?.(world, self, dt, ultTime);
           if (ultActive <= 0) ult?.onEnd?.(world, self);
           return;
         }
@@ -113,7 +117,10 @@ export function skill(spec: SkillSpec): () => Ability {
       skillState: () => ({
         progress: phase === "cooldown" ? 1 - Math.max(0, timer) / span : 1,
         ready: phase !== "cooldown",
+        remaining: phase === "cooldown" ? Math.max(0, timer) : 0,
         level,
+        ult: ult ? (ultActive > 0 ? "active" : ultUsed ? "used" : "ready") : null,
+        ultName: ult?.name ?? "",
       }),
       damageMultiplier: () =>
         (spec.damageMultiplier?.(phase) ?? 1) * (ultActive > 0 ? (ult?.damageMultiplier ?? 1) : 1),
@@ -161,6 +168,13 @@ export function skill(spec: SkillSpec): () => Ability {
 
     return ability;
   };
+}
+
+/** How many multiples of `interval` (after `start`) were passed in the step that ended at `t`. */
+export function ticks(t: number, dt: number, interval: number, start = 0): number {
+  const a = Math.floor((t - dt - start) / interval);
+  const b = Math.floor((t - start) / interval);
+  return t - start < 0 ? 0 : Math.max(0, b - Math.max(a, -1));
 }
 
 /** Evenly spread angles around `center`, `gap` radians apart. */

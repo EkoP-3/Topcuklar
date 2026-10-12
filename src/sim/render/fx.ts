@@ -320,6 +320,50 @@ export class Fx {
         this.addShake(40);
         break;
       }
+      case "strike":
+        if (e.style === "shell") {
+          this.burst(e.x, e.y, 40, ["#ffb15c", "#ffd45e", "#ff6a3c", "#ffffff"], 600, 0.7, 13);
+          this.rings.push({
+            x: e.x,
+            y: e.y,
+            radius: e.radius,
+            life: 0.4,
+            max: 0.4,
+            color: "#ffb15c",
+          });
+          this.flash = Math.max(this.flash, 0.3);
+          this.addShake(e.radius > 120 ? 46 : 22);
+        } else {
+          this.burst(e.x, e.y, 5, ["#e8d8b0", "#b9a47a"], 160, 0.3, 6);
+        }
+        break;
+      case "stomp":
+        this.rings.push({
+          x: e.x,
+          y: e.y,
+          radius: e.radius,
+          life: 0.35,
+          max: 0.35,
+          color: "#ffd45e",
+        });
+        this.burst(e.x, e.y, 24, ["#c9a27a", "#ffffff", "#ffd45e"], 480, 0.5, 10);
+        this.addShake(24);
+        break;
+      case "callout":
+        // VENI / VIDI / VICI: huge words in the middle of the arena.
+        this.texts.push({
+          x: 360,
+          y: 300,
+          vy: -30,
+          life: 0.6,
+          max: 0.6,
+          text: e.text,
+          color: SIDES[world.fighters[e.fighter]?.side ?? 0].main,
+          size: 190,
+        });
+        this.flash = Math.max(this.flash, 0.5);
+        this.addShake(20);
+        break;
       case "sweepHit":
         this.burst(e.x, e.y, 36, ["#ffffff", "#ffd45e", "#ffb15c"], 700, 0.7, 13);
         this.addShake(30);

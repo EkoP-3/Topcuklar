@@ -6,6 +6,7 @@ import type {
   ProjectileHazard,
   PylonHazard,
   RingHazard,
+  StrikeHazard,
   SweepHazard,
   UnitHazard,
 } from "../types";
@@ -69,6 +70,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     ctx.drawImage(background, 0, 0, W, H);
     drawTopPanel(ctx, world, hpLag);
     drawArena(ctx, world, fx, frame);
+    drawSkillCards(ctx, world);
     ctx.restore();
 
     drawOverlay(ctx, fx, overlay);
@@ -152,6 +154,102 @@ function drawFighterPanel(
   }
 }
 
+/** History mode: one card per leader under the arena — the move, what it does, how long until it fires, and the ultimate. */
+function drawSkillCards(ctx: Ctx, world: World): void {
+  const y = AY + AS + 30;
+  const h = 210;
+  const gap = 20;
+  const w = (AS - gap) / 2;
+  world.fighters.slice(0, 2).forEach((f, i) => {
+    const state = f.ability?.skillState?.();
+    if (!state || !f.def.ability) return;
+    const side = SIDES[f.side];
+    const x = AX + i * (w + gap);
+    ctx.save();
+    if (!f.alive) ctx.globalAlpha = 0.35;
+    roundRect(ctx, x, y, w, h, 22);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = side.main;
+    ctx.globalAlpha *= 0.9;
+    ctx.stroke();
+
+    // Medallion with a ring that fills up until the move fires.
+    const cx = x + 78;
+    const cy = y + 80;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 54, 0, TAU);
+    ctx.fillStyle = side.dark;
+    ctx.fill();
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.stroke();
+    const p = clamp(state.progress, 0, 1);
+    if (p > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 54, -Math.PI / 2, -Math.PI / 2 + TAU * p);
+      ctx.strokeStyle = state.ready ? "#ffd45e" : side.main;
+      ctx.stroke();
+    }
+    // Inside the ring: the emblem, with the countdown over it while waiting.
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (!state.ready) ctx.globalAlpha *= 0.35;
+    drawEmblem(ctx, f.def.id, 38);
+    ctx.restore();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (state.ready) {
+      ctx.font = `800 32px ${MONO_FONT}`;
+      outlinedText(ctx, "NOW!", cx, cy + 2, "#ffd45e", 7);
+    } else {
+      ctx.font = `800 38px ${MONO_FONT}`;
+      outlinedText(ctx, state.remaining.toFixed(1), cx, cy + 2, "#ffffff", 7);
+    }
+
+    const tx = x + 152;
+    const right = x + w - 18;
+    ctx.textAlign = "left";
+    fitFont(ctx, f.def.ability.name, 700, 38, right - tx, DISPLAY_FONT);
+    ctx.fillStyle = side.light;
+    ctx.fillText(f.def.ability.name, tx, y + 44);
+    // What it does.
+    ctx.fillStyle = "rgba(232,236,244,0.8)";
+    let size = 30;
+    let lines: string[] = [];
+    // Shrink until it fits in two lines.
+    for (; size >= 20; size -= 2) {
+      ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
+      lines = wrapLines(ctx, f.def.ability.text, right - tx);
+      if (lines.length <= 2) break;
+    }
+    lines.slice(0, 2).forEach((line, k) => ctx.fillText(line, tx, y + 88 + k * (size + 4)));
+    // Level and ultimate: [LV 2] [ULT] NAME
+    if (state.ult) {
+      let px = x + 18;
+      const pill = (text: string, on: boolean) => {
+        ctx.font = `800 24px ${MONO_FONT}`;
+        const pw = ctx.measureText(text).width + 20;
+        roundRect(ctx, px, y + 160, pw, 36, 9);
+        ctx.fillStyle = on ? "#ffd45e" : "rgba(255,255,255,0.14)";
+        ctx.fill();
+        ctx.textAlign = "center";
+        ctx.fillStyle = on ? OUTLINE : "#e8ecf4";
+        ctx.fillText(text, px + pw / 2, y + 179);
+        px += pw + 10;
+      };
+      pill(`LV ${state.level}`, state.level > 1);
+      pill("ULT", state.ult !== "used");
+      ctx.textAlign = "left";
+      fitFont(ctx, state.ultName, 800, 28, right - px, DISPLAY_FONT);
+      ctx.fillStyle = state.ult === "used" ? "rgba(232,236,244,0.35)" : "#ffd45e";
+      ctx.fillText(state.ultName, px, y + 179);
+    }
+    ctx.restore();
+  });
+}
+
 // --- arena -----------------------------------------------------------------------
 
 function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
@@ -198,7 +296,8 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
 
   for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world.time);
   // Armies and projectiles go over bodies.
-  for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world, world.time);
+  for (const h of world.hazards) if (h.kind === "strike") drawStrike(ctx, h);
+  for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world);
   for (const h of world.hazards) if (h.kind === "projectile") drawProjectile(ctx, h, world.time);
 
   for (const r of fx.rings) {
@@ -355,6 +454,27 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
   if (u.style === "elephant") {
     if (u.vx < 0) ctx.scale(-1, 1);
     drawEmblem(ctx, "hannibal", u.radius * 0.8);
+  } else if (u.style === "guard") {
+    // Grenadier of the Imperial Guard: white cross-belts and a tall bearskin.
+    ctx.strokeStyle = "#f4f6fb";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-u.radius * 0.6, -u.radius * 0.5);
+    ctx.lineTo(u.radius * 0.6, u.radius * 0.6);
+    ctx.moveTo(u.radius * 0.6, -u.radius * 0.5);
+    ctx.lineTo(-u.radius * 0.6, u.radius * 0.6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, -u.radius * 1.05, u.radius * 0.55, u.radius * 0.7, 0, 0, TAU);
+    ctx.fillStyle = "#14161c";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(u.radius * 0.35, -u.radius * 1.35, u.radius * 0.14, 0, TAU);
+    ctx.fillStyle = "#e0453a";
+    ctx.fill();
   } else {
     // Legionary: red scutum with a gold boss.
     ctx.beginPath();
@@ -439,6 +559,22 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.fill();
       break;
     }
+    case "musket": {
+      ctx.beginPath();
+      ctx.moveTo(-40, 0);
+      ctx.lineTo(0, 0);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(255,240,200,0.7)";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius * 0.8, 0, TAU);
+      ctx.fillStyle = "#2a2d36";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffd45e";
+      ctx.stroke();
+      break;
+    }
     case "asp": {
       ctx.scale(p.radius / 12, p.radius / 12);
       ctx.beginPath();
@@ -467,177 +603,86 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
   ctx.restore();
 }
 
-function drawSweep(ctx: Ctx, s: SweepHazard, world: World, time: number): void {
+function drawSweep(ctx: Ctx, s: SweepHazard, world: World): void {
   const side = SIDES[world.fighters[s.owner]?.side ?? 0];
   const px = -s.dy;
   const py = s.dx;
-  const angle = Math.atan2(s.dy, s.dx);
   for (const o of s.items) {
     ctx.save();
     ctx.translate(s.x + px * o, s.y + py * o);
-    ctx.rotate(angle);
-    // Keep pictures upright when travelling left.
-    if (s.dx < 0) ctx.scale(1, -1);
-    switch (s.style) {
-      case "ship":
-        drawShip(ctx, s, side.main);
-        break;
-      case "rider":
-        drawRider(ctx, s, side.main);
-        break;
-      case "elephant":
-        ctx.beginPath();
-        ctx.arc(0, 0, s.itemHalf * 0.95, 0, TAU);
-        ctx.fillStyle = "#5b6170";
-        ctx.fill();
-        ctx.lineWidth = 7;
-        ctx.strokeStyle = side.main;
-        ctx.stroke();
-        drawEmblem(ctx, "hannibal", s.itemHalf * 0.85);
-        break;
-      case "phalanx":
-        drawPhalanx(ctx, s, side.main);
-        break;
-      case "flood":
-        drawFlood(ctx, s, time);
-        break;
-    }
+    // Elephants face where they run (mirrored instead of upside down when going left).
+    if (s.dx < 0) ctx.scale(-1, 1);
+    else if (s.dy !== 0) ctx.rotate(s.dy > 0 ? Math.PI / 2 : -Math.PI / 2);
+    ctx.beginPath();
+    ctx.arc(0, 0, s.itemHalf * 0.95, 0, TAU);
+    ctx.fillStyle = "#5b6170";
+    ctx.fill();
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = side.main;
+    ctx.stroke();
+    drawEmblem(ctx, "hannibal", s.itemHalf * 0.85);
     ctx.restore();
   }
 }
 
-function drawShip(ctx: Ctx, s: SweepHazard, accent: string): void {
-  const L = s.depth * 1.7;
-  const B = s.itemHalf * 0.8;
-  // oars
-  ctx.strokeStyle = "#5a3a1e";
-  ctx.lineWidth = 5;
-  for (let i = -3; i <= 3; i++) {
-    const x = (i / 3) * L * 0.32;
+/** Marked spot before it blows: a shrinking target ring, or an arrow falling onto its shadow. */
+function drawStrike(ctx: Ctx, s: StrikeHazard): void {
+  const p = clamp(s.t / s.delay, 0, 1);
+  ctx.save();
+  if (s.style === "shell") {
+    ctx.globalAlpha = 0.25 + 0.35 * p;
     ctx.beginPath();
-    ctx.moveTo(x, -B / 2);
-    ctx.lineTo(x - 14, -s.itemHalf);
-    ctx.moveTo(x, B / 2);
-    ctx.lineTo(x - 14, s.itemHalf);
+    ctx.arc(s.x, s.y, s.radius, 0, TAU);
+    ctx.fillStyle = "rgba(255,70,50,0.35)";
+    ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#ff5a3c";
     ctx.stroke();
-  }
-  ctx.beginPath();
-  ctx.moveTo(-L / 2, -B / 2);
-  ctx.lineTo(L / 2 - B * 0.6, -B / 2);
-  ctx.quadraticCurveTo(L / 2, -B * 0.3, L / 2 + 10, 0);
-  ctx.quadraticCurveTo(L / 2, B * 0.3, L / 2 - B * 0.6, B / 2);
-  ctx.lineTo(-L / 2, B / 2);
-  ctx.closePath();
-  ctx.fillStyle = "#7a4a28";
-  ctx.fill();
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.beginPath();
-  roundRectPath(ctx, -L / 2 + 10, -B / 2 + 10, L - B * 0.6 - 10, B - 20, 8);
-  ctx.fillStyle = "#a8743f";
-  ctx.fill();
-  // red sail with crescent and star
-  ctx.beginPath();
-  roundRectPath(ctx, -12, -B * 0.85, 24, B * 1.7, 6);
-  ctx.fillStyle = "#c8202a";
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, 9, 0, TAU);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(3, 0, 7, 0, TAU);
-  ctx.fillStyle = "#c8202a";
-  ctx.fill();
-  // team pennant at the stern
-  ctx.fillStyle = accent;
-  ctx.fillRect(-L / 2 - 4, -8, 22, 16);
-}
-
-function drawRider(ctx: Ctx, s: SweepHazard, accent: string): void {
-  const L = s.depth * 1.7;
-  const B = s.itemHalf * 1.1;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, L / 2, B / 2, 0, 0, TAU);
-  ctx.fillStyle = "#8a5a32";
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(L / 2 + 6, 0, 14, 9, 0, 0, TAU);
-  ctx.fillStyle = "#8a5a32";
-  ctx.fill();
-  ctx.stroke();
-  // spear
-  ctx.beginPath();
-  ctx.moveTo(-6, -B * 0.2);
-  ctx.lineTo(L / 2 + 34, -B * 0.25);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#e8d8b0";
-  ctx.stroke();
-  // rider
-  ctx.beginPath();
-  ctx.arc(-4, 0, B * 0.36, 0, TAU);
-  ctx.fillStyle = accent;
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-}
-
-function drawPhalanx(ctx: Ctx, s: SweepHazard, accent: string): void {
-  for (const y of [-s.itemHalf * 0.5, s.itemHalf * 0.5]) {
     ctx.beginPath();
-    ctx.moveTo(0, y - 8);
-    ctx.lineTo(s.depth * 1.4, y - 8);
+    ctx.arc(s.x, s.y, s.radius * (1 - p), 0, TAU);
     ctx.lineWidth = 4;
+    ctx.strokeStyle = "#ffd45e";
+    ctx.stroke();
+    // the ball dropping in
+    const h = (1 - p) * 260;
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y - h, 10 + s.radius * 0.12, 0, TAU);
+    ctx.fillStyle = "#2a2d36";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#ff9a3c";
+    ctx.stroke();
+  } else {
+    ctx.globalAlpha = 0.35 + 0.4 * p;
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y, 10 + 8 * p, 5 + 4 * p, 0, 0, TAU);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fill();
+    const h = (1 - p) * 220;
+    ctx.globalAlpha = 1;
+    ctx.translate(s.x, s.y - h);
+    ctx.rotate(Math.PI / 2);
+    ctx.scale(1.7, 1.7);
+    ctx.beginPath();
+    ctx.moveTo(-34, 0);
+    ctx.lineTo(8, 0);
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.lineWidth = 3;
     ctx.strokeStyle = "#e8d8b0";
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(0, y, s.itemHalf * 0.48, 0, TAU);
-    ctx.fillStyle = "#d9a441";
-    ctx.fill();
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = accent;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, y, s.itemHalf * 0.2, 0, TAU);
-    ctx.fillStyle = "#a3201f";
+    ctx.moveTo(18, 0);
+    ctx.lineTo(4, -8);
+    ctx.lineTo(4, 8);
+    ctx.closePath();
+    ctx.fillStyle = "#dfe4ee";
     ctx.fill();
   }
-}
-
-function drawFlood(ctx: Ctx, s: SweepHazard, time: number): void {
-  const d = s.depth;
-  const h = s.itemHalf;
-  const g = ctx.createLinearGradient(-d, 0, d / 2, 0);
-  g.addColorStop(0, "rgba(40,110,200,0)");
-  g.addColorStop(0.5, "rgba(50,130,220,0.75)");
-  g.addColorStop(1, "rgba(120,200,255,0.95)");
-  ctx.beginPath();
-  ctx.moveTo(-d * 1.5, -h);
-  for (let y = -h; y <= h; y += 20) {
-    ctx.lineTo(d / 2 + Math.sin(y * 0.05 + time * 10) * 14, y);
-  }
-  ctx.lineTo(-d * 1.5, h);
-  ctx.closePath();
-  ctx.fillStyle = g;
-  ctx.fill();
-  // foam
-  ctx.beginPath();
-  for (let y = -h; y <= h; y += 20) {
-    const x = d / 2 + Math.sin(y * 0.05 + time * 10) * 14;
-    if (y === -h) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
-  ctx.stroke();
+  ctx.restore();
 }
 
 function star(ctx: Ctx, x: number, y: number, r: number, color: string): void {
@@ -1033,6 +1078,23 @@ function fitFont(
   ctx.font = `${weight} ${size}px ${family}`;
   const w = ctx.measureText(text).width;
   if (w > maxWidth) ctx.font = `${weight} ${Math.floor((size * maxWidth) / w)}px ${family}`;
+}
+
+/** Splits text into lines no wider than `maxWidth` with the current font. */
+function wrapLines(ctx: Ctx, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {

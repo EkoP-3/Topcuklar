@@ -1,6 +1,6 @@
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle, spawnSweep } from "../units";
-import { fan, skill } from "./kit";
+import { fireProjectile, leadAngle, spawnStrike } from "../units";
+import { fan, skill, ticks } from "./kit";
 
 const ARROW_SPEED = 1050;
 const ARROWS = [3, 5, 7];
@@ -55,17 +55,31 @@ export const genghis: FighterDef = {
       world.emit({ type: "shoot", fighter: self.index, style: "arrow" });
     },
     ultimate: {
-      name: "MONGOL HORDE",
-      cast(world, self) {
-        spawnSweep(world, self, {
-          style: "rider",
-          speed: 760,
-          depth: 70,
-          count: 7,
-          itemHalf: 42,
-          damage: 152,
-          knockback: 700,
-        });
+      name: "ARROW STORM",
+      active: 2.2,
+      cast(_world, self) {
+        self.speedMul = 1.6;
+      },
+      whileActive(world, self, dt) {
+        const enemy = world.nearestEnemy(self);
+        if (!enemy) return;
+        // The sky fills with arrows falling around the enemy.
+        for (let i = ticks(world.time, dt, 0.07); i > 0; i--) {
+          const a = world.rng.range(0, Math.PI * 2);
+          const d = Math.sqrt(world.rng.next()) * 120;
+          spawnStrike(world, self, {
+            style: "arrow",
+            x: enemy.x + enemy.vx * 0.35 + Math.cos(a) * d,
+            y: enemy.y + enemy.vy * 0.35 + Math.sin(a) * d,
+            radius: 26,
+            delay: 0.35,
+            damage: 20,
+            knockback: 40,
+          });
+        }
+      },
+      onEnd(_world, self) {
+        self.speedMul = 1;
       },
     },
   }),

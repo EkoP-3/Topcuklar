@@ -1,6 +1,6 @@
 import type { FighterDef } from "../types";
-import { countUnits, spawnUnit } from "../units";
-import { aim, fan, skill } from "./kit";
+import { spawnUnit, countUnits } from "../units";
+import { aim, fan, skill, ticks } from "./kit";
 
 const ABILITY = { name: "LEGIONS", text: "Summons legionaries that chase" };
 
@@ -57,29 +57,41 @@ export const caesar: FighterDef = {
     },
     ultimate: {
       name: "VENI, VIDI, VICI",
+      active: 1.7,
       cast(world, self) {
+        // VENI — he came: Caesar appears right next to the enemy.
         const enemy = world.nearestEnemy(self);
         if (!enemy) return;
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2;
-          spawnUnit(
-            world,
-            self,
-            {
-              style: "legion",
-              radius: 27,
-              mass: 0.5,
-              speed: 380,
-              hp: 140,
-              damage: 48,
-              knockback: 120,
-              stun: 0,
-              hitInterval: 0.5,
-              ttl: 7,
-            },
-            a + Math.PI,
-            { x: enemy.x + Math.cos(a) * 190, y: enemy.y + Math.sin(a) * 190 },
-          );
+        const a = Math.atan2(self.y - enemy.y, self.x - enemy.x);
+        const d = self.radius + enemy.radius + 6;
+        self.x = Math.min(720 - self.radius, Math.max(self.radius, enemy.x + Math.cos(a) * d));
+        self.y = Math.min(720 - self.radius, Math.max(self.radius, enemy.y + Math.sin(a) * d));
+        self.vx = 0;
+        self.vy = 0;
+        world.emit({ type: "callout", fighter: self.index, text: "VENI" });
+        world.emit({ type: "dash", fighter: self.index });
+      },
+      whileActive(world, self, dt, t) {
+        const enemy = world.nearestEnemy(self);
+        if (!enemy) return;
+        // VIDI — he saw: the enemy is frozen in place.
+        if (ticks(t, dt, 99, 0.5) > 0) {
+          enemy.stun = Math.max(enemy.stun, 1.1);
+          world.emit({ type: "stun", fighter: enemy.index });
+          world.emit({ type: "callout", fighter: self.index, text: "VIDI" });
+        }
+        // VICI — he conquered: three heavy blows.
+        if (ticks(t, dt, 99, 1) > 0) {
+          world.emit({ type: "callout", fighter: self.index, text: "VICI" });
+        }
+        for (const [at, kb] of [
+          [1, 150],
+          [1.2, 150],
+          [1.4, 1000],
+        ] as const) {
+          if (ticks(t, dt, 99, at) > 0) {
+            world.dealDamage(self, enemy, 60, enemy.x, enemy.y, kb);
+          }
         }
       },
     },

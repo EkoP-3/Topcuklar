@@ -31,7 +31,9 @@ Arena sayfasında karakter seçebilir, seed girebilir, duraklatabilir ve hızlan
 
 Her liderin canı 1000 civarındadır. Liderlerin hasarı her saniye %1,5 artar (alt panelde imza sayısı büyür). 15. saniyede seviye 2, 30. saniyede seviye 3 olurlar; yetenek bir kademe güçlenir (Mehmed II 1→2→3 gülle, Genghis 3→5→7 ok, Caesar 2→3→4 lejyoner, Leonidas'ın kalkanı uzar vb.). İsimlerin yanında bayrak vardır: bilinen yerde bugünkü ülke bayrağı, tartışmalı ya da tanınmayan yerde tarihi sancak (Alexander: Makedon güneşi, Caesar: SPQR).
 
-**Ultimate:** her liderin canı %30'un altına inince maçta bir kez süper hamlesi gelir. Ekran kararır, ağır çekimde hamlenin adı çıkar, sonra hamle yapılır: Mehmed II gemileri karadan yürütür (SHIPS OVER LAND), Genghis atlı ordusunu salar (MONGOL HORDE), Hannibal fil sürüsü (CROSSING THE ALPS), Caesar rakibi lejyonlarla kuşatır (VENI, VIDI, VICI), Napoleon dört yandan top ateşi (AUSTERLITZ), Leonidas rakibi duvara tekmeler (THIS IS SPARTA!), Alexander falanks + hücum (HAMMER AND ANVIL), Cleopatra Nil seli (NILE FLOOD). HP barındaki altın çentik ultimate'ın geleceği yeri gösterir.
+**Ultimate:** her liderin canı %30'un altına inince maçta bir kez süper hamlesi gelir (ekran kararır, ağır çekimde adı çıkar). Hepsi farklı çalışır: Mehmed II işaretli noktalara top yağdırır, son olarak dev Şahi güllesi düşer (THE GREAT BOMBARDMENT); Genghis ok yağmuru (ARROW STORM); Hannibal dört yandan fil hücumu (CROSSING THE ALPS); Caesar ışınlanır, rakibi dondurur, üç darbe vurur (VENI, VIDI, VICI); Napoleon beş muhafızla yaylım ateşi ve süngü hücumu (IMPERIAL GUARD); Leonidas rakibi duvara tekmeler (THIS IS SPARTA!); Alexander dev olup Bucephalus'la ezerek koşar (BUCEPHALUS); Cleopatra sarmal yılan atışı (SPIRAL OF ASPS).
+
+Arenanın altında her lider için bir kart vardır: yetenek adı, ne işe yaradığı, kalan süre (halkanın içinde), seviye ve ultimate.
 
 Girişte "WHO WINS?" kartı: bayrak, isim, unvan, dönem. Toplarda liderin başlığı (kavuk, iki köşeli şapka, defne, taç, Sparta miğferi…) çizilidir.
 

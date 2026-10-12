@@ -1,7 +1,6 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
-import { spawnSweep } from "../units";
-import { aim, skill, steerToward } from "./kit";
+import { aim, skill, steerToward, ticks } from "./kit";
 
 const DASH_SPEED = 1500;
 const ABILITY = { name: "COMPANION CHARGE", text: "Aims, then charges at full gallop" };
@@ -16,7 +15,7 @@ export const alexander: FighterDef = {
   title: "King of Macedon",
   flag: "vergina",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 90 },
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 87 },
   hp: 1000,
   radius: 58,
   mass: 1.1,
@@ -27,7 +26,7 @@ export const alexander: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 29,
+  contactDamage: 28,
   contactInterval: 0.45,
   createAbility: skill({
     label: ABILITY.name,
@@ -62,34 +61,36 @@ export const alexander: FighterDef = {
     damageMultiplier: (p) => (p === "active" ? 3.2 : 1),
     knockbackMultiplier: (p) => (p === "active" ? 3 : 1),
     ultimate: {
-      name: "HAMMER AND ANVIL",
-      active: 2,
-      cast(world, self) {
-        // The anvil: a phalanx comes from behind the enemy, pushing it toward the hammer.
-        spawnSweep(world, self, {
-          style: "phalanx",
-          speed: 480,
-          depth: 50,
-          count: 6,
-          itemHalf: 60,
-          damage: 60,
-          knockback: 600,
-          toward: true,
-        });
-        self.speedMul = 3;
-        self.relax = 10;
+      name: "BUCEPHALUS",
+      active: 3,
+      cast(_world, self) {
+        // Alexander mounts his legendary horse: huge, fast and stomping.
+        self.radius = self.def.radius * 1.6;
+        self.speedMul = 2.2;
+        self.relax = 8;
         self.trail = true;
+        self.damageTakenMul = 0.7;
       },
-      whileActive(world, self, dt) {
-        steerToward(world, self, 8 * dt);
+      whileActive(world, self, dt, t) {
+        steerToward(world, self, 4 * dt);
+        if (ticks(t, dt, 0.5, 0.25) === 0) return;
+        const reach = self.radius * 2.2;
+        world.emit({ type: "stomp", fighter: self.index, x: self.x, y: self.y, radius: reach });
+        for (const f of world.fighters) {
+          if (!f.alive || f.side === self.side) continue;
+          if (Math.hypot(f.x - self.x, f.y - self.y) > reach) continue;
+          world.dealDamage(self, f, 40, f.x, f.y, 500);
+        }
       },
       onEnd(_world, self) {
+        self.radius = self.def.radius;
         self.speedMul = 1;
         self.relax = DEFAULT_RELAX;
         self.trail = false;
+        self.damageTakenMul = 1;
       },
-      damageMultiplier: 2.2,
-      knockbackMultiplier: 2.5,
+      damageMultiplier: 2,
+      knockbackMultiplier: 2,
     },
   }),
 };

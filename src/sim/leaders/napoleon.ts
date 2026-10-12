@@ -1,6 +1,6 @@
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle } from "../units";
-import { fan, skill } from "./kit";
+import { fireProjectile, leadAngle, spawnUnit, unitsOf } from "../units";
+import { fan, skill, ticks } from "./kit";
 
 const BALL_SPEED = 900;
 const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce once" };
@@ -15,7 +15,7 @@ export const napoleon: FighterDef = {
   title: "Emperor of the French",
   flag: "france",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 65 },
+  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 67 },
   hp: 900,
   radius: 48,
   mass: 0.85,
@@ -26,7 +26,7 @@ export const napoleon: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 19,
+  contactDamage: 20,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -41,7 +41,7 @@ export const napoleon: FighterDef = {
           style: "ball",
           speed: BALL_SPEED,
           radius: 16,
-          damage: 65,
+          damage: 67,
           knockback: 420,
           blast: 0,
           poison: 0,
@@ -53,34 +53,70 @@ export const napoleon: FighterDef = {
       world.emit({ type: "shoot", fighter: self.index, style: "ball" });
     },
     ultimate: {
-      name: "AUSTERLITZ",
+      name: "IMPERIAL GUARD",
+      active: 2.6,
       cast(world, self) {
+        // Five grenadiers form a firing line beside the Emperor.
         const enemy = world.nearestEnemy(self);
         if (!enemy) return;
-        for (let i = 0; i < 8; i++) {
-          // Guns all around the arena edge, every one aimed at the enemy.
-          const a = (i / 8) * Math.PI * 2;
-          const from = { x: 360 + Math.cos(a) * 340, y: 360 + Math.sin(a) * 340 };
-          fireProjectile(
+        const a = Math.atan2(enemy.y - self.y, enemy.x - self.x);
+        const px = -Math.sin(a);
+        const py = Math.cos(a);
+        for (let i = -2; i <= 2; i++) {
+          spawnUnit(
             world,
             self,
-            Math.atan2(enemy.y - from.y, enemy.x - from.x),
             {
-              style: "ball",
-              speed: 800,
-              radius: 18,
-              damage: 43,
-              knockback: 300,
-              blast: 0,
-              poison: 0,
-              poisonDps: 0,
-              bounces: 0,
-              ttl: 2,
+              style: "guard",
+              radius: 26,
+              mass: 1.5,
+              speed: 0,
+              hp: 160,
+              damage: 31,
+              knockback: 200,
+              stun: 0,
+              hitInterval: 0.6,
+              ttl: 5,
             },
-            from,
+            a,
+            {
+              x: self.x + Math.cos(a) * 80 + px * i * 62,
+              y: self.y + Math.sin(a) * 80 + py * i * 62,
+            },
           );
         }
-        world.emit({ type: "shoot", fighter: self.index, style: "bombard" });
+      },
+      whileActive(world, self, dt, t) {
+        const enemy = world.nearestEnemy(self);
+        if (!enemy) return;
+        const guards = unitsOf(world, self, "guard");
+        // Three volleys: every grenadier fires at once.
+        for (const at of [0.5, 1.1, 1.7]) {
+          if (ticks(t, dt, 99, at) === 0) continue;
+          for (const g of guards) {
+            fireProjectile(
+              world,
+              self,
+              Math.atan2(enemy.y - g.y, enemy.x - g.x),
+              {
+                style: "musket",
+                speed: 1300,
+                radius: 9,
+                damage: 23,
+                knockback: 120,
+                blast: 0,
+                poison: 0,
+                poisonDps: 0,
+                bounces: 0,
+                ttl: 1.2,
+              },
+              { x: g.x, y: g.y },
+            );
+          }
+          world.emit({ type: "shoot", fighter: self.index, style: "musket" });
+        }
+        // Then they charge with bayonets.
+        if (ticks(t, dt, 99, 2.1) > 0) for (const g of guards) g.speed = 360;
       },
     },
   }),

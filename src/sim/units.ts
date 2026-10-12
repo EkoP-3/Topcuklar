@@ -1,4 +1,11 @@
-import type { Fighter, Hazard, ProjectileHazard, SweepHazard, UnitHazard } from "./types";
+import type {
+  Fighter,
+  Hazard,
+  ProjectileHazard,
+  StrikeHazard,
+  SweepHazard,
+  UnitHazard,
+} from "./types";
 import { ARENA, limitSpeed, type World } from "./world";
 
 /** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
@@ -83,6 +90,8 @@ export interface SweepSpec {
   poisonDps?: number;
   /** Travel toward the owner (starting behind the enemy) instead of away from it. */
   toward?: boolean;
+  /** Fixed direction (axis-aligned unit vector) instead of "toward the enemy". */
+  dir?: { dx: number; dy: number };
 }
 
 /**
@@ -96,7 +105,10 @@ export function spawnSweep(world: World, owner: Fighter, spec: SweepSpec): Sweep
   const ey = enemy.y - owner.y;
   let dx = 0;
   let dy = 0;
-  if (Math.abs(ex) >= Math.abs(ey)) dx = ex >= 0 ? 1 : -1;
+  if (spec.dir) {
+    dx = spec.dir.dx;
+    dy = spec.dir.dy;
+  } else if (Math.abs(ex) >= Math.abs(ey)) dx = ex >= 0 ? 1 : -1;
   else dy = ey >= 0 ? 1 : -1;
   if (spec.toward) {
     dx = -dx;
@@ -132,6 +144,46 @@ export function spawnSweep(world: World, owner: Fighter, spec: SweepSpec): Sweep
   return sweep;
 }
 
+export interface StrikeSpec {
+  style: StrikeHazard["style"];
+  x: number;
+  y: number;
+  radius: number;
+  delay: number;
+  damage: number;
+  knockback: number;
+  stun?: number;
+}
+
+/** Marks a spot that explodes after `delay` seconds, hurting enemies inside `radius`. */
+export function spawnStrike(world: World, owner: Fighter, spec: StrikeSpec): StrikeHazard {
+  const strike: StrikeHazard = {
+    kind: "strike",
+    owner: owner.index,
+    style: spec.style,
+    x: clampInside(spec.x, 20),
+    y: clampInside(spec.y, 20),
+    radius: spec.radius,
+    delay: spec.delay,
+    t: 0,
+    damage: spec.damage,
+    knockback: spec.knockback,
+    stun: spec.stun ?? 0,
+    ttl: 1,
+  };
+  world.hazards.push(strike);
+  return strike;
+}
+
+/** This owner's units of one style that are still around. */
+export function unitsOf(world: World, owner: Fighter, style: UnitHazard["style"]): UnitHazard[] {
+  const out: UnitHazard[] = [];
+  for (const h of world.hazards) {
+    if (h.kind === "unit" && h.owner === owner.index && h.style === style && h.ttl > 0) out.push(h);
+  }
+  return out;
+}
+
 export function countUnits(world: World, owner: Fighter, style: UnitHazard["style"]): number {
   let n = 0;
   for (const h of world.hazards)
@@ -146,6 +198,7 @@ export function updateUnits(world: World, dt: number): void {
     if (h.kind === "unit") updateUnit(world, h, dt);
     else if (h.kind === "projectile") updateProjectile(world, h, dt);
     else if (h.kind === "sweep") updateSweep(world, h, dt);
+    else if (h.kind === "strike") updateStrike(world, h, dt);
     else continue;
     if (h.ttl <= 0) removed = true;
   }
@@ -153,7 +206,38 @@ export function updateUnits(world: World, dt: number): void {
 }
 
 function isGone(h: Hazard): boolean {
-  return (h.kind === "unit" || h.kind === "projectile" || h.kind === "sweep") && h.ttl <= 0;
+  return (
+    (h.kind === "unit" || h.kind === "projectile" || h.kind === "sweep" || h.kind === "strike") &&
+    h.ttl <= 0
+  );
+}
+
+function updateStrike(world: World, s: StrikeHazard, dt: number): void {
+  const owner = world.fighters[s.owner];
+  if (!owner || s.ttl <= 0) return;
+  s.t += dt;
+  if (s.t < s.delay) return;
+  s.ttl = 0;
+  world.emit({ type: "strike", style: s.style, x: s.x, y: s.y, radius: s.radius });
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === owner.side) continue;
+    if (Math.hypot(f.x - s.x, f.y - s.y) > s.radius + f.radius) continue;
+    const dealt = world.dealDamage(owner, f, s.damage, f.x, f.y, s.knockback, {
+      fromX: s.x,
+      fromY: s.y,
+    });
+    if (dealt > 0 && s.stun > 0) {
+      f.stun = Math.max(f.stun, s.stun);
+      world.emit({ type: "stun", fighter: f.index });
+    }
+  }
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    if (Math.hypot(o.x - s.x, o.y - s.y) <= s.radius + o.radius) {
+      damageUnit(world, o, owner, s.damage, o.x, o.y);
+    }
+  }
 }
 
 function updateSweep(world: World, s: SweepHazard, dt: number): void {
