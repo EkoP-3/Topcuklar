@@ -27,6 +27,18 @@ export const ULT_CINEMATIC = 0.3;
 const ULT_TIME_SCALE = 0.2;
 /** Fraction of max HP at which a leader's ultimate fires. */
 export const ULT_HP = 0.3;
+/** Close calls: two bodies pass within NEAR_GAP of each other without touching. */
+const NEAR_GAP = 26;
+/** The gap has to open up past this again before the next close call can count. */
+const FAR_GAP = 50;
+const CLOSE_CALL_COOLDOWN = 0.4;
+/** Close calls needed to trigger a frenzy. */
+export const CLOSE_CALLS_FOR_FRENZY = 5;
+/** Frenzy: the arena shrinks to FRENZY_SIZE of its width and everyone speeds up. */
+export const FRENZY_TIME = 4;
+const FRENZY_SIZE = 0.75;
+const FRENZY_RAMP = 0.4;
+const FRENZY_SPEED = 1.25;
 /** Stunned fighters cruise at this fraction of their speed. */
 const STUN_SLOW = 0.3;
 const MAX_STEPS_PER_ADVANCE = 96;
@@ -54,6 +66,17 @@ export class World {
   winner = -1;
   /** 1 = normal speed; the KO moment slows time. */
   timeScale = 1;
+  /** History mode only: close calls count up to a frenzy. */
+  readonly closeCallsEnabled: boolean;
+  closeCalls = 0;
+  /** Seconds of frenzy left (0 = none). */
+  frenzy = 0;
+  /** Current walls: the arena spans lo..hi on both axes (shrinks during a frenzy). */
+  lo = 0;
+  hi = ARENA;
+  private closeCallCooldown = 0;
+  private gapArmed = false;
+  private gapTouched = false;
   /** An ultimate's slow-motion intro in progress (history mode). */
   cinematic: { fighter: number; name: string; t: number; cast: () => void } | null = null;
   private freeze = 0;
@@ -64,6 +87,7 @@ export class World {
     this.seed = seed;
     this.rng = createRng(seed);
     this.damageDealt = defs.map(() => 0);
+    this.closeCallsEnabled = defs.some((d) => d.growth);
 
     const count = defs.length;
     const rotation = this.rng.range(0, TAU);
@@ -201,6 +225,23 @@ export class World {
     return true;
   }
 
+  /**
+   * Counts a close call at (x, y). Five of them start a frenzy. Ignored outside the
+   * fight, during a frenzy, or right after the previous one.
+   */
+  closeCall(x: number, y: number): void {
+    if (!this.closeCallsEnabled || this.phase !== "fight" || this.frenzy > 0) return;
+    if (this.closeCallCooldown > 0) return;
+    this.closeCallCooldown = CLOSE_CALL_COOLDOWN;
+    this.closeCalls++;
+    this.emit({ type: "nearMiss", x, y, count: this.closeCalls });
+    if (this.closeCalls >= CLOSE_CALLS_FOR_FRENZY) {
+      this.closeCalls = 0;
+      this.frenzy = FRENZY_TIME;
+      this.emit({ type: "frenzy", on: true });
+    }
+  }
+
   /** Advance by real time. Runs as many fixed steps as fit. */
   advance(dt: number): void {
     this.acc += dt * this.timeScale;
@@ -251,6 +292,7 @@ export class World {
     }
 
     if (this.phase === "fight") this.time += dt;
+    this.updateFrenzy(dt);
 
     for (const f of this.fighters) {
       if (f.alive) this.statusEffects(f, dt);
@@ -262,6 +304,7 @@ export class World {
     this.collideBodies();
     if (this.phase === "fight") this.weapons();
     updateUnits(this, dt);
+    if (this.closeCallsEnabled) this.watchCloseCalls(dt);
 
     this.clashCooldown = Math.max(0, this.clashCooldown - dt);
     for (const f of this.fighters) {
@@ -324,9 +367,44 @@ export class World {
     if (f.poison === 0) f.poisonAcc = 0;
   }
 
+  private updateFrenzy(dt: number): void {
+    if (this.frenzy > 0 && this.phase === "fight") {
+      this.frenzy = Math.max(0, this.frenzy - dt);
+      if (this.frenzy === 0) this.emit({ type: "frenzy", on: false });
+    } else if (this.phase !== "fight") {
+      this.frenzy = 0;
+    }
+    // Walls slide in over FRENZY_RAMP seconds, hold, then slide back out.
+    const elapsed = FRENZY_TIME - this.frenzy;
+    const k = this.frenzy <= 0 ? 0 : Math.min(1, elapsed / FRENZY_RAMP, this.frenzy / FRENZY_RAMP);
+    const inset = ((1 - FRENZY_SIZE) / 2) * ARENA * k * k * (3 - 2 * k);
+    this.lo = inset;
+    this.hi = ARENA - inset;
+  }
+
+  /** Two enemy bodies brushing past each other without touching = a close call. */
+  private watchCloseCalls(dt: number): void {
+    this.closeCallCooldown = Math.max(0, this.closeCallCooldown - dt);
+    const [a, b] = this.fighters;
+    if (!a || !b || !a.alive || !b.alive || a.side === b.side) return;
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const gap = d - a.radius - b.radius;
+    if (gap <= 0) this.gapTouched = true;
+    else if (gap < NEAR_GAP) this.gapArmed = true;
+    if (gap > FAR_GAP) {
+      if (this.gapArmed && !this.gapTouched) {
+        const k = a.radius / (a.radius + b.radius);
+        this.closeCall(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
+      }
+      this.gapArmed = false;
+      this.gapTouched = false;
+    }
+  }
+
   private move(f: Fighter, dt: number): void {
     const speed = Math.hypot(f.vx, f.vy);
-    const target = f.def.baseSpeed * f.speedMul * (f.stun > 0 ? STUN_SLOW : 1);
+    const boost = this.frenzy > 0 ? FRENZY_SPEED : 1;
+    const target = f.def.baseSpeed * f.speedMul * boost * (f.stun > 0 ? STUN_SLOW : 1);
     const next = speed + (target - speed) * Math.min(1, f.relax * dt);
     if (speed < 1e-3) {
       f.vx = Math.cos(f.angle) * next;
@@ -343,30 +421,30 @@ export class World {
 
   private bounceWalls(f: Fighter): void {
     let hit: WallHit | null = null;
-    if (f.x - f.radius < 0) {
-      f.x = f.radius;
+    if (f.x - f.radius < this.lo) {
+      f.x = this.lo + f.radius;
       if (f.vx < 0) {
         f.vx = -f.vx;
-        hit = { x: 0, y: f.y, nx: 1, ny: 0 };
+        hit = { x: this.lo, y: f.y, nx: 1, ny: 0 };
       }
-    } else if (f.x + f.radius > ARENA) {
-      f.x = ARENA - f.radius;
+    } else if (f.x + f.radius > this.hi) {
+      f.x = this.hi - f.radius;
       if (f.vx > 0) {
         f.vx = -f.vx;
-        hit = { x: ARENA, y: f.y, nx: -1, ny: 0 };
+        hit = { x: this.hi, y: f.y, nx: -1, ny: 0 };
       }
     }
-    if (f.y - f.radius < 0) {
-      f.y = f.radius;
+    if (f.y - f.radius < this.lo) {
+      f.y = this.lo + f.radius;
       if (f.vy < 0) {
         f.vy = -f.vy;
-        hit ??= { x: f.x, y: 0, nx: 0, ny: 1 };
+        hit ??= { x: f.x, y: this.lo, nx: 0, ny: 1 };
       }
-    } else if (f.y + f.radius > ARENA) {
-      f.y = ARENA - f.radius;
+    } else if (f.y + f.radius > this.hi) {
+      f.y = this.hi - f.radius;
       if (f.vy > 0) {
         f.vy = -f.vy;
-        hit ??= { x: f.x, y: ARENA, nx: 0, ny: -1 };
+        hit ??= { x: f.x, y: this.hi, nx: 0, ny: -1 };
       }
     }
     if (hit) {

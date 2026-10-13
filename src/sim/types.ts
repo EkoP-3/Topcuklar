@@ -35,6 +35,12 @@ export interface FighterDef {
   era?: string;
   /** History mode: one-line English fact shown during the match. */
   fact?: string;
+  /** History mode: full name for descriptions, e.g. "Alexander the Great". */
+  fullName?: string;
+  /** History mode: where the title, dates and fact come from (links). */
+  sources?: string[];
+  /** History mode: musical mode of the background melody (see render/music.ts). */
+  musicMode?: string;
   /** History mode: English title, e.g. "Ottoman Sultan". */
   title?: string;
   /** History mode: flag or banner id drawn next to the name (see render/flags.ts). */
@@ -249,6 +255,10 @@ export interface ProjectileHazard {
   /** Poison applied on hit: seconds and damage per second. */
   poison: number;
   poisonDps: number;
+  /** Closest it came to an enemy body without hitting, and where (for close calls). */
+  closest?: number;
+  nearX?: number;
+  nearY?: number;
   /** Wall bounces left; the next wall touch after that removes it. */
   bounces: number;
   ttl: number;
@@ -296,6 +306,8 @@ export type SimEvent =
   | { type: "strike"; style: StrikeHazard["style"]; x: number; y: number; radius: number }
   | { type: "stomp"; fighter: number; x: number; y: number; radius: number }
   | { type: "callout"; fighter: number; text: string }
+  | { type: "nearMiss"; x: number; y: number; count: number }
+  | { type: "frenzy"; on: boolean }
   | { type: "stun"; fighter: number }
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }

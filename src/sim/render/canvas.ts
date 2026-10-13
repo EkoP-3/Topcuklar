@@ -2,6 +2,7 @@ import { TAU, clamp } from "../geom";
 import type {
   ArcHazard,
   Fighter,
+  FighterDef,
   HookHazard,
   ProjectileHazard,
   PylonHazard,
@@ -10,7 +11,7 @@ import type {
   SweepHazard,
   UnitHazard,
 } from "../types";
-import { ARENA, ULT_CINEMATIC, ULT_HP, type World } from "../world";
+import { ARENA, CLOSE_CALLS_FOR_FRENZY, ULT_CINEMATIC, ULT_HP, type World } from "../world";
 import type { Fx } from "./fx";
 import { DISPLAY_FONT, MONO_FONT, OUTLINE, SIDES } from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
@@ -32,8 +33,13 @@ const K = AS / ARENA;
 
 type Ctx = CanvasRenderingContext2D;
 
+export interface DrawExtras {
+  /** Leaders to show on the "who's next?" end card (question marks when null). */
+  next?: readonly [FighterDef, FighterDef] | null;
+}
+
 export interface Renderer {
-  draw(world: World, fx: Fx): void;
+  draw(world: World, fx: Fx, extras?: DrawExtras): void;
 }
 
 /**
@@ -52,7 +58,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
   const hpLag: number[] = [];
   let frame = 0;
 
-  const draw = (world: World, fx: Fx): void => {
+  const draw = (world: World, fx: Fx, extras: DrawExtras = {}): void => {
     frame++;
     ctx.setTransform(quality, 0, 0, quality, 0, 0);
     ctx.fillStyle = "#05060a";
@@ -69,8 +75,9 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     ctx.translate(fx.shakeX, fx.shakeY);
     ctx.drawImage(background, 0, 0, W, H);
     drawTopPanel(ctx, world, hpLag);
-    drawArena(ctx, world, fx, frame);
+    drawArena(ctx, world, fx, frame, extras);
     drawSkillCards(ctx, world);
+    drawCloseCalls(ctx, world);
     ctx.restore();
 
     drawOverlay(ctx, fx, overlay);
@@ -246,7 +253,7 @@ function drawSkillCards(ctx: Ctx, world: World): void {
 
 // --- arena -----------------------------------------------------------------------
 
-function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
+function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number, extras: DrawExtras): void {
   ctx.save();
   ctx.translate(AX, AY);
   roundRect(ctx, 0, 0, AS, AS, 40);
@@ -255,6 +262,7 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   // Everything below lives in world units.
   ctx.save();
   ctx.scale(K, K);
+  drawDangerZone(ctx, world, frame);
 
   for (const d of fx.trail) {
     const k = d.life / d.max;
@@ -326,7 +334,7 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number): void {
   drawSpotlight(ctx, world);
   ctx.restore();
 
-  drawBanner(ctx, world);
+  drawBanner(ctx, world, extras);
   ctx.restore();
 
   roundRect(ctx, AX, AY, AS, AS, 40);
@@ -787,7 +795,7 @@ function drawHook(ctx: Ctx, h: HookHazard, world: World): void {
   ctx.stroke();
 }
 
-function drawBanner(ctx: Ctx, world: World): void {
+function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
   let text = "";
   let color = "#f4f6fb";
   let size = 120;
@@ -836,6 +844,10 @@ function drawBanner(ctx: Ctx, world: World): void {
     case "over": {
       const winner = world.fighters[world.winner];
       if (!winner) return;
+      if (leaders && world.phaseTime >= WINS_TIME) {
+        drawNextCard(ctx, world.phaseTime - WINS_TIME, extras.next ?? null);
+        return;
+      }
       text = `${winner.def.name} WINS`;
       size = 108;
       color = SIDES[winner.side].main;
@@ -934,6 +946,140 @@ function drawUltimateBanner(ctx: Ctx, world: World): void {
   fitFont(ctx, c.name, 800, 120, AS - 60, DISPLAY_FONT);
   outlinedText(ctx, c.name, 0, 30, SIDES[f.side].main, 16);
   ctx.restore();
+}
+
+/** Seconds the "X WINS" banner shows before the "who's next?" card (history mode). */
+const WINS_TIME = 1.4;
+
+/** End card: "WHO'S NEXT?" with two mystery balls (or the chosen next leaders). */
+function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDef] | null): void {
+  const a = clamp(t / 0.25, 0, 1);
+  const s = easeOutBack(a);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = "rgba(5,6,10,0.82)";
+  ctx.fillRect(0, 0, AS, AS);
+  ctx.translate(AS / 2, 0);
+  ctx.scale(s, s);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 96px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "WHO'S NEXT?", 0, 170, "#ffd45e", 14);
+
+  const r = 120;
+  const y = 460;
+  ([-1, 1] as const).forEach((dir, i) => {
+    const side = SIDES[i === 0 ? 0 : 1];
+    const def = next?.[i] ?? null;
+    const x = dir * 230;
+    // Gentle bob so the card does not look frozen.
+    const by = y + Math.sin(t * 4 + i * 1.7) * 8;
+    ctx.beginPath();
+    ctx.arc(x, by, r, 0, TAU);
+    ctx.fillStyle = side.main;
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = side.dark;
+    ctx.stroke();
+    if (def) {
+      ctx.save();
+      ctx.translate(x, by);
+      drawHeadgear(ctx, def.id, r);
+      ctx.restore();
+      fitFont(ctx, def.name, 800, 50, 400, DISPLAY_FONT);
+      outlinedText(ctx, def.name, x, by + r + 50, side.light, 9);
+    } else {
+      ctx.font = `800 150px ${DISPLAY_FONT}`;
+      outlinedText(ctx, "?", x, by + 8, "#ffffff", 14);
+    }
+  });
+  ctx.font = `800 80px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "VS", 0, y, "#f4f6fb", 12);
+
+  ctx.font = `800 58px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "COMMENT BELOW", 0, 760, "#f4f6fb", 10);
+  // Bouncing arrow pointing down at the comments.
+  const ay = 830 + Math.abs(Math.sin(t * 5)) * 18;
+  ctx.beginPath();
+  ctx.moveTo(-34, ay);
+  ctx.lineTo(34, ay);
+  ctx.lineTo(0, ay + 44);
+  ctx.closePath();
+  ctx.fillStyle = "#ffd45e";
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Frenzy: everything outside the shrunken walls turns into a red danger zone. */
+function drawDangerZone(ctx: Ctx, world: World, frame: number): void {
+  if (world.lo <= 0.5) return;
+  const lo = world.lo;
+  const hi = world.hi;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ARENA, ARENA);
+  ctx.rect(lo, lo, hi - lo, hi - lo);
+  ctx.fillStyle = "rgba(170,20,30,0.45)";
+  ctx.fill("evenodd");
+  // Warning stripes along the danger zone.
+  ctx.save();
+  ctx.clip("evenodd");
+  ctx.strokeStyle = "rgba(255,90,60,0.25)";
+  ctx.lineWidth = 14;
+  const shift = (frame * 2) % 60;
+  for (let x = -ARENA; x < ARENA * 2; x += 60) {
+    ctx.beginPath();
+    ctx.moveTo(x + shift, 0);
+    ctx.lineTo(x + shift + ARENA, ARENA);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.beginPath();
+  ctx.rect(lo, lo, hi - lo, hi - lo);
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = `rgba(255,${120 + 60 * Math.sin(frame * 0.4)},60,0.95)`;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * History mode: a small tab on the arena's top edge — "CLOSE CALLS" with 5 dots, or
+ * the frenzy countdown while the arena is shrunk.
+ */
+function drawCloseCalls(ctx: Ctx, world: World): void {
+  if (!world.closeCallsEnabled || world.phase === "intro") return;
+  const w = 330;
+  const h = 48;
+  const x = W / 2 - w / 2;
+  const y = AY - h / 2;
+  const frenzy = world.frenzy > 0;
+  roundRect(ctx, x, y, w, h, 24);
+  ctx.fillStyle = frenzy ? "#a3141e" : "#10131c";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = frenzy ? "#ff8a5a" : "#f4f6fb";
+  ctx.stroke();
+  ctx.textBaseline = "middle";
+  if (frenzy) {
+    ctx.textAlign = "center";
+    ctx.font = `800 28px ${DISPLAY_FONT}`;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(`SHRINK  ${world.frenzy.toFixed(1)}s`, W / 2, y + h / 2 + 1);
+    return;
+  }
+  ctx.textAlign = "left";
+  ctx.font = `800 24px ${DISPLAY_FONT}`;
+  ctx.fillStyle = "#e8ecf4";
+  ctx.fillText("CLOSE CALLS", x + 24, y + h / 2 + 1);
+  for (let i = 0; i < CLOSE_CALLS_FOR_FRENZY; i++) {
+    ctx.beginPath();
+    ctx.arc(x + 200 + i * 26, y + h / 2, 9, 0, TAU);
+    ctx.fillStyle = i < world.closeCalls ? "#ffd45e" : "rgba(255,255,255,0.15)";
+    ctx.fill();
+  }
 }
 
 /** "LEVEL 2" banner for 1.2 s after each level-up time (history mode only). */

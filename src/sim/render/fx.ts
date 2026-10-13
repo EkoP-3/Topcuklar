@@ -48,6 +48,8 @@ interface Shockwave {
 
 const MAX_PARTICLES = 1600;
 const POISON_GREEN = "#6ee65a";
+/** Shown in turn for each close call. */
+const NEAR_MISS_WORDS = ["SO CLOSE!", "NEAR MISS!", "ALMOST!", "INCHES AWAY!", "WHEW!"];
 
 /**
  * Purely cosmetic effects (sparks, floating numbers, screen shake). It reads the
@@ -348,6 +350,46 @@ export class Fx {
         });
         this.burst(e.x, e.y, 24, ["#c9a27a", "#ffffff", "#ffd45e"], 480, 0.5, 10);
         this.addShake(24);
+        break;
+      case "nearMiss": {
+        const phrase = NEAR_MISS_WORDS[(e.count - 1) % NEAR_MISS_WORDS.length] ?? "SO CLOSE!";
+        this.texts.push({
+          x: e.x,
+          y: e.y - 30,
+          vy: -90,
+          life: 0.9,
+          max: 0.9,
+          text: phrase,
+          color: "#ffd45e",
+          size: 54,
+        });
+        this.burst(e.x, e.y, 10, ["#ffd45e", "#ffffff"], 260, 0.35, 7);
+        break;
+      }
+      case "frenzy":
+        if (!e.on) break;
+        this.texts.push({
+          x: 360,
+          y: 330,
+          vy: -20,
+          life: 1.2,
+          max: 1.2,
+          text: "ARENA SHRINKS!",
+          color: "#ff6a4a",
+          size: 104,
+        });
+        this.texts.push({
+          x: 360,
+          y: 420,
+          vy: -20,
+          life: 1.2,
+          max: 1.2,
+          text: "SPEED +25%",
+          color: "#ffd45e",
+          size: 64,
+        });
+        this.flash = Math.max(this.flash, 0.5);
+        this.addShake(26);
         break;
       case "callout":
         // VENI / VIDI / VICI: huge words in the middle of the arena.

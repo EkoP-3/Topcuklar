@@ -1,5 +1,4 @@
 import type { FighterDef } from "../types";
-import { ARENA } from "../world";
 import { spawnUnit, countUnits } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
@@ -12,6 +11,9 @@ export const caesar: FighterDef = {
     "Jül Sezar. Belli aralıklarla lejyoner çağırır; lejyonerler rakibi kovalar ve temas ettikçe hasar verir. Önce 2, 15. saniyede 3, 30. saniyede 4 lejyoner.",
   era: "100–44 BC",
   fact: "Crossed the Rubicon in 49 BC and started a civil war.",
+  fullName: "Julius Caesar",
+  sources: ["https://en.wikipedia.org/wiki/Julius_Caesar"],
+  musicMode: "dorian",
   title: "Dictator of Rome",
   flag: "spqr",
   ability: ABILITY,
@@ -65,8 +67,10 @@ export const caesar: FighterDef = {
         if (!enemy) return;
         const a = Math.atan2(self.y - enemy.y, self.x - enemy.x);
         const d = self.radius + enemy.radius + 6;
-        self.x = Math.min(ARENA - self.radius, Math.max(self.radius, enemy.x + Math.cos(a) * d));
-        self.y = Math.min(ARENA - self.radius, Math.max(self.radius, enemy.y + Math.sin(a) * d));
+        const lo = world.lo + self.radius;
+        const hi = world.hi - self.radius;
+        self.x = Math.min(hi, Math.max(lo, enemy.x + Math.cos(a) * d));
+        self.y = Math.min(hi, Math.max(lo, enemy.y + Math.sin(a) * d));
         self.vx = 0;
         self.vy = 0;
         world.emit({ type: "callout", fighter: self.index, text: "VENI" });

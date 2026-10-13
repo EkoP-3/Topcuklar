@@ -33,6 +33,14 @@ Her liderin canı 1000 civarındadır. Liderlerin hasarı her saniye %1,5 artar 
 
 **Ultimate:** her liderin canı %30'un altına inince maçta bir kez süper hamlesi gelir (ekran kararır, ağır çekimde adı çıkar). Hepsi farklı çalışır: Mehmed II işaretli noktalara top yağdırır, son olarak dev Şahi güllesi düşer (THE GREAT BOMBARDMENT); Genghis ok yağmuru (ARROW STORM); Hannibal dört yandan fil hücumu (CROSSING THE ALPS); Caesar ışınlanır, rakibi dondurur, üç darbe vurur (VENI, VIDI, VICI); Napoleon beş muhafızla yaylım ateşi ve süngü hücumu (IMPERIAL GUARD); Leonidas rakibi duvara tekmeler (THIS IS SPARTA!); Alexander dev olup Bucephalus'la ezerek koşar (BUCEPHALUS); Cleopatra sarmal yılan atışı (SPIRAL OF ASPS).
 
+**Kıl payı (CLOSE CALLS):** toplar ya da mermiler rakibin dibinden geçip çarpmadığında "SO CLOSE!", "NEAR MISS!" gibi yazılar çıkar ve arenanın üstündeki sayaç artar. Sayaç 5 olunca arena 4 saniyeliğine küçülür ve toplar %25 hızlanır (yalnızca Tarih modunda).
+
+**Müzik:** kodla üretilir (telifsiz), videoya da girer. Maçın gidişine göre değişir: savaş davulları, 15. saniyede yaylılar ve melodi, daralmada hızlanma, ultimate'ta sessizlik + vuruş, sonda zafer fanfarı. Melodi önde olan liderin makamını kullanır (Osmanlı: hicaz, Moğol: pentatonik…). Sayfada "Müzik açık/kapalı" düğmesi vardır.
+
+**Video sonu:** "X WINS" ardından "WHO'S NEXT? — COMMENT BELOW" kartı. Sayfada "Sonraki maç kartı" seçilirse kartta "?" yerine o iki lider görünür.
+
+**Video açıklaması:** sayfadaki kutu, seçili maç için İngilizce başlık, bilgiler, kaynaklar ve etiketler hazırlar ("Kopyala" düğmesi). Tarih bilgilerinin doğruluk notları ve kaynaklar: `docs/tarih-kaynaklari.md`.
+
 Arenanın altında her lider için bir kart vardır: yetenek adı, ne işe yaradığı, kalan süre (halkanın içinde), seviye ve ultimate.
 
 Girişte "WHO WINS?" kartı: bayrak, isim, unvan, dönem. Toplarda liderin başlığı (kavuk, iki köşeli şapka, defne, taç, Sparta miğferi…) çizilidir.

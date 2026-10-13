@@ -28,11 +28,14 @@ if (a && b) {
   const shots: { at: number; frame: number }[] = [];
   let frame = 0;
   let introShot = false;
+  let nearShots = 0;
   const castFrames: number[] = [];
   while (world.phase !== "over" && frame < 60 * 90) {
     world.advance(1 / 60);
     const ult = world.events.some((e) => e.type === "ultimate");
     const cast = world.events.some((e) => e.type === "ultimateCast");
+    const near = world.events.some((e) => e.type === "nearMiss");
+    const frenzy = world.events.some((e) => e.type === "frenzy" && e.on);
     fx.consume(world);
     fx.update(1 / 60, world);
     frame++;
@@ -46,9 +49,20 @@ if (a && b) {
     } else {
       if (ult) shots.push({ at: frame + 30, frame });
       if (cast) castFrames.push(frame + 12, frame + 40);
+      if (near && nearShots < 2) {
+        nearShots++;
+        castFrames.push(frame + 8);
+      }
+      if (frenzy) castFrames.push(frame + 20, frame + 150);
       if (shots.some((s) => s.at === frame) || castFrames.includes(frame)) snap(world, fx);
     }
   }
-  snap(world, fx);
+  // End screen: "X WINS", then the "who's next?" card.
+  for (let i = 0; i < 60 * 3.2; i++) {
+    world.advance(1 / 60);
+    fx.consume(world);
+    fx.update(1 / 60, world);
+    if (i === 30 || i === 150) snap(world, fx);
+  }
 }
 (window as unknown as { done: boolean }).done = true;

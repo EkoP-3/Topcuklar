@@ -12,11 +12,14 @@ export const genghis: FighterDef = {
   description:
     "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi oklu yaylım atar: önce 3, 15. saniyede 5, 30. saniyede 7 ok.",
   era: "c. 1162–1227",
-  fact: "Founded the Mongol Empire, later the largest land empire in history.",
+  fact: "Founded the Mongol Empire, later the largest contiguous land empire in history.",
+  fullName: "Genghis Khan",
+  sources: ["https://en.wikipedia.org/wiki/Genghis_Khan"],
+  musicMode: "pentatonic",
   title: "Great Khan of the Mongols",
   flag: "mongolia",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 27 },
+  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 28 },
   hp: 950,
   radius: 52,
   mass: 0.9,
@@ -27,7 +30,7 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 19,
+  contactDamage: 20,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -43,7 +46,7 @@ export const genghis: FighterDef = {
           style: "arrow",
           speed: ARROW_SPEED,
           radius: 9,
-          damage: 27,
+          damage: 28,
           knockback: 60,
           blast: 0,
           poison: 0,
@@ -73,7 +76,7 @@ export const genghis: FighterDef = {
             y: enemy.y + enemy.vy * 0.35 + Math.sin(a) * d,
             radius: 26,
             delay: 0.35,
-            damage: 20,
+            damage: 21,
             knockback: 40,
           });
         }

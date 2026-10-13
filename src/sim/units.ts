@@ -10,6 +10,8 @@ import { ARENA, limitSpeed, type World } from "./world";
 
 /** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
 const UNIT_STEER = 3;
+/** A projectile passing an enemy within this gap (without hitting) is a close call. */
+const PROJECTILE_NEAR_GAP = 32;
 /** Units hit by a fighter take this much of the fighter's contact damage. */
 const VS_UNIT_DAMAGE = 1.5;
 
@@ -305,12 +307,12 @@ function updateUnit(world: World, u: UnitHazard, dt: number): void {
   }
   u.x += u.vx * dt;
   u.y += u.vy * dt;
-  if (u.x < u.radius || u.x > ARENA - u.radius) {
-    u.x = clampInside(u.x, u.radius);
+  if (u.x < world.lo + u.radius || u.x > world.hi - u.radius) {
+    u.x = clampTo(world, u.x, u.radius);
     u.vx = -u.vx;
   }
-  if (u.y < u.radius || u.y > ARENA - u.radius) {
-    u.y = clampInside(u.y, u.radius);
+  if (u.y < world.lo + u.radius || u.y > world.hi - u.radius) {
+    u.y = clampTo(world, u.y, u.radius);
     u.vy = -u.vy;
   }
 
@@ -379,25 +381,39 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
   p.x += p.vx * dt;
   p.y += p.vy * dt;
 
-  const outX = p.x < p.radius || p.x > ARENA - p.radius;
-  const outY = p.y < p.radius || p.y > ARENA - p.radius;
+  const outX = p.x < world.lo + p.radius || p.x > world.hi - p.radius;
+  const outY = p.y < world.lo + p.radius || p.y > world.hi - p.radius;
   if (outX || outY) {
     if (p.bounces > 0) {
       p.bounces--;
       if (outX) p.vx = -p.vx;
       if (outY) p.vy = -p.vy;
-      p.x = clampInside(p.x, p.radius);
-      p.y = clampInside(p.y, p.radius);
+      p.x = clampTo(world, p.x, p.radius);
+      p.y = clampTo(world, p.y, p.radius);
       world.emit({ type: "wall", fighter: owner.index, x: p.x, y: p.y });
     } else {
       explode(world, owner, p, null);
       p.ttl = 0;
+      missedBy(world, p);
     }
+    return;
+  }
+  if (p.ttl <= 0) {
+    missedBy(world, p);
     return;
   }
 
   for (const f of world.fighters) {
-    if (!f.alive || f.side === owner.side || !overlap(p, f)) continue;
+    if (!f.alive || f.side === owner.side) continue;
+    const gap = Math.hypot(f.x - p.x, f.y - p.y) - f.radius - p.radius;
+    if (gap > 0) {
+      if (gap < (p.closest ?? Infinity)) {
+        p.closest = gap;
+        p.nearX = p.x;
+        p.nearY = p.y;
+      }
+      continue;
+    }
     const speed = Math.hypot(p.vx, p.vy) || 1;
     const hx = f.x - (p.vx / speed) * f.radius;
     const hy = f.y - (p.vy / speed) * f.radius;
@@ -499,4 +515,16 @@ function overlap(a: Circle, b: Circle): { nx: number; ny: number; depth: number 
 
 function clampInside(v: number, r: number): number {
   return Math.min(ARENA - r, Math.max(r, v));
+}
+
+/** Keeps a coordinate inside the current (possibly shrunken) walls. */
+function clampTo(world: World, v: number, r: number): number {
+  return Math.min(world.hi - r, Math.max(world.lo + r, v));
+}
+
+/** A shot that flew right past an enemy without hitting counts as a close call. */
+function missedBy(world: World, p: ProjectileHazard): void {
+  if ((p.closest ?? Infinity) < PROJECTILE_NEAR_GAP) {
+    world.closeCall(p.nearX ?? p.x, p.nearY ?? p.y);
+  }
 }

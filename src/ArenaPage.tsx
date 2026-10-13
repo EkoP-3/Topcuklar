@@ -3,11 +3,13 @@ import { createRng } from "./sim/rng";
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
 import { SIDES } from "./sim/render/palette";
+import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
 import { ROSTERS, ROSTER_LABELS, findIn, isRosterId, type RosterId } from "./sim/rosters";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
-import { canRecord, recordMatch, type Recording } from "./recorder";
+import { canRecord, recordMatch, tailSeconds, type Recording } from "./recorder";
+import { ultimateName, videoDescription } from "./describe";
 
 interface ArenaSearch {
   mode: RosterId | undefined;
@@ -31,8 +33,8 @@ function readSearch(): ArenaSearch {
 }
 
 const RANDOM = "random";
-/** Seconds to show the winner before the next match starts (when auto-play is on). */
-const AUTO_NEXT_DELAY = 2.6;
+/** Extra seconds after the end screen before the next match starts (auto-play). */
+const AUTO_NEXT_PAUSE = 0.6;
 
 /** Unknown ids in the address bar fall back to a random pick instead of an empty select. */
 function knownOrRandom(mode: RosterId, id: string | undefined): string {
@@ -47,9 +49,12 @@ function readMuted(): boolean {
   }
 }
 
-/** A leader's ultimate name (read from a fresh ability instance), or "". */
-function ultimateName(def: FighterDef): string {
-  return def.growth ? (def.createAbility?.().skillState?.().ultName ?? "") : "";
+function readMusicOn(): boolean {
+  try {
+    return localStorage.getItem("arena-music") !== "0";
+  } catch {
+    return true;
+  }
 }
 
 function randomSeed(): number {
@@ -102,6 +107,15 @@ export function ArenaPage() {
   const worldRef = useRef<World | null>(null);
   const fxRef = useRef<Fx | null>(null);
   const sfxRef = useRef<Sfx | null>(null);
+  const musicRef = useRef<Music | null>(null);
+  const [musicOn, setMusicOn] = useState(readMusicOn);
+  const [nextA, setNextA] = useState("");
+  const [nextB, setNextB] = useState("");
+  const [copied, setCopied] = useState(false);
+  const extrasRef = useRef<{
+    musicOn: boolean;
+    next: readonly [FighterDef, FighterDef] | null;
+  }>({ musicOn, next: null });
   const [muted, setMuted] = useState(readMuted);
   const [audioReady, setAudioReady] = useState(false);
   const mutedRef = useRef(muted);
@@ -114,6 +128,7 @@ export function ArenaPage() {
       if (!sfxRef.current) {
         try {
           sfxRef.current = new Sfx(new AudioContext());
+          musicRef.current = new Music(sfxRef.current);
         } catch {
           return;
         }
@@ -144,12 +159,35 @@ export function ArenaPage() {
     live.current = { paused, speed, auto, busy: recProgress !== null };
   }, [paused, speed, auto, recProgress]);
 
+  // Chosen "who's next?" leaders (both must be picked to replace the question marks).
+  const nextDefs: readonly [FighterDef, FighterDef] | null = (() => {
+    const da = findIn(mode, nextA);
+    const db = findIn(mode, nextB);
+    return da && db ? [da, db] : null;
+  })();
+  useEffect(() => {
+    const da = findIn(mode, nextA);
+    const db = findIn(mode, nextB);
+    extrasRef.current = { musicOn, next: da && db ? [da, db] : null };
+    try {
+      localStorage.setItem("arena-music", musicOn ? "1" : "0");
+    } catch {
+      // storage unavailable: the choice just is not remembered
+    }
+  }, [musicOn, mode, nextA, nextB]);
+
   const startRecording = () => {
     if (recording.current) return;
     const fighters = resolveFighters(seed, mode, a, b);
     setRecMessage(null);
     setRecProgress(0);
-    const job = recordMatch({ seed, fighters, onProgress: setRecProgress });
+    const job = recordMatch({
+      seed,
+      fighters,
+      onProgress: setRecProgress,
+      music: musicOn,
+      next: nextDefs,
+    });
     recording.current = job;
     job.done
       .then((name) => setRecMessage(name ? `İndirildi: ${name}` : "Kayıt iptal edildi."))
@@ -169,6 +207,7 @@ export function ArenaPage() {
     const [defA, defB] = resolveFighters(seed, mode, a, b);
     worldRef.current = new World(seed, [defA, defB]);
     fxRef.current = new Fx(seed);
+    musicRef.current?.reset();
     setMatchup([defA.name, defB.name]);
   }, [mode, a, b, seed, restarts]);
 
@@ -199,17 +238,23 @@ export function ArenaPage() {
       const { paused: isPaused, speed: rate, auto: isAuto, busy } = live.current;
 
       if (world && fx && !busy) {
+        const extras = extrasRef.current;
         if (!isPaused) {
           fx.sfx = sfxRef.current;
           world.advance(dt * rate);
           fx.consume(world);
           fx.update(dt * rate, world);
+          const sfx = sfxRef.current;
+          if (extras.musicOn && sfx && sfx.ctx.state === "running") {
+            musicRef.current?.update(musicState(world), sfx.ctx.currentTime);
+          }
         }
-        renderer.draw(world, fx);
+        renderer.draw(world, fx, { next: extras.next });
 
         if (world.phase === "over" && isAuto && !isPaused) {
           overFor += dt;
-          if (overFor >= AUTO_NEXT_DELAY) {
+          const wait = tailSeconds(world.fighters.map((f) => f.def)) + AUTO_NEXT_PAUSE;
+          if (overFor >= wait) {
             overFor = 0;
             nextMatch.current();
           }
@@ -396,6 +441,9 @@ export function ArenaPage() {
             <button className={buttonClass} onClick={() => setMuted((m) => !m)}>
               {muted ? "🔇 Ses kapalı" : "🔊 Ses açık"}
             </button>
+            <button className={buttonClass} onClick={() => setMusicOn((m) => !m)}>
+              {musicOn ? "🎵 Müzik açık" : "🎵 Müzik kapalı"}
+            </button>
             {!audioReady && !muted && (
               <span className="text-xs text-neutral-500">
                 Tarayıcı sesi bir dokunuştan sonra açar; sayfaya bir kez tıklayın.
@@ -412,6 +460,76 @@ export function ArenaPage() {
             />
             Sürekli oynat (maç bitince yeni rastgele maç)
           </label>
+
+          {mode === "leaders" && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">
+                Sonraki maç kartı (video sonu)
+              </h2>
+              <p className="text-xs text-neutral-500">
+                Boş bırakılırsa kartta “?” görünür. Seçilirse “WHO&apos;S NEXT?” kartında bu iki
+                lider gösterilir.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {(
+                  [
+                    [nextA, setNextA],
+                    [nextB, setNextB],
+                  ] as const
+                ).map(([value, set], i) => (
+                  <select
+                    key={i}
+                    className={`${controlClass} w-full`}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                  >
+                    <option className="bg-[#0d1224]" value="">
+                      ?
+                    </option>
+                    {roster.map((d) => (
+                      <option className="bg-[#0d1224]" key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mode === "leaders" && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">
+                  Video açıklaması
+                </h2>
+                <button
+                  className={buttonClass}
+                  onClick={() => {
+                    const [da, db] = resolveFighters(seed, mode, a, b);
+                    void navigator.clipboard?.writeText(videoDescription(da, db)).then(
+                      () => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      },
+                      () => setCopied(false),
+                    );
+                  }}
+                >
+                  {copied ? "✓ Kopyalandı" : "📋 Kopyala"}
+                </button>
+              </div>
+              <textarea
+                readOnly
+                className={`${controlClass} h-48 w-full font-mono text-xs`}
+                value={(() => {
+                  const [da, db] = resolveFighters(seed, mode, a, b);
+                  return videoDescription(da, db);
+                })()}
+                onFocus={(e) => e.currentTarget.select()}
+              />
+            </div>
+          )}
 
           <div className="space-y-2 pt-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">

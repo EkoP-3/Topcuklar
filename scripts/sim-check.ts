@@ -17,14 +17,26 @@ const NAME_W = Math.max(8, ...ROSTER.map((d) => d.name.length)) + 1;
 
 /** Fighters that fired their ultimate in the last played match. */
 let ultUsers: number[] = [];
+let nearMisses = 0;
+let frenzies = 0;
+const firstFrenzyAt: number[] = [];
 
 function play(seed: number, a: FighterDef, b: FighterDef): World {
   const world = new World(seed, [a, b]);
   ultUsers = [];
+  let frenzyThisMatch = false;
   let frames = 0;
   while (world.phase !== "over" && frames < 60 * 200) {
     world.advance(FRAME);
-    for (const e of world.events) if (e.type === "ultimate") ultUsers.push(e.fighter);
+    for (const e of world.events) {
+      if (e.type === "ultimate") ultUsers.push(e.fighter);
+      else if (e.type === "nearMiss") nearMisses++;
+      else if (e.type === "frenzy" && e.on) {
+        if (!frenzyThisMatch) firstFrenzyAt.push(world.time);
+        frenzyThisMatch = true;
+        frenzies++;
+      }
+    }
     world.events.length = 0;
     frames++;
   }
@@ -120,6 +132,15 @@ console.log(
   `reached 15s: ${((reached15 / games) * 100).toFixed(1)}%, ` +
     `reached 30s: ${((reached30 / games) * 100).toFixed(1)}%`,
 );
+if (nearMisses > 0) {
+  const avgFirst = firstFrenzyAt.reduce((s, t) => s + t, 0) / Math.max(1, firstFrenzyAt.length);
+  console.log(
+    `close calls: ${(nearMisses / games).toFixed(1)} per match, ` +
+      `frenzies: ${(frenzies / games).toFixed(2)} per match, ` +
+      `in ${((firstFrenzyAt.length / games) * 100).toFixed(1)}% of matches, ` +
+      `first at ${avgFirst.toFixed(1)}s on average`,
+  );
+}
 if (ultCount > 0) {
   console.log(
     `ultimates: ${(ultCount / games).toFixed(2)} per match, ` +

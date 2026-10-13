@@ -4,21 +4,29 @@ import type { World } from "../world";
 /** Weapons that sound like heavy impacts instead of metal. */
 const BLUNT = new Set(["maul", "mace"]);
 
-interface ToneOptions {
+export interface ToneOptions {
   type?: OscillatorType;
   gain?: number;
   slideTo?: number;
   delay?: number;
   attack?: number;
+  /** Absolute start time (overrides `delay`). */
+  at?: number;
+  /** Soften bright waves with a low-pass filter at this frequency. */
+  lowpass?: number;
+  /** Route to the music bus instead of the effects bus. */
+  music?: boolean;
 }
 
-interface NoiseOptions {
+export interface NoiseOptions {
   gain?: number;
   filter?: BiquadFilterType;
   freq?: number;
   slideTo?: number;
   q?: number;
   delay?: number;
+  at?: number;
+  music?: boolean;
 }
 
 /**
@@ -39,6 +47,8 @@ export class Sfx {
    */
   clock: number | null = null;
   private readonly bus: GainNode;
+  /** Background music goes through here (quieter than the effects). */
+  private readonly musicBus: GainNode;
   private readonly monitor: GainNode;
   private readonly noiseBuffer: AudioBuffer;
   private readonly lastPlayed = new Map<string, number>();
@@ -54,6 +64,9 @@ export class Sfx {
     this.bus = ctx.createGain();
     this.bus.gain.value = 0.55;
     this.bus.connect(compressor);
+    this.musicBus = ctx.createGain();
+    this.musicBus.gain.value = 0.32;
+    this.musicBus.connect(compressor);
 
     this.monitor = ctx.createGain();
     compressor.connect(this.monitor);
@@ -74,7 +87,7 @@ export class Sfx {
     if (this.ctx instanceof AudioContext && this.ctx.state === "suspended") void this.ctx.resume();
   }
 
-  private now(): number {
+  now(): number {
     return this.clock ?? this.ctx.currentTime;
   }
 
@@ -202,9 +215,9 @@ export class Sfx {
         break;
       case "ultimate":
         // Rising tension while the name is on screen.
-        this.tone(110, 1.4, { type: "sawtooth", gain: 0.16, slideTo: 880, attack: 0.3 });
-        this.tone(55, 1.4, { type: "sine", gain: 0.4, slideTo: 110, attack: 0.2 });
-        this.noise(1.3, { filter: "bandpass", freq: 300, slideTo: 4000, q: 0.8, gain: 0.35 });
+        this.tone(110, 1.8, { type: "sawtooth", gain: 0.16, slideTo: 880, attack: 0.3 });
+        this.tone(55, 1.8, { type: "sine", gain: 0.4, slideTo: 110, attack: 0.2 });
+        this.noise(1.7, { filter: "bandpass", freq: 300, slideTo: 4000, q: 0.8, gain: 0.35 });
         break;
       case "ultimateCast":
         this.tone(48, 1.4, { type: "sine", gain: 0.9, slideTo: 22 });
@@ -231,6 +244,22 @@ export class Sfx {
       case "stomp":
         this.thud(1);
         this.tone(55, 0.5, { type: "sine", gain: 0.6, slideTo: 30 });
+        break;
+      case "nearMiss":
+        // Whoosh past.
+        this.noise(0.28, { filter: "bandpass", freq: 600, slideTo: 3500, q: 1.5, gain: 0.45 });
+        this.tone(660 + e.count * 110, 0.12, { type: "triangle", gain: 0.12, delay: 0.12 });
+        break;
+      case "frenzy":
+        if (e.on) {
+          // Alarm + rumble as the walls close in.
+          for (let i = 0; i < 3; i++) {
+            this.tone(880, 0.16, { type: "square", gain: 0.1, delay: i * 0.22, slideTo: 660 });
+          }
+          this.tone(50, 1.2, { type: "sawtooth", gain: 0.25, slideTo: 35, lowpass: 400 });
+        } else {
+          this.tone(300, 0.4, { type: "triangle", gain: 0.12, slideTo: 150 });
+        }
         break;
       case "callout":
         this.tone(98, 0.6, { type: "sawtooth", gain: 0.15, attack: 0.01 });
@@ -283,8 +312,8 @@ export class Sfx {
     return true;
   }
 
-  private tone(freq: number, dur: number, o: ToneOptions = {}): void {
-    const t0 = this.now() + (o.delay ?? 0);
+  tone(freq: number, dur: number, o: ToneOptions = {}): void {
+    const t0 = o.at ?? this.now() + (o.delay ?? 0);
     const osc = this.ctx.createOscillator();
     osc.type = o.type ?? "sine";
     osc.frequency.setValueAtTime(freq, t0);
@@ -294,13 +323,21 @@ export class Sfx {
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(peak, t0 + (o.attack ?? 0.005));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(this.bus);
+    const out = o.music ? this.musicBus : this.bus;
+    if (o.lowpass) {
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = o.lowpass;
+      osc.connect(lp).connect(g).connect(out);
+    } else {
+      osc.connect(g).connect(out);
+    }
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
   }
 
-  private noise(dur: number, o: NoiseOptions = {}): void {
-    const t0 = this.now() + (o.delay ?? 0);
+  noise(dur: number, o: NoiseOptions = {}): void {
+    const t0 = o.at ?? this.now() + (o.delay ?? 0);
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     src.loop = true;
@@ -312,7 +349,10 @@ export class Sfx {
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(o.gain ?? 0.3, t0);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    src.connect(filter).connect(g).connect(this.bus);
+    src
+      .connect(filter)
+      .connect(g)
+      .connect(o.music ? this.musicBus : this.bus);
     src.start(Math.max(0, t0), Math.random() * 0.5);
     src.stop(t0 + dur + 0.05);
   }

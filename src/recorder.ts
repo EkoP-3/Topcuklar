@@ -1,12 +1,15 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
+import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 
-/** Seconds of the winner screen kept at the end of the clip. */
-const TAIL = 1.6;
+/** Seconds of the end screen kept at the end of the clip (history mode adds the "who's next?" card). */
+export function tailSeconds(fighters: readonly FighterDef[]): number {
+  return fighters.some((d) => d.growth) ? 3.4 : 1.6;
+}
 /** Safety net: stop a recording that somehow never finishes. */
 const MAX_SECONDS = 90;
 const FPS = 60;
@@ -22,6 +25,10 @@ export interface RecordOptions {
   fighters: [FighterDef, FighterDef];
   /** Called often with 0..1. */
   onProgress: (progress: number) => void;
+  /** Background music in the clip (default true). */
+  music?: boolean;
+  /** Shown on the "who's next?" end card instead of question marks. */
+  next?: readonly [FighterDef, FighterDef] | null;
 }
 
 export interface Recording {
@@ -200,7 +207,7 @@ async function recordOffline(
         fx.consume(world);
         fx.update(dt, world);
       }
-      renderer.draw(world, fx);
+      renderer.draw(world, fx, { next: opts.next ?? null });
       const frame = new VideoFrame(canvas, {
         timestamp: Math.round((i * 1e6) / FPS),
         duration: Math.round(1e6 / FPS),
@@ -233,12 +240,15 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   // Frame 0 is the starting position; frame n has been advanced n times.
   let frames = 1;
   let overFrames = 0;
-  while (overFrames < TAIL * FPS && frames < FPS * MAX_SECONDS) {
+  const tail = tailSeconds(opts.fighters);
+  const states: ReturnType<typeof musicState>[] = [musicState(probe)];
+  while (overFrames < tail * FPS && frames < FPS * MAX_SECONDS) {
     probe.advance(dt);
     if (probe.events.length > 0) {
       plays.push({ t: frames * dt, events: probe.events });
       probe.events = [];
     }
+    states.push(musicState(probe));
     if (probe.phase === "over") overFrames++;
     frames++;
     if (frames % 240 === 0) await yieldToPage();
@@ -254,6 +264,15 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
     sfx.clock = p.t;
     for (const e of p.events) sfx.play(probe, e);
     if (i % 100 === 99) await yieldToPage();
+  }
+  if (opts.music !== false) {
+    // The same music code as the live preview, driven by the frame clock.
+    const music = new Music(sfx);
+    for (let i = 0; i < states.length; i++) {
+      const state = states[i];
+      if (state) music.update(state, i * dt);
+      if (i % 600 === 599) await yieldToPage();
+    }
   }
   const buffer = await ctx.startRendering();
   return { buffer, frames };
@@ -357,7 +376,7 @@ function clipSeconds(seed: number, fighters: [FighterDef, FighterDef]): number {
     probe.events.length = 0;
     frames++;
   }
-  return frames / 60 + TAIL;
+  return frames / 60 + tailSeconds(fighters);
 }
 
 /** Real-time capture of a hidden canvas (browsers without WebCodecs). */
@@ -377,16 +396,19 @@ function recordStream(opts: RecordOptions): Recording {
     const fx = new Fx(opts.seed);
     const canvas = document.createElement("canvas");
     const renderer = createRenderer(canvas, 1);
-    renderer.draw(world, fx);
+    const extras = { next: opts.next ?? null };
+    renderer.draw(world, fx, extras);
 
     const stream = canvas.captureStream(STREAM_FPS);
     let audioContext: AudioContext | null = null;
+    let music: Music | null = null;
     try {
       audioContext = new AudioContext();
       const sfx = new Sfx(audioContext, { tap: true });
       sfx.resume();
       sfx.tap?.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
       fx.sfx = sfx;
+      if (opts.music !== false) music = new Music(sfx);
     } catch {
       audioContext = null;
     }
@@ -438,20 +460,21 @@ function recordStream(opts: RecordOptions): Recording {
         const dt = Math.min(1 / 20, (now - last) / 1000);
         last = now;
         world.advance(dt);
+        if (music && audioContext) music.update(musicState(world), audioContext.currentTime);
         fx.consume(world);
         fx.update(dt, world);
         // Only draw as often as the stream captures.
         sinceDraw += dt;
         if (sinceDraw >= 1 / STREAM_FPS - 0.002) {
           sinceDraw = 0;
-          renderer.draw(world, fx);
+          renderer.draw(world, fx, extras);
         }
 
         const elapsed = (now - startedAt) / 1000;
         opts.onProgress(Math.min(1, elapsed / total));
 
         if (world.phase === "over") tail += dt;
-        if (tail >= TAIL || elapsed > MAX_SECONDS) {
+        if (tail >= tailSeconds(opts.fighters) || elapsed > MAX_SECONDS) {
           finish(false);
           return;
         }
