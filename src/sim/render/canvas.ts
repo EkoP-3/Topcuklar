@@ -26,7 +26,7 @@ const W = 1080;
 const H = 1920;
 /** Arena square inside the frame, in frame pixels. */
 const AX = 60;
-const AY = 500;
+const AY = 350;
 const AS = 960;
 /** Frame pixels per world unit. The world is smaller than the frame so fighters look big. */
 const K = AS / ARENA;
@@ -98,9 +98,9 @@ function drawTopPanel(ctx: Ctx, world: World, hpLag: number[]): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `700 56px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", W / 2, 432, "#f4f6fb", 8);
+  outlinedText(ctx, "VS", W / 2, 282, "#f4f6fb", 8);
   ctx.font = `600 30px ${MONO_FONT}`;
-  outlinedText(ctx, formatTime(world.time), W / 2, 474, "rgba(244,246,251,0.55)", 5);
+  outlinedText(ctx, formatTime(world.time), W / 2, 324, "rgba(244,246,251,0.55)", 5);
 }
 
 function drawFighterPanel(
@@ -122,7 +122,7 @@ function drawFighterPanel(
     const fh = 46;
     const fw = fh * FLAG_RATIO;
     ctx.save();
-    ctx.translate(align === "left" ? edgeX : edgeX - fw, 332);
+    ctx.translate(align === "left" ? edgeX : edgeX - fw, 182);
     drawFlag(ctx, f.def.flag, fh);
     ctx.restore();
     nameX = align === "left" ? edgeX + fw + 14 : edgeX - fw - 14;
@@ -130,9 +130,9 @@ function drawFighterPanel(
     ctx.textBaseline = "alphabetic";
   }
   fitFont(ctx, f.def.name, 700, 58, w - Math.abs(nameX - edgeX), DISPLAY_FONT);
-  outlinedText(ctx, f.def.name, nameX, 374, side.main, 9);
+  outlinedText(ctx, f.def.name, nameX, 224, side.main, 9);
 
-  const y = 400;
+  const y = 250;
   const h = 44;
   roundRect(ctx, x0, y, w, h, 12);
   ctx.fillStyle = "#10131c";
