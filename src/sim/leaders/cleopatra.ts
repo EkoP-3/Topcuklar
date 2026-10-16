@@ -19,7 +19,7 @@ export const cleopatra: FighterDef = {
   flag: "egypt",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "POISON/S", base: 30 },
-  hp: 1000,
+  hp: 970,
   radius: 55,
   mass: 1,
   baseSpeed: 460,

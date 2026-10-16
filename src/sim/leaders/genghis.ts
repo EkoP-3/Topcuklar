@@ -20,7 +20,7 @@ export const genghis: FighterDef = {
   flag: "mongolia",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "ARROW DMG", base: 28 },
-  hp: 1000,
+  hp: 950,
   radius: 52,
   mass: 0.9,
   baseSpeed: 540,

@@ -18,7 +18,7 @@ export const hannibal: FighterDef = {
   flag: "tunisia",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "TRAMPLE DMG", base: 40 },
-  hp: 1000,
+  hp: 970,
   radius: 58,
   mass: 1.1,
   baseSpeed: 430,

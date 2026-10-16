@@ -19,7 +19,7 @@ export const napoleon: FighterDef = {
   flag: "france",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "CANNON DMG", base: 73 },
-  hp: 900,
+  hp: 860,
   radius: 48,
   mass: 0.85,
   baseSpeed: 470,

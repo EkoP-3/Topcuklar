@@ -422,8 +422,9 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
       watchNearMiss(world, p, gap);
       continue;
     }
-    if (world.time < f.reflectUntil) {
-      // Leonidas' shield: the shot flies back at whoever fired it.
+    if (world.time < f.reflectUntil || (p.style === "bombard" && f.reflectUntil > 0)) {
+      // Leonidas' shield: the shot flies back at whoever fired it (the slow Şahi shell
+      // for as long as the shield is up, everything else only in the first second).
       const a = Math.atan2(owner.y - p.y, owner.x - p.x);
       const speed = Math.hypot(p.vx, p.vy);
       p.vx = Math.cos(a) * speed;

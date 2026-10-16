@@ -22,7 +22,7 @@ export const alexander: FighterDef = {
   flag: "vergina",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 98 },
-  hp: 1000,
+  hp: 950,
   radius: 58,
   mass: 1.1,
   baseSpeed: 440,
@@ -66,7 +66,7 @@ export const alexander: FighterDef = {
       self.trail = false;
       self.damageTakenMul = 1;
     },
-    shieldPierce: (p) => (p === "active" ? 0.5 : 0),
+    shieldPierce: (p) => (p === "active" ? 0.85 : 0),
     onHit(world, self, target, p) {
       if (p !== "active") return;
       // The charge lands with a shockwave that throws the enemy back.

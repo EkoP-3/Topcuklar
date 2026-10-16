@@ -18,7 +18,7 @@ export const caesar: FighterDef = {
   flag: "spqr",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "LEGION DMG", base: 26 },
-  hp: 1000,
+  hp: 970,
   radius: 58,
   mass: 1,
   baseSpeed: 430,
