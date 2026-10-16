@@ -3,13 +3,16 @@ import type { FighterDef } from "../types";
 import { skill, steerToward } from "./kit";
 
 const SHIELD_TIME = [2.2, 3, 4];
-const ABILITY = { name: "HOLD THE LINE", text: "Shield up: -60% damage, hard bash" };
+const ABILITY = {
+  name: "HOLD THE LINE",
+  text: "Shield up: -60% damage, parries shots back",
+};
 
 export const leonidas: FighterDef = {
   id: "leonidas",
   name: "LEONIDAS",
   description:
-    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırıp rakibe yürür: aldığı hasar %60 azalır, kalkanla sert vurur. Kalkan önce 2,2 sn, 15. saniyede 3 sn, 30. saniyede 4 sn sürer.",
+    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırıp rakibe yürür: aldığı hasar %60 azalır, kalkanla sert vurur; kalkanı kaldırdığı ilk saniyede gelen mermileri sahibine geri sektirir. Kalkan önce 2,2 sn, 15. saniyede 3 sn, 30. saniyede 4 sn sürer.",
   era: "c. 540–480 BC",
   fact: "Led the 300 Spartans at Thermopylae in 480 BC.",
   fullName: "Leonidas I of Sparta",
@@ -18,7 +21,7 @@ export const leonidas: FighterDef = {
   title: "King of Sparta",
   flag: "greece",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BASH DMG", base: 72 },
+  growth: { perSecond: 0.015, stat: "BASH DMG", base: 73 },
   hp: 1200,
   radius: 60,
   mass: 1.4,
@@ -29,7 +32,7 @@ export const leonidas: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 33,
+  contactDamage: 32,
   contactInterval: 0.45,
   createAbility: skill({
     label: ABILITY.name,
@@ -39,6 +42,8 @@ export const leonidas: FighterDef = {
     cast(world, self) {
       self.damageTakenMul = 0.4;
       self.shielded = true;
+      // Raising the shield parries: shots bounce back for the first second.
+      self.reflectUntil = world.time + 1;
       self.speedMul = 1.25;
       world.emit({ type: "shield", fighter: self.index });
     },
@@ -48,6 +53,7 @@ export const leonidas: FighterDef = {
     onEnd(_world, self) {
       self.damageTakenMul = 1;
       self.shielded = false;
+      self.reflectUntil = 0;
       self.speedMul = 1;
     },
     damageMultiplier: (p) => (p === "active" ? 2.2 : 1),

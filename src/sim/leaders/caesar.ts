@@ -2,13 +2,13 @@ import type { FighterDef } from "../types";
 import { spawnUnit, countUnits } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
-const ABILITY = { name: "LEGIONS", text: "Summons legionaries that chase" };
+const ABILITY = { name: "LEGIONS", text: "Legionaries chase and lock shields" };
 
 export const caesar: FighterDef = {
   id: "caesar",
   name: "CAESAR",
   description:
-    "Jül Sezar. Belli aralıklarla lejyoner çağırır; lejyonerler rakibi kovalar ve temas ettikçe hasar verir. Önce 2, 15. saniyede 3, 30. saniyede 4 lejyoner.",
+    "Jül Sezar. Belli aralıklarla lejyoner çağırır; lejyonerler rakibi kovalar ve temas ettikçe hasar verir; rakibe yaklaşınca kalkan duvarı (testudo) kurup daha az hasar alırlar. Önce 2, 15. saniyede 3, 30. saniyede 4 lejyoner.",
   era: "100–44 BC",
   fact: "Crossed the Rubicon in 49 BC and started a civil war.",
   fullName: "Julius Caesar",
@@ -28,7 +28,7 @@ export const caesar: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 24,
+  contactDamage: 23,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,

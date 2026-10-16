@@ -35,6 +35,10 @@ export interface SkillSpec {
   onEnd?(world: World, self: Fighter): void;
   damageMultiplier?(phase: SkillPhase): number;
   knockbackMultiplier?(phase: SkillPhase): number;
+  /** 0..1 of the target's shield reduction this fighter's hits ignore. */
+  shieldPierce?(phase: SkillPhase): number;
+  /** Contact hit landed (outside the ultimate). */
+  onHit?(world: World, self: Fighter, target: Fighter, phase: SkillPhase): void;
   onDamaged?: Ability["onDamaged"];
   /** Once-per-match super move, fired when HP drops to ULT_HP of max. */
   ultimate?: UltimateSpec;
@@ -129,8 +133,13 @@ export function skill(spec: SkillSpec): () => Ability {
         (ultActive > 0 ? (ult?.knockbackMultiplier ?? 1) : 1),
       onHitDealt: (world, self, target) => {
         if (ultActive > 0) ult?.onHit?.(world, self, target);
+        else spec.onHit?.(world, self, target, phase);
       },
     };
+    if (spec.shieldPierce) {
+      const f = spec.shieldPierce;
+      ability.shieldPierce = () => f(phase);
+    }
     if (spec.onDamaged) ability.onDamaged = spec.onDamaged;
 
     function startWindup(world: World, self: Fighter, seconds: number): void {
@@ -158,7 +167,7 @@ export function skill(spec: SkillSpec): () => Ability {
       if (phase === "active") spec.onEnd?.(world, self);
       if (chargesLeft > 0) {
         chargesLeft--;
-        startWindup(world, self, spec.windup ? RECHARGE_WINDUP : 0);
+        startWindup(world, self, RECHARGE_WINDUP);
         return;
       }
       phase = "cooldown";

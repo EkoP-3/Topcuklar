@@ -3,13 +3,13 @@ import { fireProjectile, leadAngle } from "../units";
 import { fan, skill, ticks } from "./kit";
 
 const ASP_SPEED = 700;
-const ABILITY = { name: "ASP", text: "Throws asps that poison" };
+const ABILITY = { name: "ASP", text: "Poison asps; misses become snake traps" };
 
 export const cleopatra: FighterDef = {
   id: "cleopatra",
   name: "CLEOPATRA",
   description:
-    "Kleopatra. Belli aralıklarla rakibe engerek fırlatır; ısırılan rakip birkaç saniye zehirlenip can kaybeder. Önce 1, 15. saniyede 2, 30. saniyede 3 engerek.",
+    "Kleopatra. Belli aralıklarla rakibe engerek fırlatır; ısırılan rakip birkaç saniye zehirlenip can kaybeder; ıskalayan engerek yerde 3 sn bekleyen bir yılan tuzağına dönüşür. Önce 1, 15. saniyede 2, 30. saniyede 3 engerek.",
   era: "69–30 BC",
   fact: "The last active ruler of Ptolemaic Egypt.",
   fullName: "Cleopatra VII",
@@ -18,7 +18,7 @@ export const cleopatra: FighterDef = {
   title: "Queen of Egypt",
   flag: "egypt",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "POISON/S", base: 28 },
+  growth: { perSecond: 0.015, stat: "POISON/S", base: 30 },
   hp: 1000,
   radius: 55,
   mass: 1,
@@ -29,7 +29,7 @@ export const cleopatra: FighterDef = {
   damage: 0,
   knockback: 130,
   hitInterval: 0.5,
-  contactDamage: 23,
+  contactDamage: 26,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -44,12 +44,13 @@ export const cleopatra: FighterDef = {
           style: "asp",
           speed: ASP_SPEED,
           radius: 15,
-          damage: 19,
+          damage: 22,
           knockback: 80,
           blast: 0,
           poison: 4,
-          poisonDps: 28,
+          poisonDps: 30,
           bounces: 1,
+          leaves: "snake",
           ttl: 3,
         });
       }
@@ -67,11 +68,11 @@ export const cleopatra: FighterDef = {
               style: "asp",
               speed: 560,
               radius: 15,
-              damage: 23,
+              damage: 26,
               knockback: 60,
               blast: 0,
               poison: 4,
-              poisonDps: 45,
+              poisonDps: 48,
               bounces: 0,
               ttl: 1.6,
             });

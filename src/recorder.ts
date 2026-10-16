@@ -1,5 +1,6 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import { createRenderer } from "./sim/render/canvas";
+import { loadFonts } from "./sim/render/palette";
 import { Fx } from "./sim/render/fx";
 import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
@@ -58,7 +59,7 @@ export function recordMatch(opts: RecordOptions): Recording {
   let cancelled = false;
   let cancelStream: () => void = () => {};
   const done = (async (): Promise<string | null> => {
-    if (document.fonts) await document.fonts.ready;
+    await loadFonts();
     const plan = canEncodeOffline() ? await pickOfflineCodecs() : null;
     try {
       if (plan) return await recordOffline(opts, plan, () => cancelled);

@@ -2,13 +2,13 @@ import type { FighterDef } from "../types";
 import { spawnSweep, spawnUnit, countUnits } from "../units";
 import { aim, fan, skill } from "./kit";
 
-const ABILITY = { name: "WAR ELEPHANT", text: "Elephants trample and stun" };
+const ABILITY = { name: "WAR ELEPHANT", text: "Elephants trample, stun and drag" };
 
 export const hannibal: FighterDef = {
   id: "hannibal",
   name: "HANNIBAL",
   description:
-    "Hannibal. Belli aralıklarla savaş fili salar; fil ağırdır, rakibi savurur ve kısa süre sersemletir. Önce 1, 15. saniyede 2, 30. saniyede 3 fil.",
+    "Hannibal. Belli aralıklarla savaş fili salar; fil ağırdır, rakibi savurur, sürükler ve kısa süre sersemletir; filler mermileri gövdesiyle durdurur. Önce 1, 15. saniyede 2, 30. saniyede 3 fil.",
   era: "247–c. 183 BC",
   fact: "Crossed the Alps with war elephants to invade Italy in 218 BC.",
   fullName: "Hannibal Barca",
@@ -17,7 +17,7 @@ export const hannibal: FighterDef = {
   title: "General of Carthage",
   flag: "tunisia",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "TRAMPLE DMG", base: 38 },
+  growth: { perSecond: 0.015, stat: "TRAMPLE DMG", base: 40 },
   hp: 1000,
   radius: 58,
   mass: 1.1,
@@ -28,7 +28,7 @@ export const hannibal: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 22,
+  contactDamage: 24,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -46,7 +46,7 @@ export const hannibal: FighterDef = {
             mass: 2.4,
             speed: 300,
             hp: 180,
-            damage: 38,
+            damage: 40,
             knockback: 520,
             stun: 0.6,
             hitInterval: 0.9,
@@ -72,7 +72,7 @@ export const hannibal: FighterDef = {
             depth: 90,
             count: 3,
             itemHalf: 46,
-            damage: 33,
+            damage: 35,
             knockback: 600,
             stun: 0.25,
             dir,

@@ -3,13 +3,13 @@ import { fireProjectile, leadAngle, spawnUnit, unitsOf } from "../units";
 import { fan, skill, ticks } from "./kit";
 
 const BALL_SPEED = 900;
-const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce once" };
+const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce twice" };
 
 export const napoleon: FighterDef = {
   id: "napoleon",
   name: "NAPOLEON",
   description:
-    "Napolyon. Küçük ve çevik; belli aralıklarla ağır top güllesi atar, gülle bir kez duvardan seker. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
+    "Napolyon. Küçük ve çevik; belli aralıklarla ağır top güllesi atar, gülle iki kez duvardan seker. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
   era: "1769–1821",
   fact: "An artillery officer who crowned himself Emperor of the French in 1804.",
   fullName: "Napoleon Bonaparte",
@@ -18,7 +18,7 @@ export const napoleon: FighterDef = {
   title: "Emperor of the French",
   flag: "france",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 64 },
+  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 73 },
   hp: 900,
   radius: 48,
   mass: 0.85,
@@ -29,7 +29,7 @@ export const napoleon: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 19,
+  contactDamage: 20,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -44,12 +44,12 @@ export const napoleon: FighterDef = {
           style: "ball",
           speed: BALL_SPEED,
           radius: 16,
-          damage: 64,
+          damage: 73,
           knockback: 420,
           blast: 0,
           poison: 0,
           poisonDps: 0,
-          bounces: 1,
+          bounces: 2,
           ttl: 3,
         });
       }
@@ -75,7 +75,7 @@ export const napoleon: FighterDef = {
               mass: 1.5,
               speed: 0,
               hp: 160,
-              damage: 30,
+              damage: 33,
               knockback: 200,
               stun: 0,
               hitInterval: 0.6,
@@ -105,7 +105,7 @@ export const napoleon: FighterDef = {
                 style: "musket",
                 speed: 1300,
                 radius: 9,
-                damage: 22,
+                damage: 25,
                 knockback: 120,
                 blast: 0,
                 poison: 0,

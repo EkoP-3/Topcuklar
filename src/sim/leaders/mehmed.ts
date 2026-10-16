@@ -4,13 +4,13 @@ import { fireProjectile, leadAngle, spawnStrike } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
 const BALL_SPEED = 760;
-const ABILITY = { name: "GREAT BOMBARD", text: "Giant cannonball that explodes" };
+const ABILITY = { name: "GREAT BOMBARD", text: "Giant shell that leaves a burning crater" };
 
 export const mehmed: FighterDef = {
   id: "mehmed",
   name: "MEHMED II",
   description:
-    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
+    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar ve 2 sn yanan bir krater bırakır. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
   era: "1432–1481",
   fact: "Took Constantinople in 1453 with the help of giant bombards.",
   fullName: "Mehmed II (the Conqueror)",
@@ -19,7 +19,7 @@ export const mehmed: FighterDef = {
   title: "Ottoman Sultan",
   flag: "turkey",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 105 },
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 97 },
   hp: 1050,
   radius: 59,
   mass: 1.2,
@@ -30,13 +30,13 @@ export const mehmed: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 24,
+  contactDamage: 22,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
     firstAt: 2.2,
     cooldown: 3.4,
-    windup: 0.8,
+    windup: 0.65,
     onWindup(world, self) {
       self.speedMul = 0.25;
       self.relax = 6;
@@ -55,12 +55,13 @@ export const mehmed: FighterDef = {
           style: "bombard",
           speed: BALL_SPEED,
           radius: 27,
-          damage: 105,
+          damage: 97,
           knockback: 600,
           blast: 130,
           poison: 0,
           poisonDps: 0,
           bounces: 0,
+          leaves: "fire",
           ttl: 3,
         });
       }
@@ -84,7 +85,7 @@ export const mehmed: FighterDef = {
             y: enemy.y + enemy.vy * 0.7 + world.rng.range(-70, 70),
             radius: 95,
             delay: 0.8,
-            damage: 78,
+            damage: 73,
             knockback: 450,
           });
         }
@@ -96,7 +97,7 @@ export const mehmed: FighterDef = {
             y: enemy.y,
             radius: 160,
             delay: 1,
-            damage: 157,
+            damage: 146,
             knockback: 900,
           });
         }

@@ -4,13 +4,13 @@ import { fan, skill, ticks } from "./kit";
 
 const ARROW_SPEED = 1050;
 const ARROWS = [3, 5, 7];
-const ABILITY = { name: "HORSE ARCHERS", text: "Fast rider, fires arrow volleys" };
+const ABILITY = { name: "HORSE ARCHERS", text: "Fast rider; arrow volleys pierce soldiers" };
 
 export const genghis: FighterDef = {
   id: "genghis",
   name: "GENGHIS KHAN",
   description:
-    "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi oklu yaylım atar: önce 3, 15. saniyede 5, 30. saniyede 7 ok.",
+    "Cengiz Han. Hızlı hareket eder ve sık sık atlı okçu gibi oklu yaylım atar (oklar askerlerin içinden geçer; 30. saniyeden sonra art arda iki yaylım): önce 3, 15. saniyede 5, 30. saniyede 7 ok.",
   era: "c. 1162–1227",
   fact: "Founded the Mongol Empire, later the largest contiguous land empire in history.",
   fullName: "Genghis Khan",
@@ -20,7 +20,7 @@ export const genghis: FighterDef = {
   flag: "mongolia",
   ability: ABILITY,
   growth: { perSecond: 0.015, stat: "ARROW DMG", base: 28 },
-  hp: 950,
+  hp: 1000,
   radius: 52,
   mass: 0.9,
   baseSpeed: 540,
@@ -30,13 +30,14 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 20,
+  contactDamage: 21,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
     quiet: true,
     firstAt: 1.2,
     cooldown: 1.9,
+    charges: (level) => (level >= 3 ? 2 : 1),
     cast(world, self, level) {
       const enemy = world.nearestEnemy(self);
       if (!enemy) return;
@@ -76,7 +77,7 @@ export const genghis: FighterDef = {
             y: enemy.y + enemy.vy * 0.35 + Math.sin(a) * d,
             radius: 26,
             delay: 0.35,
-            damage: 21,
+            damage: 23,
             knockback: 40,
           });
         }

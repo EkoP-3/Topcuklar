@@ -75,6 +75,8 @@ export interface Ability {
   onClash?(world: World, self: Fighter, other: Fighter): void;
   damageMultiplier?(self: Fighter): number;
   knockbackMultiplier?(self: Fighter): number;
+  /** 0..1: how much of the target's damage reduction (shields) this fighter's hits ignore. */
+  shieldPierce?(self: Fighter): number;
   /** Short status text for the telemetry panel, e.g. "[CHARGING]". */
   hud?(self: Fighter): string;
   /** Timed signature move state, for the cooldown bar (history mode). */
@@ -134,6 +136,8 @@ export interface Fighter {
   poisonBy: number;
   /** Poison damage built up but not yet dealt. */
   poisonAcc: number;
+  /** Until this fight time, shots that hit this fighter bounce back at their owner. */
+  reflectUntil: number;
   /** Seconds during which hitting a wall hurts (after a huge knockback), by whom and how much. */
   slam: number;
   slamBy: number;
@@ -160,7 +164,8 @@ export type Hazard =
   | UnitHazard
   | ProjectileHazard
   | SweepHazard
-  | StrikeHazard;
+  | StrikeHazard
+  | ZoneHazard;
 
 /** A marked spot that explodes after `delay` seconds (artillery shell, falling arrow). */
 export interface StrikeHazard {
@@ -259,9 +264,33 @@ export interface ProjectileHazard {
   closest?: number;
   nearX?: number;
   nearY?: number;
+  /** A close call was already counted for this shot. */
+  nearCounted?: boolean;
+  /** What a miss leaves behind: a burning crater, a waiting snake. */
+  leaves?: ZoneHazard["style"];
+  /** Enemy units already hit while flying through them. */
+  pierced?: UnitHazard[];
   /** Wall bounces left; the next wall touch after that removes it. */
   bounces: number;
   ttl: number;
+}
+
+/** A patch on the floor: a burning crater (hurts every tick) or a snake trap (bites once). */
+export interface ZoneHazard {
+  kind: "zone";
+  owner: number;
+  style: "fire" | "snake";
+  x: number;
+  y: number;
+  radius: number;
+  ttl: number;
+  maxTtl: number;
+  /** Fire: damage per second while inside. Snake: damage of the bite. */
+  damage: number;
+  poison: number;
+  poisonDps: number;
+  /** Seconds until it can hurt again. */
+  lock: number;
 }
 
 export type PylonHazard = Extract<Hazard, { kind: "pylon" }>;
@@ -296,7 +325,9 @@ export type SimEvent =
   | { type: "summon"; fighter: number; style: UnitHazard["style"]; x: number; y: number }
   | { type: "shoot"; fighter: number; style: ProjectileHazard["style"] }
   | { type: "blast"; x: number; y: number; radius: number }
-  | { type: "unitDown"; x: number; y: number; side: 0 | 1 }
+  | { type: "unitDown"; x: number; y: number; side: 0 | 1; style: UnitHazard["style"] }
+  | { type: "reflect"; fighter: number; x: number; y: number }
+  | { type: "zone"; style: ZoneHazard["style"]; x: number; y: number; radius: number }
   | { type: "shield"; fighter: number }
   | { type: "skill"; fighter: number; name: string; small: boolean }
   | { type: "ultimate"; fighter: number; name: string }

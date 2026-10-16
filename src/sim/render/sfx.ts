@@ -16,6 +16,17 @@ export interface ToneOptions {
   lowpass?: number;
   /** Route to the music bus instead of the effects bus. */
   music?: boolean;
+  /** Pitch offset in cents (for detuned layers). */
+  detune?: number;
+  /** Fraction of `dur` held at full volume before the fade (default 0: decay at once). */
+  hold?: number;
+}
+
+export interface NoteOptions {
+  at?: number;
+  delay?: number;
+  gain?: number;
+  music?: boolean;
 }
 
 export interface NoiseOptions {
@@ -52,6 +63,8 @@ export class Sfx {
   private readonly monitor: GainNode;
   private readonly noiseBuffer: AudioBuffer;
   private readonly lastPlayed = new Map<string, number>();
+  /** Plucked-string notes, rendered once per pitch. */
+  private readonly plucks = new Map<number, AudioBuffer>();
 
   constructor(ctx: BaseAudioContext, opts: { tap?: boolean } = {}) {
     this.ctx = ctx;
@@ -67,6 +80,19 @@ export class Sfx {
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = 0.32;
     this.musicBus.connect(compressor);
+
+    // Shared hall reverb: everything sounds like it is played in one stone room.
+    const reverb = ctx.createConvolver();
+    reverb.buffer = hallImpulse(ctx, 1.9);
+    const reverbReturn = ctx.createGain();
+    reverbReturn.gain.value = 0.9;
+    reverb.connect(reverbReturn).connect(compressor);
+    const fxSend = ctx.createGain();
+    fxSend.gain.value = 0.18;
+    this.bus.connect(fxSend).connect(reverb);
+    const musicSend = ctx.createGain();
+    musicSend.gain.value = 0.38;
+    this.musicBus.connect(musicSend).connect(reverb);
 
     this.monitor = ctx.createGain();
     compressor.connect(this.monitor);
@@ -113,8 +139,7 @@ export class Sfx {
       }
       case "clash":
         if (!this.allow("clash", 0.08)) return;
-        this.tone(1250 * rand(0.95, 1.05), 0.35, { type: "triangle", gain: 0.22 });
-        this.tone(1870 * rand(0.95, 1.05), 0.25, { type: "square", gain: 0.06 });
+        this.bell(1250 * rand(0.95, 1.05), 0.4, 0.2);
         this.noise(0.06, { filter: "highpass", freq: 3000, gain: 0.3 });
         break;
       case "wall":
@@ -130,9 +155,12 @@ export class Sfx {
         });
         break;
       case "levelUp":
-        [523, 659, 784, 1046].forEach((f, i) =>
-          this.tone(f, 0.12, { type: "square", gain: 0.1, delay: i * 0.055 }),
-        );
+        // War-horn call over a drum hit.
+        if (!this.allow("levelUp", 0.5)) return;
+        this.drum(0.9);
+        this.horn(196, 0.22, { gain: 0.12 });
+        this.horn(262, 0.6, { gain: 0.14, delay: 0.2 });
+        this.horn(392, 0.6, { gain: 0.06, delay: 0.2 });
         break;
       case "ring":
         this.tone(880, 1.4, { type: "sine", gain: 0.3 });
@@ -162,12 +190,24 @@ export class Sfx {
         break;
       case "summon":
         if (e.style === "elephant") {
-          this.tone(330, 0.5, { type: "sawtooth", gain: 0.12, slideTo: 620, attack: 0.05 });
-          this.tone(660, 0.45, { type: "square", gain: 0.04, slideTo: 1240, attack: 0.05 });
+          // Trumpeting elephant.
+          this.tone(330, 0.5, {
+            type: "sawtooth",
+            gain: 0.12,
+            slideTo: 620,
+            attack: 0.05,
+            lowpass: 1800,
+          });
+          this.tone(336, 0.45, {
+            type: "sawtooth",
+            gain: 0.06,
+            slideTo: 640,
+            attack: 0.05,
+            lowpass: 2400,
+          });
         } else {
-          [196, 294].forEach((f, i) =>
-            this.tone(f, 0.32, { type: "sawtooth", gain: 0.1, delay: i * 0.14, attack: 0.03 }),
-          );
+          this.horn(196, 0.2, { gain: 0.1 });
+          this.horn(294, 0.35, { gain: 0.1, delay: 0.14 });
         }
         break;
       case "shoot":
@@ -222,9 +262,8 @@ export class Sfx {
       case "ultimateCast":
         this.tone(48, 1.4, { type: "sine", gain: 0.9, slideTo: 22 });
         this.noise(1.2, { filter: "lowpass", freq: 2600, slideTo: 90, gain: 0.9 });
-        [262, 330, 392, 523].forEach((f) =>
-          this.tone(f, 0.9, { type: "sawtooth", gain: 0.07, attack: 0.02 }),
-        );
+        this.drum(1);
+        for (const f of [131, 196, 262, 330]) this.horn(f, 1.1, { gain: 0.07 });
         break;
       case "strike":
         if (e.style === "shell") {
@@ -246,25 +285,26 @@ export class Sfx {
         this.tone(55, 0.5, { type: "sine", gain: 0.6, slideTo: 30 });
         break;
       case "nearMiss":
-        // Whoosh past.
-        this.noise(0.28, { filter: "bandpass", freq: 600, slideTo: 3500, q: 1.5, gain: 0.45 });
-        this.tone(660 + e.count * 110, 0.12, { type: "triangle", gain: 0.12, delay: 0.12 });
+        // Whoosh past, then a plucked sting that climbs with the count.
+        this.noise(0.32, { filter: "bandpass", freq: 500, slideTo: 3200, q: 1.4, gain: 0.5 });
+        this.pluck(440 * 2 ** ((e.count * 3) / 12), { gain: 0.5, delay: 0.1 });
         break;
       case "frenzy":
         if (e.on) {
-          // Alarm + rumble as the walls close in.
-          for (let i = 0; i < 3; i++) {
-            this.tone(880, 0.16, { type: "square", gain: 0.1, delay: i * 0.22, slideTo: 660 });
-          }
+          // Two war-horn blasts and a rumble as the walls close in.
+          this.horn(147, 0.45, { gain: 0.16 });
+          this.horn(147, 0.9, { gain: 0.16, delay: 0.5 });
+          this.horn(220, 0.9, { gain: 0.08, delay: 0.5 });
+          this.drum(1);
           this.tone(50, 1.2, { type: "sawtooth", gain: 0.25, slideTo: 35, lowpass: 400 });
         } else {
           this.tone(300, 0.4, { type: "triangle", gain: 0.12, slideTo: 150 });
         }
         break;
       case "callout":
-        this.tone(98, 0.6, { type: "sawtooth", gain: 0.15, attack: 0.01 });
-        this.tone(147, 0.6, { type: "sawtooth", gain: 0.1, attack: 0.01 });
-        this.thud(1);
+        this.horn(98, 0.6, { gain: 0.15 });
+        this.horn(147, 0.6, { gain: 0.1 });
+        this.drum(1);
         break;
       case "sweepHit":
         this.thud(1);
@@ -281,9 +321,25 @@ export class Sfx {
         this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
         break;
       case "fight":
-        [392, 523, 659].forEach((f, i) =>
-          this.tone(f, 0.28, { type: "square", gain: 0.09, delay: i * 0.07 }),
-        );
+        this.drum(1);
+        this.horn(196, 0.16, { gain: 0.12 });
+        this.horn(196, 0.16, { gain: 0.12, delay: 0.16 });
+        this.horn(294, 0.7, { gain: 0.14, delay: 0.32 });
+        this.horn(392, 0.7, { gain: 0.06, delay: 0.32 });
+        break;
+      case "reflect":
+        // Bronze shield ringing as the shot is turned back.
+        this.bell(900, 0.6, 0.22);
+        this.noise(0.08, { filter: "highpass", freq: 3500, gain: 0.35 });
+        this.thud(0.6);
+        break;
+      case "zone":
+        if (e.style === "fire") {
+          this.noise(1.2, { filter: "lowpass", freq: 900, slideTo: 300, gain: 0.35 });
+          this.noise(0.6, { filter: "highpass", freq: 3000, gain: 0.12, delay: 0.1 });
+        } else {
+          this.noise(0.5, { filter: "highpass", freq: 5000, gain: 0.18 });
+        }
         break;
       default:
         break;
@@ -294,14 +350,126 @@ export class Sfx {
   private clang(power: number): void {
     const f = 520 * rand(0.9, 1.15);
     this.tone(f, 0.16, { type: "triangle", gain: 0.3 * power, slideTo: f * 0.55 });
-    this.tone(f * 2.76, 0.1, { type: "square", gain: 0.05 * power });
+    this.tone(f * 2.76, 0.1, { type: "sine", gain: 0.08 * power });
     this.noise(0.07, { filter: "bandpass", freq: 3200, q: 0.9, gain: 0.55 * power });
   }
 
-  /** Heavy blunt impact. */
+  /** Heavy blunt impact: a body thump with a little leather slap on top. */
   private thud(power: number): void {
     this.tone(150 * rand(0.9, 1.1), 0.22, { type: "sine", gain: 0.7 * power, slideTo: 45 });
     this.noise(0.12, { filter: "lowpass", freq: 900, gain: 0.55 * power });
+    this.noise(0.03, { filter: "bandpass", freq: 1800, q: 1.2, gain: 0.25 * power });
+  }
+
+  /** Struck metal: inharmonic partials that ring out. */
+  bell(freq: number, dur: number, gain: number, o: NoteOptions = {}): void {
+    const at = o.at ?? this.now() + (o.delay ?? 0);
+    const music = o.music ?? false;
+    [1, 2.76, 5.4].forEach((k, i) => {
+      this.tone(freq * k, dur / (1 + i * 0.6), {
+        type: "sine",
+        gain: gain / (1 + i * 1.5),
+        at,
+        music,
+      });
+    });
+  }
+
+  /**
+   * War horn / brass: two slightly detuned saws through a low-pass that opens as the
+   * note swells, like breath going into a horn.
+   */
+  horn(freq: number, dur: number, o: NoteOptions = {}): void {
+    const t0 = o.at ?? this.now() + (o.delay ?? 0);
+    const peak = o.gain ?? 0.12;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.06);
+    g.gain.setValueAtTime(peak, t0 + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur + 0.12);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.Q.value = 1.4;
+    lp.frequency.setValueAtTime(freq * 1.5, t0);
+    lp.frequency.exponentialRampToValueAtTime(Math.min(freq * 7, 4200), t0 + 0.09);
+    lp.frequency.exponentialRampToValueAtTime(freq * 3, t0 + dur + 0.1);
+    lp.connect(g).connect(o.music ? this.musicBus : this.bus);
+    for (const cents of [-7, 7]) {
+      const osc = this.ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq * 0.97, t0);
+      osc.frequency.exponentialRampToValueAtTime(freq, t0 + 0.05);
+      osc.detune.value = cents;
+      osc.connect(lp);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.2);
+    }
+  }
+
+  /** Big frame drum / taiko: a deep pitched thump plus the skin's slap. */
+  drum(power: number, o: NoteOptions = {}): void {
+    const at = o.at ?? this.now() + (o.delay ?? 0);
+    const music = o.music ?? false;
+    const gain = o.gain ?? 1;
+    this.tone(78, 0.55, { type: "sine", gain: 0.85 * power * gain, slideTo: 36, at, music });
+    this.tone(118, 0.18, { type: "sine", gain: 0.3 * power * gain, slideTo: 60, at, music });
+    this.noise(0.09, { filter: "lowpass", freq: 700, gain: 0.4 * power * gain, at, music });
+    this.noise(0.025, {
+      filter: "bandpass",
+      freq: 2200,
+      q: 1,
+      gain: 0.15 * power * gain,
+      at,
+      music,
+    });
+  }
+
+  /** Plucked string (lute / oud), synthesized with the Karplus-Strong method. */
+  pluck(freq: number, o: NoteOptions = {}): void {
+    const t0 = o.at ?? this.now() + (o.delay ?? 0);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.pluckBuffer(freq);
+    const g = this.ctx.createGain();
+    g.gain.value = o.gain ?? 0.4;
+    src.connect(g).connect(o.music ? this.musicBus : this.bus);
+    src.start(Math.max(0, t0));
+  }
+
+  private pluckBuffer(freq: number): AudioBuffer {
+    const key = Math.round(freq);
+    const hit = this.plucks.get(key);
+    if (hit) return hit;
+    const sr = this.ctx.sampleRate;
+    const length = Math.round(sr * 1.3);
+    const buffer = this.ctx.createBuffer(1, length, sr);
+    const out = buffer.getChannelData(0);
+    const period = Math.max(2, Math.round(sr / freq));
+    const line = new Float32Array(period);
+    // Slightly darkened noise burst = the pick hitting the string.
+    let prev = 0;
+    for (let i = 0; i < period; i++) {
+      prev = prev * 0.5 + (Math.random() * 2 - 1) * 0.5;
+      line[i] = prev;
+    }
+    const decay = 0.996;
+    let idx = 0;
+    let last = 0;
+    for (let i = 0; i < length; i++) {
+      const cur = line[idx] ?? 0;
+      const next = (cur + last) * 0.5 * decay;
+      last = cur;
+      line[idx] = next;
+      out[i] = cur;
+      idx = (idx + 1) % period;
+    }
+    // Soft fade at the end so the buffer never clicks off.
+    const fade = Math.round(sr * 0.1);
+    for (let i = 0; i < fade; i++) {
+      const k = length - fade + i;
+      out[k] = (out[k] ?? 0) * (1 - i / fade);
+    }
+    this.plucks.set(key, buffer);
+    return buffer;
   }
 
   /** Skips a sound that played less than `gap` seconds ago (avoids machine-gun stacking). */
@@ -318,10 +486,13 @@ export class Sfx {
     osc.type = o.type ?? "sine";
     osc.frequency.setValueAtTime(freq, t0);
     if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.slideTo), t0 + dur);
+    if (o.detune) osc.detune.value = o.detune;
     const g = this.ctx.createGain();
     const peak = o.gain ?? 0.2;
+    const attack = o.attack ?? 0.005;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(peak, t0 + (o.attack ?? 0.005));
+    g.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+    if (o.hold) g.gain.setValueAtTime(peak, t0 + Math.max(attack, dur * o.hold));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     const out = o.music ? this.musicBus : this.bus;
     if (o.lowpass) {
@@ -364,4 +535,23 @@ function clamp(v: number, lo: number, hi: number): number {
 
 function rand(lo: number, hi: number): number {
   return lo + Math.random() * (hi - lo);
+}
+
+/** Decaying stereo noise: the echo of a medium stone hall. */
+function hallImpulse(ctx: BaseAudioContext, seconds: number): AudioBuffer {
+  const sr = ctx.sampleRate;
+  const length = Math.round(sr * seconds);
+  const buffer = ctx.createBuffer(2, length, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buffer.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < length; i++) {
+      const t = i / length;
+      // Darker as it fades, like air soaking up the highs.
+      const k = 0.35 + 0.6 * t;
+      lp = lp * k + (Math.random() * 2 - 1) * (1 - k);
+      data[i] = lp * (1 - t) ** 2.6 * 2.2;
+    }
+  }
+  return buffer;
 }

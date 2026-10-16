@@ -10,10 +10,23 @@ import type {
   StrikeHazard,
   SweepHazard,
   UnitHazard,
+  ZoneHazard,
 } from "../types";
 import { ARENA, CLOSE_CALLS_FOR_FRENZY, ULT_CINEMATIC, ULT_HP, type World } from "../world";
 import type { Fx } from "./fx";
-import { DISPLAY_FONT, MONO_FONT, OUTLINE, SIDES } from "./palette";
+import {
+  BODY_FONT,
+  DISPLAY_FONT,
+  GOLD,
+  GOLD_INK,
+  INK,
+  MONO_FONT,
+  OUTLINE,
+  PAPER,
+  PAPER_DARK,
+  SIDES,
+  fontsVersion,
+} from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem } from "./emblems";
 import { FLAG_RATIO, drawFlag } from "./flags";
@@ -30,6 +43,10 @@ const AY = 350;
 const AS = 960;
 /** Frame pixels per world unit. The world is smaller than the frame so fighters look big. */
 const K = AS / ARENA;
+/** Corner radius of the map sheet. */
+const AR = 14;
+/** Dark leather around the map. */
+const LEATHER = "#1d120a";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -57,12 +74,14 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
   const overlay = buildOverlay(quality);
   const hpLag: number[] = [];
   let frame = 0;
+  const cam: Camera = { zoom: 1, x: ARENA / 2, y: ARENA / 2 };
 
   const draw = (world: World, fx: Fx, extras: DrawExtras = {}): void => {
     frame++;
     ctx.setTransform(quality, 0, 0, quality, 0, 0);
-    ctx.fillStyle = "#05060a";
+    ctx.fillStyle = LEATHER;
     ctx.fillRect(0, 0, W, H);
+    followCamera(cam, world);
 
     for (const f of world.fighters) {
       const ratio = clamp(f.hp / f.maxHp, 0, 1);
@@ -75,7 +94,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     ctx.translate(fx.shakeX, fx.shakeY);
     ctx.drawImage(background, 0, 0, W, H);
     drawTopPanel(ctx, world, hpLag);
-    drawArena(ctx, world, fx, frame, extras);
+    drawArena(ctx, world, fx, frame, extras, cam);
     drawSkillCards(ctx, world);
     drawCloseCalls(ctx, world);
     ctx.restore();
@@ -84,6 +103,41 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
   };
 
   return { draw };
+}
+
+// --- camera ----------------------------------------------------------------------
+
+/** Edited-video feel: the view leans in on the ultimate's caster and on the K.O. */
+interface Camera {
+  zoom: number;
+  x: number;
+  y: number;
+}
+
+function followCamera(cam: Camera, world: World): void {
+  let zoom = 1;
+  let x = ARENA / 2;
+  let y = ARENA / 2;
+  const caster = world.cinematic ? world.fighters[world.cinematic.fighter] : null;
+  const fallen = world.phase === "ko" ? world.fighters.find((f) => !f.alive) : undefined;
+  if (caster) {
+    zoom = 1.16;
+    x = caster.x;
+    y = caster.y;
+  } else if (fallen) {
+    zoom = 1.2;
+    x = fallen.x;
+    y = fallen.y;
+  }
+  if (world.phase === "intro") {
+    cam.zoom = 1;
+    cam.x = x;
+    cam.y = y;
+    return;
+  }
+  cam.zoom += (zoom - cam.zoom) * 0.12;
+  cam.x += (x - cam.x) * 0.15;
+  cam.y += (y - cam.y) * 0.15;
 }
 
 // --- layout pieces -------------------------------------------------------------
@@ -97,10 +151,10 @@ function drawTopPanel(ctx: Ctx, world: World, hpLag: number[]): void {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
-  ctx.font = `700 56px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", W / 2, 282, "#f4f6fb", 8);
-  ctx.font = `600 30px ${MONO_FONT}`;
-  outlinedText(ctx, formatTime(world.time), W / 2, 324, "rgba(244,246,251,0.55)", 5);
+  ctx.font = `900 56px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "VS", W / 2, 282, PAPER, 8);
+  ctx.font = `700 30px ${MONO_FONT}`;
+  outlinedText(ctx, formatTime(world.time), W / 2, 324, "rgba(236,220,180,0.6)", 5);
 }
 
 function drawFighterPanel(
@@ -129,13 +183,13 @@ function drawFighterPanel(
     ctx.textAlign = align;
     ctx.textBaseline = "alphabetic";
   }
-  fitFont(ctx, f.def.name, 700, 58, w - Math.abs(nameX - edgeX), DISPLAY_FONT);
-  outlinedText(ctx, f.def.name, nameX, 224, side.main, 9);
+  fitFont(ctx, f.def.name, 900, 58, w - Math.abs(nameX - edgeX), DISPLAY_FONT);
+  outlinedText(ctx, f.def.name, nameX, 224, side.light, 9);
 
   const y = 250;
   const h = 44;
-  roundRect(ctx, x0, y, w, h, 12);
-  ctx.fillStyle = "#10131c";
+  roundRect(ctx, x0, y, w, h, 6);
+  ctx.fillStyle = "#0f0905";
   ctx.fill();
   ctx.save();
   ctx.clip();
@@ -144,19 +198,22 @@ function drawFighterPanel(
     if (align === "left") ctx.fillRect(x0, y, w * r, h);
     else ctx.fillRect(x0 + w * (1 - r), y, w * r, h);
   };
-  fillPart(lag, "rgba(255,255,255,0.55)");
+  fillPart(lag, "rgba(236,220,180,0.6)");
   fillPart(ratio, side.main);
+  // A little sheen so the bar looks enamelled rather than flat.
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillRect(x0, y + 4, w, h * 0.3);
   ctx.restore();
-  roundRect(ctx, x0, y, w, h, 12);
-  ctx.strokeStyle = "rgba(255,255,255,0.85)";
-  ctx.lineWidth = 3;
+  roundRect(ctx, x0, y, w, h, 6);
+  ctx.strokeStyle = "#b08a4a";
+  ctx.lineWidth = 4;
   ctx.stroke();
   if (f.def.growth) {
     // Where the ultimate fires.
     const tx = align === "left" ? x0 + w * ULT_HP : x0 + w * (1 - ULT_HP);
     ctx.fillStyle = OUTLINE;
     ctx.fillRect(tx - 4, y - 8, 8, h + 16);
-    ctx.fillStyle = "#ffd45e";
+    ctx.fillStyle = GOLD;
     ctx.fillRect(tx - 2, y - 6, 4, h + 12);
   }
 }
@@ -173,32 +230,31 @@ function drawSkillCards(ctx: Ctx, world: World): void {
     const side = SIDES[f.side];
     const x = AX + i * (w + gap);
     ctx.save();
-    if (!f.alive) ctx.globalAlpha = 0.35;
-    roundRect(ctx, x, y, w, h, 22);
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = side.main;
-    ctx.globalAlpha *= 0.9;
-    ctx.stroke();
+    if (!f.alive) ctx.globalAlpha = 0.45;
+    parchmentCard(ctx, x, y, w, h, side.main);
 
-    // Medallion with a ring that fills up until the move fires.
-    const cx = x + 78;
-    const cy = y + 80;
+    // Wax-seal medallion with a ring that fills up until the move fires.
+    const cx = x + 80;
+    const cy = y + 82;
     ctx.beginPath();
     ctx.arc(cx, cy, 54, 0, TAU);
     ctx.fillStyle = side.dark;
     ctx.fill();
     ctx.lineWidth = 9;
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.strokeStyle = "rgba(43,27,15,0.18)";
     ctx.stroke();
     const p = clamp(state.progress, 0, 1);
     if (p > 0) {
       ctx.beginPath();
       ctx.arc(cx, cy, 54, -Math.PI / 2, -Math.PI / 2 + TAU * p);
-      ctx.strokeStyle = state.ready ? "#ffd45e" : side.main;
+      ctx.strokeStyle = state.ready ? GOLD : side.main;
       ctx.stroke();
     }
+    ctx.beginPath();
+    ctx.arc(cx, cy, 59, 0, TAU);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
     // Inside the ring: the emblem, with the countdown over it while waiting.
     ctx.save();
     ctx.translate(cx, cy);
@@ -208,61 +264,115 @@ function drawSkillCards(ctx: Ctx, world: World): void {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     if (state.ready) {
-      ctx.font = `800 32px ${MONO_FONT}`;
-      outlinedText(ctx, "NOW!", cx, cy + 2, "#ffd45e", 7);
+      ctx.font = `900 30px ${MONO_FONT}`;
+      outlinedText(ctx, "NOW!", cx, cy + 2, GOLD, 7);
     } else {
-      ctx.font = `800 38px ${MONO_FONT}`;
-      outlinedText(ctx, state.remaining.toFixed(1), cx, cy + 2, "#ffffff", 7);
+      ctx.font = `900 36px ${MONO_FONT}`;
+      outlinedText(ctx, state.remaining.toFixed(1), cx, cy + 2, PAPER, 7);
     }
 
-    const tx = x + 152;
-    const right = x + w - 18;
+    const tx = x + 156;
+    const right = x + w - 20;
     ctx.textAlign = "left";
-    fitFont(ctx, f.def.ability.name, 700, 38, right - tx, DISPLAY_FONT);
-    ctx.fillStyle = side.light;
-    ctx.fillText(f.def.ability.name, tx, y + 44);
+    fitFont(ctx, f.def.ability.name, 900, 34, right - tx, DISPLAY_FONT);
+    ctx.fillStyle = side.dark;
+    ctx.fillText(f.def.ability.name, tx, y + 46);
     // What it does.
-    ctx.fillStyle = "rgba(232,236,244,0.8)";
+    ctx.fillStyle = INK;
     const { size, lines } = fitTwoLines(ctx, f.def.ability.text, right - tx);
-    ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
-    lines.forEach((line, k) => ctx.fillText(line, tx, y + 88 + k * (size + 4)));
+    ctx.font = `600 ${size}px ${BODY_FONT}`;
+    lines.forEach((line, k) => ctx.fillText(line, tx, y + 90 + k * (size + 2)));
     // Level and ultimate: [LV 2] [ULT] NAME
     if (state.ult) {
-      let px = x + 18;
+      let px = x + 20;
       const pill = (text: string, on: boolean) => {
-        ctx.font = `800 24px ${MONO_FONT}`;
-        const pw = ctx.measureText(text).width + 20;
-        roundRect(ctx, px, y + 160, pw, 36, 9);
-        ctx.fillStyle = on ? "#ffd45e" : "rgba(255,255,255,0.14)";
+        ctx.font = `900 22px ${MONO_FONT}`;
+        const pw = ctx.measureText(text).width + 22;
+        roundRect(ctx, px, y + 160, pw, 34, 6);
+        ctx.fillStyle = on ? GOLD : "rgba(43,27,15,0.1)";
         ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = on ? INK : "rgba(43,27,15,0.35)";
+        ctx.stroke();
         ctx.textAlign = "center";
-        ctx.fillStyle = on ? OUTLINE : "#e8ecf4";
-        ctx.fillText(text, px + pw / 2, y + 179);
+        ctx.fillStyle = on ? INK : "rgba(43,27,15,0.55)";
+        ctx.fillText(text, px + pw / 2, y + 178);
         px += pw + 10;
       };
       pill(`LV ${state.level}`, state.level > 1);
       pill("ULT", state.ult !== "used");
       ctx.textAlign = "left";
-      fitFont(ctx, state.ultName, 800, 28, right - px, DISPLAY_FONT);
-      ctx.fillStyle = state.ult === "used" ? "rgba(232,236,244,0.35)" : "#ffd45e";
-      ctx.fillText(state.ultName, px, y + 179);
+      fitFont(ctx, state.ultName, 900, 26, right - px, DISPLAY_FONT);
+      ctx.fillStyle = state.ult === "used" ? "rgba(43,27,15,0.35)" : GOLD_INK;
+      ctx.fillText(state.ultName, px, y + 178);
     }
     ctx.restore();
   });
 }
 
+/** A sheet of parchment with an ink double rule and a coloured ribbon edge. */
+function parchmentCard(ctx: Ctx, x: number, y: number, w: number, h: number, accent: string): void {
+  roundRect(ctx, x, y, w, h, 10);
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, "#f1e3bf");
+  g.addColorStop(1, "#dcc391");
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  const burn = ctx.createRadialGradient(
+    x + w / 2,
+    y + h / 2,
+    h * 0.3,
+    x + w / 2,
+    y + h / 2,
+    w * 0.62,
+  );
+  burn.addColorStop(0, "rgba(120,80,30,0)");
+  burn.addColorStop(1, "rgba(120,80,30,0.32)");
+  ctx.fillStyle = burn;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = accent;
+  ctx.fillRect(x, y, w, 8);
+  ctx.restore();
+  roundRect(ctx, x, y, w, h, 10);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  roundRect(ctx, x + 8, y + 14, w - 16, h - 22, 6);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(43,27,15,0.45)";
+  ctx.stroke();
+}
+
 // --- arena -----------------------------------------------------------------------
 
-function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number, extras: DrawExtras): void {
+function drawArena(
+  ctx: Ctx,
+  world: World,
+  fx: Fx,
+  frame: number,
+  extras: DrawExtras,
+  cam: Camera,
+): void {
   ctx.save();
   ctx.translate(AX, AY);
-  roundRect(ctx, 0, 0, AS, AS, 40);
+  roundRect(ctx, 0, 0, AS, AS, AR);
   ctx.clip();
 
   // Everything below lives in world units.
   ctx.save();
   ctx.scale(K, K);
+  if (cam.zoom > 1.001) {
+    // Zooming about a point inside the map keeps the map covering the whole frame.
+    const zx = clamp(cam.x, 0, ARENA);
+    const zy = clamp(cam.y, 0, ARENA);
+    ctx.translate(zx, zy);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-zx, -zy);
+  }
   drawDangerZone(ctx, world, frame);
+  for (const h of world.hazards) if (h.kind === "zone") drawZone(ctx, h, frame);
 
   for (const d of fx.trail) {
     const k = d.life / d.max;
@@ -316,7 +426,9 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number, extras: DrawEx
   for (const p of fx.particles) {
     ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size / 2, 0, TAU);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
 
@@ -324,7 +436,7 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number, extras: DrawEx
   ctx.textBaseline = "middle";
   for (const t of fx.texts) {
     ctx.globalAlpha = clamp(t.life / t.max, 0, 1);
-    ctx.font = `800 ${Math.round(t.size / K)}px ${MONO_FONT}`;
+    ctx.font = `900 ${Math.round(t.size / K)}px ${DISPLAY_FONT}`;
     // Keep callouts fully inside the arena.
     const half = ctx.measureText(t.text).width / 2 + 8;
     const x = half * 2 < ARENA ? clamp(t.x, half, ARENA - half) : ARENA / 2;
@@ -336,11 +448,112 @@ function drawArena(ctx: Ctx, world: World, fx: Fx, frame: number, extras: DrawEx
 
   drawBanner(ctx, world, extras);
   ctx.restore();
+  drawMapBorder(ctx);
+}
 
-  roundRect(ctx, AX, AY, AS, AS, 40);
-  ctx.strokeStyle = "#f4f6fb";
-  ctx.lineWidth = 7;
+/** Ink double rule around the map with small diamonds at the corners. */
+function drawMapBorder(ctx: Ctx): void {
+  roundRect(ctx, AX, AY, AS, AS, AR);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 9;
   ctx.stroke();
+  roundRect(ctx, AX - 9, AY - 9, AS + 18, AS + 18, AR + 6);
+  ctx.strokeStyle = "#b08a4a";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  const inset = 16;
+  ctx.strokeStyle = "rgba(43,27,15,0.6)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(AX + inset, AY + inset, AS - inset * 2, AS - inset * 2);
+  for (const [cx, cy] of [
+    [AX + inset, AY + inset],
+    [AX + AS - inset, AY + inset],
+    [AX + inset, AY + AS - inset],
+    [AX + AS - inset, AY + AS - inset],
+  ] as const) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 11);
+    ctx.lineTo(cx + 11, cy);
+    ctx.lineTo(cx, cy + 11);
+    ctx.lineTo(cx - 11, cy);
+    ctx.closePath();
+    ctx.fillStyle = INK;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, TAU);
+    ctx.fillStyle = "#b08a4a";
+    ctx.fill();
+  }
+}
+
+/** Burning crater (Şahi shell) or a coiled asp waiting on the ground. */
+function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
+  const fade = clamp(z.ttl / 0.4, 0, 1) * clamp((z.maxTtl - z.ttl) / 0.12, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.translate(z.x, z.y);
+  if (z.style === "fire") {
+    // Scorched ground…
+    const g = ctx.createRadialGradient(0, 0, z.radius * 0.1, 0, 0, z.radius);
+    g.addColorStop(0, "rgba(255,170,60,0.75)");
+    g.addColorStop(0.55, "rgba(200,70,20,0.45)");
+    g.addColorStop(1, "rgba(40,20,10,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, z.radius, 0, TAU);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, z.radius * 0.92, 0, TAU);
+    ctx.setLineDash([10, 8]);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(60,25,10,0.6)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // …and flickering flame tongues.
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TAU + noise(i, 3) * 0.6;
+      const d = z.radius * (0.25 + 0.5 * noise(i, 7));
+      const fh = 18 + 16 * noise(i, Math.floor(frame / 3));
+      const fx = Math.cos(a) * d;
+      const fy = Math.sin(a) * d;
+      ctx.beginPath();
+      ctx.moveTo(fx - 8, fy + 6);
+      ctx.quadraticCurveTo(fx - 6, fy - fh * 0.5, fx, fy - fh);
+      ctx.quadraticCurveTo(fx + 6, fy - fh * 0.5, fx + 8, fy + 6);
+      ctx.closePath();
+      ctx.fillStyle = i % 2 === 0 ? "#ff8a2a" : GOLD;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(60,25,10,0.7)";
+      ctx.stroke();
+    }
+  } else {
+    // A coiled asp, head raised.
+    const r = z.radius * 1.3;
+    ctx.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      const a = t * TAU * 1.6 + frame * 0.04;
+      const d = r * (1 - t * 0.75);
+      if (i === 0) ctx.moveTo(Math.cos(a) * d, Math.sin(a) * d);
+      else ctx.lineTo(Math.cos(a) * d, Math.sin(a) * d);
+    }
+    ctx.lineCap = "round";
+    ctx.lineWidth = 11;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#4fbf3a";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, -4, 8, 6, 0, 0, TAU);
+    ctx.fillStyle = "#4fbf3a";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
@@ -363,6 +576,11 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
     ctx.restore();
   }
 
+  // Soft ink shadow on the paper.
+  ctx.beginPath();
+  ctx.arc(5, 8, f.radius, 0, TAU);
+  ctx.fillStyle = "rgba(43,27,15,0.22)";
+  ctx.fill();
   ctx.beginPath();
   ctx.arc(0, 0, f.radius, 0, TAU);
   ctx.fillStyle = side.main;
@@ -371,9 +589,14 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
   ctx.strokeStyle = side.dark;
   ctx.stroke();
   ctx.beginPath();
+  ctx.arc(0, 0, f.radius + 3.5, 0, TAU);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.beginPath();
   ctx.arc(0, 0, f.radius - 9, 0, TAU);
   ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.strokeStyle = "rgba(255,240,210,0.35)";
   ctx.stroke();
 
   if (leader) {
@@ -410,11 +633,11 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
   ctx.textBaseline = "middle";
   const hp = String(Math.max(0, Math.ceil(f.hp)));
   if (leader) {
-    ctx.font = `800 ${Math.round(f.radius * 0.62)}px ${MONO_FONT}`;
-    outlinedText(ctx, hp, 0, 3, "#ffffff", 6);
+    ctx.font = `900 ${Math.round(f.radius * 0.58)}px ${MONO_FONT}`;
+    outlinedText(ctx, hp, 0, 3, "#fff8e8", 6);
   } else {
-    ctx.font = `700 ${Math.round(f.radius * 0.5)}px ${MONO_FONT}`;
-    outlinedText(ctx, hp, 0, 2, "#ffffff", 4);
+    ctx.font = `900 ${Math.round(f.radius * 0.48)}px ${MONO_FONT}`;
+    outlinedText(ctx, hp, 0, 2, "#fff8e8", 4);
   }
 
   if (leader) drawHeadgear(ctx, f.def.id, f.radius);
@@ -433,7 +656,7 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
     for (let i = 0; i < 3; i++) {
       const a = time * 6 + (i / 3) * TAU;
       const sy = leader ? -f.radius * 1.65 : -f.radius - 10;
-      star(ctx, Math.cos(a) * f.radius * 0.7, sy + Math.sin(a) * 8, 9, "#ffd45e");
+      star(ctx, Math.cos(a) * f.radius * 0.7, sy + Math.sin(a) * 8, 9, GOLD);
     }
   }
 
@@ -458,7 +681,7 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
     drawEmblem(ctx, "hannibal", u.radius * 0.8);
   } else if (u.style === "guard") {
     // Grenadier of the Imperial Guard: white cross-belts and a tall bearskin.
-    ctx.strokeStyle = "#f4f6fb";
+    ctx.strokeStyle = PAPER;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(-u.radius * 0.6, -u.radius * 0.5);
@@ -488,7 +711,7 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(0, 0, u.radius * 0.2, 0, TAU);
-    ctx.fillStyle = "#ffd45e";
+    ctx.fillStyle = GOLD;
     ctx.fill();
   }
 
@@ -542,7 +765,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
     case "bombard": {
       const big = p.style === "bombard";
       // smoke trail
-      ctx.fillStyle = "rgba(200,200,210,0.25)";
+      ctx.fillStyle = "rgba(70,55,40,0.22)";
       for (let i = 1; i <= 3; i++) {
         ctx.beginPath();
         ctx.arc(-i * p.radius * 1.1, 0, p.radius * (1 - i * 0.22), 0, TAU);
@@ -566,14 +789,14 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.moveTo(-40, 0);
       ctx.lineTo(0, 0);
       ctx.lineWidth = 4;
-      ctx.strokeStyle = "rgba(255,240,200,0.7)";
+      ctx.strokeStyle = "rgba(60,40,20,0.55)";
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(0, 0, p.radius * 0.8, 0, TAU);
       ctx.fillStyle = "#2a2d36";
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "#ffd45e";
+      ctx.strokeStyle = GOLD;
       ctx.stroke();
       break;
     }
@@ -644,7 +867,7 @@ function drawStrike(ctx: Ctx, s: StrikeHazard): void {
     ctx.beginPath();
     ctx.arc(s.x, s.y, s.radius * (1 - p), 0, TAU);
     ctx.lineWidth = 4;
-    ctx.strokeStyle = "#ffd45e";
+    ctx.strokeStyle = GOLD;
     ctx.stroke();
     // the ball dropping in
     const h = (1 - p) * 260;
@@ -788,7 +1011,7 @@ function drawHook(ctx: Ctx, h: HookHazard, world: World): void {
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(h.x, h.y, 14, 0, TAU);
-  ctx.fillStyle = h.attached >= 0 ? "#ffd45e" : "#e3dcc8";
+  ctx.fillStyle = h.attached >= 0 ? GOLD : "#e3dcc8";
   ctx.fill();
   ctx.lineWidth = 4;
   ctx.strokeStyle = OUTLINE;
@@ -797,7 +1020,7 @@ function drawHook(ctx: Ctx, h: HookHazard, world: World): void {
 
 function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
   let text = "";
-  let color = "#f4f6fb";
+  let color = PAPER;
   let size = 120;
   let t = world.phaseTime;
   let alpha = 1;
@@ -824,7 +1047,7 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
       if (lv) {
         text = `LEVEL ${lv.level}`;
         size = 150;
-        color = "#ffd45e";
+        color = GOLD;
         t = lv.t;
         alpha = 1 - clamp((lv.t - 0.8) / 0.4, 0, 1);
         break;
@@ -832,7 +1055,7 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
       if (world.phaseTime >= 0.7) return;
       text = "FIGHT!";
       size = 180;
-      color = "#ffd45e";
+      color = GOLD;
       alpha = 1 - clamp((world.phaseTime - 0.4) / 0.3, 0, 1);
       break;
     }
@@ -878,7 +1101,7 @@ function drawLeaderCards(ctx: Ctx, world: World, t: number): void {
   const fade = 1 - clamp((t - (INTRO_CARD_TIME - 0.45)) / 0.45, 0, 1);
   ctx.save();
   ctx.globalAlpha = fade;
-  ctx.fillStyle = "rgba(5,6,10,0.62)";
+  ctx.fillStyle = "rgba(29,18,10,0.72)";
   ctx.fillRect(0, 0, AS, AS);
   const s = easeOutBack(clamp(t / 0.25, 0, 1));
   ctx.translate(AS / 2, 0);
@@ -886,11 +1109,11 @@ function drawLeaderCards(ctx: Ctx, world: World, t: number): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `800 64px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "WHO WINS?", 0, 90, "#ffd45e", 12);
+  outlinedText(ctx, "WHO WINS?", 0, 90, GOLD, 12);
   leaderCard(ctx, a, 290);
   ctx.textAlign = "center";
   ctx.font = `800 84px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", 0, 500, "#f4f6fb", 12);
+  outlinedText(ctx, "VS", 0, 500, PAPER, 12);
   leaderCard(ctx, b, 680);
   ctx.restore();
 }
@@ -922,7 +1145,7 @@ function drawSpotlight(ctx: Ctx, world: World): void {
   ctx.beginPath();
   ctx.arc(f.x, f.y, f.radius * 2, 0, TAU);
   ctx.lineWidth = 6;
-  ctx.strokeStyle = "#ffd45e";
+  ctx.strokeStyle = GOLD;
   ctx.stroke();
   ctx.restore();
 }
@@ -942,9 +1165,9 @@ function drawUltimateBanner(ctx: Ctx, world: World): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `800 52px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "ULTIMATE", 0, -60, "#ffd45e", 11);
+  outlinedText(ctx, "ULTIMATE", 0, -60, GOLD, 11);
   fitFont(ctx, c.name, 800, 120, AS - 60, DISPLAY_FONT);
-  outlinedText(ctx, c.name, 0, 30, SIDES[f.side].main, 16);
+  outlinedText(ctx, c.name, 0, 30, SIDES[f.side].bright, 16);
   ctx.restore();
 }
 
@@ -957,14 +1180,14 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
   const s = easeOutBack(a);
   ctx.save();
   ctx.globalAlpha = a;
-  ctx.fillStyle = "rgba(5,6,10,0.82)";
+  ctx.fillStyle = "rgba(29,18,10,0.86)";
   ctx.fillRect(0, 0, AS, AS);
   ctx.translate(AS / 2, 0);
   ctx.scale(s, s);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `800 96px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "WHO'S NEXT?", 0, 170, "#ffd45e", 14);
+  outlinedText(ctx, "WHO'S NEXT?", 0, 170, GOLD, 14);
 
   const r = 120;
   const y = 460;
@@ -994,10 +1217,10 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
     }
   });
   ctx.font = `800 80px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", 0, y, "#f4f6fb", 12);
+  outlinedText(ctx, "VS", 0, y, PAPER, 12);
 
   ctx.font = `800 58px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "COMMENT BELOW", 0, 760, "#f4f6fb", 10);
+  outlinedText(ctx, "COMMENT BELOW", 0, 760, PAPER, 10);
   // Bouncing arrow pointing down at the comments.
   const ay = 830 + Math.abs(Math.sin(t * 5)) * 18;
   ctx.beginPath();
@@ -1005,7 +1228,7 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
   ctx.lineTo(34, ay);
   ctx.lineTo(0, ay + 44);
   ctx.closePath();
-  ctx.fillStyle = "#ffd45e";
+  ctx.fillStyle = GOLD;
   ctx.fill();
   ctx.lineWidth = 6;
   ctx.strokeStyle = OUTLINE;
@@ -1051,34 +1274,38 @@ function drawDangerZone(ctx: Ctx, world: World, frame: number): void {
  */
 function drawCloseCalls(ctx: Ctx, world: World): void {
   if (!world.closeCallsEnabled || world.phase === "intro") return;
-  const w = 330;
+  const w = 350;
   const h = 48;
   const x = W / 2 - w / 2;
   const y = AY - h / 2;
   const frenzy = world.frenzy > 0;
-  roundRect(ctx, x, y, w, h, 24);
-  ctx.fillStyle = frenzy ? "#a3141e" : "#10131c";
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.fillStyle = frenzy ? "#8e1a14" : "#efe0bb";
   ctx.fill();
   ctx.lineWidth = 4;
-  ctx.strokeStyle = frenzy ? "#ff8a5a" : "#f4f6fb";
+  ctx.strokeStyle = INK;
   ctx.stroke();
   ctx.textBaseline = "middle";
   if (frenzy) {
     ctx.textAlign = "center";
-    ctx.font = `800 28px ${DISPLAY_FONT}`;
-    ctx.fillStyle = "#ffffff";
+    ctx.font = `900 28px ${DISPLAY_FONT}`;
+    ctx.fillStyle = PAPER;
     ctx.fillText(`SHRINK  ${world.frenzy.toFixed(1)}s`, W / 2, y + h / 2 + 1);
     return;
   }
   ctx.textAlign = "left";
-  ctx.font = `800 24px ${DISPLAY_FONT}`;
-  ctx.fillStyle = "#e8ecf4";
-  ctx.fillText("CLOSE CALLS", x + 24, y + h / 2 + 1);
+  ctx.font = `900 24px ${DISPLAY_FONT}`;
+  ctx.fillStyle = INK;
+  ctx.fillText("CLOSE CALLS", x + 26, y + h / 2 + 1);
   for (let i = 0; i < CLOSE_CALLS_FOR_FRENZY; i++) {
+    const cx = x + 252 + i * 30;
     ctx.beginPath();
-    ctx.arc(x + 200 + i * 26, y + h / 2, 9, 0, TAU);
-    ctx.fillStyle = i < world.closeCalls ? "#ffd45e" : "rgba(255,255,255,0.15)";
+    ctx.arc(cx, y + h / 2, 10, 0, TAU);
+    ctx.fillStyle = i < world.closeCalls ? "#a3221a" : "rgba(43,27,15,0.12)";
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
   }
 }
 
@@ -1105,7 +1332,7 @@ function drawMatchCard(ctx: Ctx, world: World): void {
   cardName(ctx, a, -150);
   ctx.textAlign = "center";
   ctx.font = `800 96px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", 0, 0, "#f4f6fb", 14);
+  outlinedText(ctx, "VS", 0, 0, PAPER, 14);
   cardName(ctx, b, 150);
   ctx.restore();
 }
@@ -1124,14 +1351,14 @@ function cardName(ctx: Ctx, f: Fighter, y: number): void {
   }
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  outlinedText(ctx, f.def.name, x + fw, y, SIDES[f.side].main, 16);
+  outlinedText(ctx, f.def.name, x + fw, y, SIDES[f.side].bright, 16);
 }
 
 // --- overlay ---------------------------------------------------------------------
 
 function drawOverlay(ctx: Ctx, fx: Fx, overlay: HTMLCanvasElement): void {
   if (fx.flash > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${clamp(fx.flash * 0.4, 0, 0.4)})`;
+    ctx.fillStyle = `rgba(255,246,222,${clamp(fx.flash * 0.4, 0, 0.4)})`;
     ctx.fillRect(0, 0, W, H);
   }
   ctx.drawImage(overlay, 0, 0, W, H);
@@ -1146,22 +1373,71 @@ function layer(quality: number): { canvas: HTMLCanvasElement; g: Ctx | null } {
   return { canvas, g };
 }
 
-/** Arena floor, grid and watermark. Transparent outside the arena. */
+/**
+ * Leather around the page and the arena as an old sea chart: parchment with stains and
+ * burnt edges, a lat/long grid, rhumb lines and a faded compass rose. Drawn once.
+ */
 function buildBackground(quality: number): HTMLCanvasElement {
   const { canvas, g: ctx } = layer(quality);
   if (!ctx) return canvas;
+
+  // Leather.
+  const lg = ctx.createRadialGradient(W / 2, H * 0.45, H * 0.1, W / 2, H * 0.45, H * 0.75);
+  lg.addColorStop(0, "#4a2e1a");
+  lg.addColorStop(1, "#160d07");
+  ctx.fillStyle = lg;
+  ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 5000; i++) {
+    const x = noise(i, 1) * W;
+    const y = noise(i, 2) * H;
+    ctx.fillStyle = noise(i, 3) < 0.5 ? "rgba(0,0,0,0.12)" : "rgba(255,220,170,0.04)";
+    ctx.fillRect(x, y, 2, 2);
+  }
+  // Gilt rule like a book cover.
+  ctx.strokeStyle = "rgba(176,138,74,0.55)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(22, 22, W - 44, H - 44);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(32, 32, W - 64, H - 64);
+
+  // The map sheet.
+  ctx.save();
   ctx.translate(AX, AY);
-  roundRect(ctx, 0, 0, AS, AS, 40);
+  roundRect(ctx, 0, 0, AS, AS, AR);
   ctx.clip();
-
-  const bg = ctx.createLinearGradient(0, 0, 0, AS);
-  bg.addColorStop(0, "#0d1224");
-  bg.addColorStop(1, "#070912");
-  ctx.fillStyle = bg;
+  const pg = ctx.createLinearGradient(0, 0, AS, AS);
+  pg.addColorStop(0, "#f0e1bb");
+  pg.addColorStop(1, PAPER);
+  ctx.fillStyle = pg;
   ctx.fillRect(0, 0, AS, AS);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.045)";
-  ctx.lineWidth = 2;
+  // Stains.
+  for (let i = 0; i < 18; i++) {
+    const x = noise(i, 11) * AS;
+    const y = noise(i, 12) * AS;
+    const r = 40 + noise(i, 13) * 150;
+    const st = ctx.createRadialGradient(x, y, 0, x, y, r);
+    st.addColorStop(0, `rgba(150,105,45,${0.05 + noise(i, 14) * 0.09})`);
+    st.addColorStop(0.8, "rgba(150,105,45,0.03)");
+    st.addColorStop(1, "rgba(150,105,45,0)");
+    ctx.fillStyle = st;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // Fibres.
+  ctx.strokeStyle = "rgba(110,75,35,0.08)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 700; i++) {
+    const x = noise(i, 21) * AS;
+    const y = noise(i, 22) * AS;
+    const a = noise(i, 23) * TAU;
+    const l = 4 + noise(i, 24) * 10;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+    ctx.stroke();
+  }
+  // Lat/long grid.
+  ctx.strokeStyle = "rgba(90,60,25,0.16)";
+  ctx.lineWidth = 1.5;
   for (let p = 120; p < AS; p += 120) {
     ctx.beginPath();
     ctx.moveTo(p, 0);
@@ -1170,38 +1446,76 @@ function buildBackground(quality: number): HTMLCanvasElement {
     ctx.lineTo(AS, p);
     ctx.stroke();
   }
+  // Rhumb lines and the compass rose.
+  const cx = AS / 2;
+  const cy = AS / 2;
+  ctx.strokeStyle = "rgba(90,60,25,0.1)";
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * TAU;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * AS, cy + Math.sin(a) * AS);
+    ctx.stroke();
+  }
+  drawCompass(ctx, cx, cy, 190);
+  // Burnt, darker edges.
+  const burn = ctx.createRadialGradient(cx, cy, AS * 0.35, cx, cy, AS * 0.75);
+  burn.addColorStop(0, "rgba(110,70,25,0)");
+  burn.addColorStop(1, "rgba(110,70,25,0.42)");
+  ctx.fillStyle = burn;
+  ctx.fillRect(0, 0, AS, AS);
+  ctx.restore();
 
   return canvas;
 }
 
-/** Vignette and CRT scanlines, drawn on top of everything. */
+/** Faded eight-point compass rose. */
+function drawCompass(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 0.16;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = INK;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.62, 0, TAU);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.68, 0, TAU);
+  ctx.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU - Math.PI / 2;
+    const len = i % 2 === 0 ? r : r * 0.6;
+    const w = i % 2 === 0 ? r * 0.13 : r * 0.09;
+    for (const half of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+      ctx.lineTo(Math.cos(a + (half * Math.PI) / 2) * w, Math.sin(a + (half * Math.PI) / 2) * w);
+      ctx.closePath();
+      ctx.fillStyle = half < 0 ? INK : PAPER_DARK;
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+  ctx.font = `900 ${Math.round(r * 0.22)}px ${DISPLAY_FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = INK;
+  ctx.fillText("N", 0, -r - r * 0.16);
+  ctx.restore();
+}
+
+/** Warm vignette on top of everything (no TV scanlines: this is a printed page). */
 function buildOverlay(quality: number): HTMLCanvasElement {
   const { canvas, g: ctx } = layer(quality);
   if (!ctx) return canvas;
-  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78);
-  vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.5)");
+  const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.8);
+  vignette.addColorStop(0, "rgba(20,10,4,0)");
+  vignette.addColorStop(1, "rgba(20,10,4,0.5)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
-
-  const scanlines = makeScanlines(ctx, quality);
-  if (scanlines) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = scanlines;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
   return canvas;
-}
-
-function makeScanlines(ctx: Ctx, quality: number): CanvasPattern | null {
-  const tile = document.createElement("canvas");
-  tile.width = 1;
-  tile.height = Math.max(3, Math.round(4 * quality));
-  const c = tile.getContext("2d");
-  if (!c) return null;
-  c.fillStyle = "rgba(0,0,0,0.2)";
-  c.fillRect(0, tile.height - 1, 1, 1);
-  return ctx.createPattern(tile, "repeat");
 }
 
 // --- helpers ---------------------------------------------------------------------
@@ -1224,13 +1538,13 @@ const twoLineCache = new Map<string, { size: number; lines: string[] }>();
 
 /** Largest font size (30 down to 20) at which `text` fits in two lines; cached per text. */
 function fitTwoLines(ctx: Ctx, text: string, maxWidth: number): { size: number; lines: string[] } {
-  const key = `${maxWidth}|${text}`;
+  const key = `${fontsVersion()}|${maxWidth}|${text}`;
   const hit = twoLineCache.get(key);
   if (hit) return hit;
-  let size = 30;
+  let size = 32;
   let lines: string[] = [];
   for (; size >= 20; size -= 2) {
-    ctx.font = `500 ${size}px ${DISPLAY_FONT}`;
+    ctx.font = `600 ${size}px ${BODY_FONT}`;
     lines = wrapLines(ctx, text, maxWidth);
     if (lines.length <= 2) break;
   }

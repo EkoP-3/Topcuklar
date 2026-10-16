@@ -6,6 +6,7 @@
  */
 import { createRenderer } from "../src/sim/render/canvas";
 import { Fx } from "../src/sim/render/fx";
+import { loadFonts } from "../src/sim/render/palette";
 import { findIn } from "../src/sim/rosters";
 import { World } from "../src/sim/world";
 
@@ -21,7 +22,7 @@ function snap(world: World, fx: Fx): void {
   document.body.append(c);
 }
 
-await document.fonts.ready;
+await loadFonts();
 if (a && b) {
   const world = new World(seed, [a, b]);
   const fx = new Fx(seed);

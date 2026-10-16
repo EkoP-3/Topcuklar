@@ -298,9 +298,9 @@ export function ArenaPage() {
             </p>
             {matchup && (
               <p className="mt-3 font-mono text-sm">
-                <span style={{ color: SIDES[0].main }}>{matchup[0]}</span>
+                <span style={{ color: SIDES[0].bright }}>{matchup[0]}</span>
                 <span className="mx-2 text-neutral-500">vs</span>
-                <span style={{ color: SIDES[1].main }}>{matchup[1]}</span>
+                <span style={{ color: SIDES[1].bright }}>{matchup[1]}</span>
               </p>
             )}
           </div>

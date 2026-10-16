@@ -99,19 +99,13 @@ export class Music {
       return base * 2 ** (semis / 12);
     };
 
-    // War drums.
+    // War drums (taiko-like): big hits on 1 and 3, a smaller drum answering.
     if (inBar === 0 || inBar === 4) {
-      sfx.tone(inBar === 0 ? 95 : 80, 0.35, {
-        at,
-        type: "sine",
-        gain: inBar === 0 ? 0.9 : 0.6,
-        slideTo: 38,
-        music: true,
-      });
-      sfx.noise(0.08, { at, filter: "lowpass", freq: 600, gain: 0.35, music: true });
+      sfx.drum(inBar === 0 ? 1 : 0.7, { at, music: true });
     }
     if (inBar === 6 || (bar === 3 && inBar >= 5)) {
-      sfx.tone(150, 0.18, { at, type: "sine", gain: 0.45, slideTo: 90, music: true });
+      sfx.tone(150, 0.2, { at, type: "sine", gain: 0.4, slideTo: 85, music: true });
+      sfx.noise(0.03, { at, filter: "bandpass", freq: 1800, gain: 0.12, music: true });
     }
     if (s.level >= 3 || s.frenzy) {
       sfx.noise(0.04, { at, filter: "highpass", freq: 7000, gain: 0.12, music: true });
@@ -122,63 +116,49 @@ export class Music {
       sfx.tone(freq(barRoot, ROOT / 2), eighth * 1.6, {
         at,
         type: "triangle",
-        gain: 0.38,
+        gain: 0.34,
+        lowpass: 500,
         music: true,
       });
     }
 
     if (s.level < 2) return;
 
-    // Strings: a soft chord held through the bar.
+    // Strings: a soft ensemble chord swelling through the bar (detuned pairs).
     if (inBar === 0) {
       for (const d of [0, 2, 4]) {
-        sfx.tone(freq(barRoot + d, ROOT), eighth * 8, {
-          at,
-          type: "sawtooth",
-          gain: 0.07,
-          attack: 0.25,
-          lowpass: 1400,
-          music: true,
-        });
+        for (const detune of [-9, 9]) {
+          sfx.tone(freq(barRoot + d, ROOT), eighth * 8.4, {
+            at,
+            type: "sawtooth",
+            gain: 0.035,
+            attack: 0.4,
+            hold: 0.75,
+            detune,
+            lowpass: 1100,
+            music: true,
+          });
+        }
       }
     }
-    // Melody in the leading leader's mode.
+    // Melody on a plucked lute/oud, in the leading leader's mode.
     const m = MELODY[step % MELODY.length] ?? 0;
     if (s.level >= 3 || step % 2 === 0 || s.frenzy) {
-      sfx.tone(freq(barRoot + m, ROOT * 4), eighth * 0.9, {
-        at,
-        type: "square",
-        gain: 0.06,
-        lowpass: 2600,
-        music: true,
-      });
+      sfx.pluck(freq(barRoot + m, ROOT * 4), { at, gain: 0.32, music: true });
     }
   }
 
-  /** Rising arpeggio and a held chord over a drum roll. */
+  /** Horn call and a held brass chord over a drum roll. */
   private fanfare(at: number, mode: string): void {
     const sfx = this.sfx;
     const scale = MODES[mode] ?? MODES[DEFAULT_MODE] ?? [0];
     const f = (i: number) =>
       ROOT * 2 * 2 ** ((scale[i % scale.length] ?? 0) / 12 + Math.floor(i / scale.length));
     [0, 2, 4].forEach((d, i) => {
-      sfx.tone(f(d), 0.22, {
-        at: at + i * 0.14,
-        type: "sawtooth",
-        gain: 0.14,
-        lowpass: 2400,
-        music: true,
-      });
+      sfx.horn(f(d), 0.2, { at: at + i * 0.15, gain: 0.13, music: true });
     });
     for (const d of [0, 2, 4, 7]) {
-      sfx.tone(f(d), 1.4, {
-        at: at + 0.45,
-        type: "sawtooth",
-        gain: 0.1,
-        attack: 0.05,
-        lowpass: 2000,
-        music: true,
-      });
+      sfx.horn(f(d), 1.5, { at: at + 0.45, gain: 0.08, music: true });
     }
     for (let i = 0; i < 10; i++) {
       sfx.tone(85, 0.2, {
@@ -189,6 +169,6 @@ export class Music {
         music: true,
       });
     }
-    sfx.tone(60, 1.2, { at: at + 0.5, type: "sine", gain: 0.9, slideTo: 32, music: true });
+    sfx.drum(1.2, { at: at + 0.45, music: true });
   }
 }

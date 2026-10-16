@@ -5,13 +5,14 @@ import type {
   StrikeHazard,
   SweepHazard,
   UnitHazard,
+  ZoneHazard,
 } from "./types";
 import { ARENA, limitSpeed, type World } from "./world";
 
 /** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
 const UNIT_STEER = 3;
 /** A projectile passing an enemy within this gap (without hitting) is a close call. */
-const PROJECTILE_NEAR_GAP = 32;
+const PROJECTILE_NEAR_GAP = 8;
 /** Units hit by a fighter take this much of the fighter's contact damage. */
 const VS_UNIT_DAMAGE = 1.5;
 
@@ -201,6 +202,7 @@ export function updateUnits(world: World, dt: number): void {
     else if (h.kind === "projectile") updateProjectile(world, h, dt);
     else if (h.kind === "sweep") updateSweep(world, h, dt);
     else if (h.kind === "strike") updateStrike(world, h, dt);
+    else if (h.kind === "zone") updateZone(world, h, dt);
     else continue;
     if (h.ttl <= 0) removed = true;
   }
@@ -209,7 +211,11 @@ export function updateUnits(world: World, dt: number): void {
 
 function isGone(h: Hazard): boolean {
   return (
-    (h.kind === "unit" || h.kind === "projectile" || h.kind === "sweep" || h.kind === "strike") &&
+    (h.kind === "unit" ||
+      h.kind === "projectile" ||
+      h.kind === "sweep" ||
+      h.kind === "strike" ||
+      h.kind === "zone") &&
     h.ttl <= 0
   );
 }
@@ -287,7 +293,7 @@ function updateSweep(world: World, s: SweepHazard, dt: number): void {
   for (const o of world.hazards) {
     if (o.kind !== "unit" || o.ttl <= 0) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
-    if (touches(o.x, o.y, o.radius)) damageUnit(world, o, owner, o.hp + 1, o.x, o.y);
+    if (touches(o.x, o.y, o.radius)) damageUnit(world, o, owner, o.hp * 2 + 1, o.x, o.y);
   }
 }
 
@@ -350,6 +356,12 @@ function updateUnit(world: World, u: UnitHazard, dt: number): void {
       f.stun = Math.max(f.stun, u.stun);
       world.emit({ type: "stun", fighter: f.index });
     }
+    if (dealt > 0 && u.style === "elephant") {
+      // Trample: the elephant carries its victim along.
+      f.vx += u.vx * 0.9;
+      f.vy += u.vy * 0.9;
+      limitSpeed(f);
+    }
     // The fighter hits back.
     const back = f.def.contactDamage ?? 0;
     if (back > 0) {
@@ -394,12 +406,12 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
     } else {
       explode(world, owner, p, null);
       p.ttl = 0;
-      missedBy(world, p);
+      leaveBehind(world, owner, p, true);
     }
     return;
   }
   if (p.ttl <= 0) {
-    missedBy(world, p);
+    leaveBehind(world, owner, p, true);
     return;
   }
 
@@ -407,12 +419,26 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
     if (!f.alive || f.side === owner.side) continue;
     const gap = Math.hypot(f.x - p.x, f.y - p.y) - f.radius - p.radius;
     if (gap > 0) {
-      if (gap < (p.closest ?? Infinity)) {
-        p.closest = gap;
-        p.nearX = p.x;
-        p.nearY = p.y;
-      }
+      watchNearMiss(world, p, gap);
       continue;
+    }
+    if (world.time < f.reflectUntil) {
+      // Leonidas' shield: the shot flies back at whoever fired it.
+      const a = Math.atan2(owner.y - p.y, owner.x - p.x);
+      const speed = Math.hypot(p.vx, p.vy);
+      p.vx = Math.cos(a) * speed;
+      p.vy = Math.sin(a) * speed;
+      p.owner = f.index;
+      // Bounced shots come back weaker.
+      p.damage *= 0.5;
+      p.poison *= 0.5;
+      p.x = f.x + Math.cos(a) * (f.radius + p.radius + 2);
+      p.y = f.y + Math.sin(a) * (f.radius + p.radius + 2);
+      delete p.closest;
+      p.nearCounted = true;
+      delete p.leaves;
+      world.emit({ type: "reflect", fighter: f.index, x: p.x, y: p.y });
+      return;
     }
     const speed = Math.hypot(p.vx, p.vy) || 1;
     const hx = f.x - (p.vx / speed) * f.radius;
@@ -429,15 +455,113 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
     }
     explode(world, owner, p, f);
     p.ttl = 0;
+    leaveBehind(world, owner, p, false);
     return;
   }
 
+  // Shots fly through enemy soldiers, hurting each once; elephants and shells stop them.
   for (const o of world.hazards) {
     if (o.kind !== "unit" || o.ttl <= 0 || !overlap(p, o)) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
+    if (p.pierced?.includes(o)) continue;
     damageUnit(world, o, owner, p.damage, p.x, p.y);
-    explode(world, owner, p, null);
-    p.ttl = 0;
+    // Elephants are big enough to stop any shot; explosive shells blow up on them.
+    if (p.blast > 0 || o.style === "elephant") {
+      explode(world, owner, p, null);
+      p.ttl = 0;
+      leaveBehind(world, owner, p, false);
+      return;
+    }
+    (p.pierced ??= []).push(o);
+  }
+}
+
+/** Big shots that skim right past an enemy (heading at them) count as close calls. */
+function watchNearMiss(world: World, p: ProjectileHazard, gap: number): void {
+  if (p.style !== "ball" && p.style !== "bombard") return;
+  if (gap < (p.closest ?? Infinity)) {
+    p.closest = gap;
+    p.nearX = p.x;
+    p.nearY = p.y;
+  } else if (
+    !p.nearCounted &&
+    (p.closest ?? Infinity) < PROJECTILE_NEAR_GAP &&
+    gap > (p.closest ?? 0) + 6
+  ) {
+    p.nearCounted = true;
+    world.closeCall(p.nearX ?? p.x, p.nearY ?? p.y);
+  }
+}
+
+/** Fire crater after a bombard lands; a snake trap where an asp missed. */
+function leaveBehind(world: World, owner: Fighter, p: ProjectileHazard, missed: boolean): void {
+  if (p.leaves === "fire") {
+    spawnZone(world, owner, {
+      style: "fire",
+      x: p.x,
+      y: p.y,
+      radius: 65,
+      ttl: 2,
+      damage: 30,
+      poison: 0,
+      poisonDps: 0,
+    });
+  } else if (p.leaves === "snake" && missed) {
+    spawnZone(world, owner, {
+      style: "snake",
+      x: p.x,
+      y: p.y,
+      radius: 20,
+      ttl: 3,
+      damage: p.damage * 0.5,
+      poison: p.poison * 0.5,
+      poisonDps: p.poisonDps,
+    });
+  }
+}
+
+export function spawnZone(
+  world: World,
+  owner: Fighter,
+  spec: Omit<ZoneHazard, "kind" | "owner" | "maxTtl" | "lock">,
+): ZoneHazard {
+  const zone: ZoneHazard = {
+    kind: "zone",
+    owner: owner.index,
+    ...spec,
+    x: clampTo(world, spec.x, spec.radius * 0.5),
+    y: clampTo(world, spec.y, spec.radius * 0.5),
+    maxTtl: spec.ttl,
+    lock: 0,
+  };
+  world.hazards.push(zone);
+  world.emit({ type: "zone", style: zone.style, x: zone.x, y: zone.y, radius: zone.radius });
+  return zone;
+}
+
+function updateZone(world: World, z: ZoneHazard, dt: number): void {
+  const owner = world.fighters[z.owner];
+  if (!owner || z.ttl <= 0) return;
+  z.ttl -= dt;
+  z.lock = Math.max(0, z.lock - dt);
+  if (z.lock > 0) return;
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === owner.side) continue;
+    if (Math.hypot(f.x - z.x, f.y - z.y) > z.radius + f.radius) continue;
+    if (z.style === "fire") {
+      // A quarter-second tick of burn.
+      world.dealDamage(owner, f, z.damage * 0.25, f.x, f.y, 0, { dot: true });
+      z.lock = 0.25;
+    } else {
+      const dealt = world.dealDamage(owner, f, z.damage, z.x, z.y, 120, { fromX: z.x, fromY: z.y });
+      if (dealt > 0 && z.poison > 0) {
+        f.poison = Math.max(f.poison, z.poison);
+        f.poisonDps = z.poisonDps;
+        f.poisonBy = owner.index;
+        world.emit({ type: "poison", fighter: f.index });
+      }
+      z.ttl = 0;
+    }
     return;
   }
 }
@@ -459,7 +583,7 @@ function explode(world: World, owner: Fighter, p: ProjectileHazard, direct: Figh
     if (o.kind !== "unit" || o.ttl <= 0) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
     if (Math.hypot(o.x - p.x, o.y - p.y) - o.radius <= p.blast) {
-      damageUnit(world, o, owner, p.damage * 0.5, o.x, o.y);
+      damageUnit(world, o, owner, p.damage * 0.3, o.x, o.y);
     }
   }
 }
@@ -473,12 +597,21 @@ function damageUnit(
   y: number,
 ): void {
   if (world.phase !== "fight" || u.ttl <= 0) return;
-  u.hp -= Math.max(1, Math.round(amount * world.power(attacker)));
+  // Testudo: legionaries close to the enemy lock shields and take half damage.
+  const enemy = nearestEnemyFighter(world, world.fighters[u.owner]?.side ?? -1, u.x, u.y);
+  const testudo = u.style === "legion" && enemy && Math.hypot(enemy.x - u.x, enemy.y - u.y) < 130;
+  u.hp -= Math.max(1, Math.round(amount * world.power(attacker) * (testudo ? 0.7 : 1)));
   u.hurt = 0.15;
   world.emit({ type: "bump", x, y, strength: 500 });
   if (u.hp <= 0) {
     u.ttl = 0;
-    world.emit({ type: "unitDown", x: u.x, y: u.y, side: world.fighters[u.owner]?.side ?? 0 });
+    world.emit({
+      type: "unitDown",
+      x: u.x,
+      y: u.y,
+      side: world.fighters[u.owner]?.side ?? 0,
+      style: u.style,
+    });
   }
 }
 
@@ -520,11 +653,4 @@ function clampInside(v: number, r: number): number {
 /** Keeps a coordinate inside the current (possibly shrunken) walls. */
 function clampTo(world: World, v: number, r: number): number {
   return Math.min(world.hi - r, Math.max(world.lo + r, v));
-}
-
-/** A shot that flew right past an enemy without hitting counts as a close call. */
-function missedBy(world: World, p: ProjectileHazard): void {
-  if ((p.closest ?? Infinity) < PROJECTILE_NEAR_GAP) {
-    world.closeCall(p.nearX ?? p.x, p.nearY ?? p.y);
-  }
 }

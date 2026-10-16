@@ -69,6 +69,7 @@ const perPair = Number(process.argv[2] ?? 100);
 const totals = new Map<string, { wins: number; games: number }>();
 for (const d of ROSTER) totals.set(d.id, { wins: 0, games: 0 });
 
+let lowest = { rate: 1, pair: "" };
 let timeouts = 0;
 let closeFinishes = 0;
 let reached15 = 0;
@@ -114,10 +115,16 @@ for (const row of ROSTER) {
       t.games += perPair;
     }
     cells.push(`${Math.round((wins / perPair) * 100)}%`.padStart(8));
+    const rate = wins / perPair;
+    if (rate < lowest.rate) lowest = { rate, pair: `${row.name} vs ${col.name}` };
   }
   console.log(cells.join(" "));
 }
 
+console.log(
+  `\nmost one-sided matchup: ${lowest.pair} ${Math.round(lowest.rate * 100)}%` +
+    ` (${Math.round((1 - lowest.rate) * 100)}% the other way)`,
+);
 console.log("\noverall win rate");
 for (const d of ROSTER) {
   const t = totals.get(d.id);

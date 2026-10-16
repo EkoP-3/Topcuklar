@@ -27,13 +27,18 @@ export const ULT_CINEMATIC = 0.3;
 const ULT_TIME_SCALE = 0.2;
 /** Fraction of max HP at which a leader's ultimate fires. */
 export const ULT_HP = 0.3;
-/** Close calls: two bodies pass within NEAR_GAP of each other without touching. */
-const NEAR_GAP = 26;
+/** Close calls: two bodies rush past within NEAR_GAP of each other without touching. */
+const NEAR_GAP = 19;
+/** ...while closing in on each other at least this fast (units/second). */
+const NEAR_SPEED = 380;
 /** The gap has to open up past this again before the next close call can count. */
-const FAR_GAP = 50;
-const CLOSE_CALL_COOLDOWN = 0.4;
+const FAR_GAP = 60;
+const CLOSE_CALL_COOLDOWN = 0.8;
+/** A close call slows time briefly so the viewer sees it. */
+const CLOSE_CALL_SLOWMO = 0.09;
+const CLOSE_CALL_TIME_SCALE = 0.35;
 /** Close calls needed to trigger a frenzy. */
-export const CLOSE_CALLS_FOR_FRENZY = 5;
+export const CLOSE_CALLS_FOR_FRENZY = 3;
 /** Frenzy: the arena shrinks to FRENZY_SIZE of its width and everyone speeds up. */
 export const FRENZY_TIME = 4;
 const FRENZY_SIZE = 0.75;
@@ -75,8 +80,15 @@ export class World {
   lo = 0;
   hi = ARENA;
   private closeCallCooldown = 0;
-  private gapArmed = false;
   private gapTouched = false;
+  private prevGap = Infinity;
+  /** Closest gap during the current approach and how fast they were closing then. */
+  private approachMin = Infinity;
+  private approachSpeed = 0;
+  private approachX = 0;
+  private approachY = 0;
+  /** Sim-seconds of close-call slow motion left. */
+  private slowmo = 0;
   /** An ultimate's slow-motion intro in progress (history mode). */
   cinematic: { fighter: number; name: string; t: number; cast: () => void } | null = null;
   private freeze = 0;
@@ -123,6 +135,7 @@ export class World {
         poisonDps: 0,
         poisonBy: -1,
         poisonAcc: 0,
+        reflectUntil: 0,
         slam: 0,
         slamBy: -1,
         slamDamage: 0,
@@ -179,7 +192,10 @@ export class World {
     opts: DamageOptions = {},
   ): number {
     if (this.phase !== "fight" || !target.alive) return 0;
-    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * target.damageTakenMul));
+    // Shields lower damage; piercing hits ignore part of that reduction.
+    const pierce = clamp(opts.pierce ?? 0, 0, 1);
+    const taken = target.damageTakenMul + (1 - target.damageTakenMul) * pierce;
+    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * taken));
     target.hp -= dmg;
     target.hurt = HURT_FLASH;
     this.damageDealt[attacker.index] = (this.damageDealt[attacker.index] ?? 0) + dmg;
@@ -235,6 +251,10 @@ export class World {
     this.closeCallCooldown = CLOSE_CALL_COOLDOWN;
     this.closeCalls++;
     this.emit({ type: "nearMiss", x, y, count: this.closeCalls });
+    if (!this.cinematic) {
+      this.slowmo = CLOSE_CALL_SLOWMO;
+      this.timeScale = CLOSE_CALL_TIME_SCALE;
+    }
     if (this.closeCalls >= CLOSE_CALLS_FOR_FRENZY) {
       this.closeCalls = 0;
       this.frenzy = FRENZY_TIME;
@@ -293,6 +313,10 @@ export class World {
 
     if (this.phase === "fight") this.time += dt;
     this.updateFrenzy(dt);
+    if (this.slowmo > 0) {
+      this.slowmo = Math.max(0, this.slowmo - dt);
+      if (this.slowmo === 0 && !this.cinematic && this.phase === "fight") this.timeScale = 1;
+    }
 
     for (const f of this.fighters) {
       if (f.alive) this.statusEffects(f, dt);
@@ -382,23 +406,46 @@ export class World {
     this.hi = ARENA - inset;
   }
 
-  /** Two enemy bodies brushing past each other without touching = a close call. */
+  /**
+   * A close call: the two leaders rush at each other and miss by a hair. Measured at
+   * the closest point of each approach: tiny gap, high closing speed, no touch, and
+   * neither of them stunned (drifting side by side does not count).
+   */
   private watchCloseCalls(dt: number): void {
     this.closeCallCooldown = Math.max(0, this.closeCallCooldown - dt);
     const [a, b] = this.fighters;
     if (!a || !b || !a.alive || !b.alive || a.side === b.side) return;
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const d = Math.hypot(dx, dy) || 1;
     const gap = d - a.radius - b.radius;
     if (gap <= 0) this.gapTouched = true;
-    else if (gap < NEAR_GAP) this.gapArmed = true;
-    if (gap > FAR_GAP) {
-      if (this.gapArmed && !this.gapTouched) {
-        const k = a.radius / (a.radius + b.radius);
-        this.closeCall(a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k);
-      }
-      this.gapArmed = false;
-      this.gapTouched = false;
+    if (gap < this.approachMin) {
+      this.approachMin = gap;
+      // Closing speed: how fast they are moving toward each other right now.
+      this.approachSpeed = Math.hypot(b.vx - a.vx, b.vy - a.vy);
+      const k = a.radius / (a.radius + b.radius);
+      this.approachX = a.x + dx * k;
+      this.approachY = a.y + dy * k;
     }
+    // Just passed the closest point of this approach.
+    if (gap > this.prevGap && this.prevGap === this.approachMin) {
+      const free = a.stun <= 0 && b.stun <= 0 && !this.cinematic;
+      if (
+        free &&
+        !this.gapTouched &&
+        this.approachMin > 0 &&
+        this.approachMin < NEAR_GAP &&
+        this.approachSpeed > NEAR_SPEED
+      ) {
+        this.closeCall(this.approachX, this.approachY);
+      }
+    }
+    if (gap > FAR_GAP) {
+      this.gapTouched = false;
+      this.approachMin = Infinity;
+    }
+    this.prevGap = gap;
   }
 
   private move(f: Fighter, dt: number): void {
@@ -523,7 +570,8 @@ export class World {
     const ab = a.ability;
     const dmg = base * (ab?.damageMultiplier?.(a) ?? 1);
     const kb = a.def.knockback * (ab?.knockbackMultiplier?.(a) ?? 1);
-    const dealt = this.dealDamage(a, b, dmg, x, y, kb);
+    const pierce = ab?.shieldPierce?.(a) ?? 0;
+    const dealt = this.dealDamage(a, b, dmg, x, y, kb, pierce > 0 ? { pierce } : {});
     a.hitLock[b.index] = a.def.contactInterval ?? 0.5;
     if (dealt > 0) ab?.onHitDealt?.(this, a, b, dealt);
   }
@@ -658,6 +706,8 @@ export interface DamageOptions {
   fromY?: number;
   /** Damage over time: no knockback, no hit-stop. */
   dot?: boolean;
+  /** 0..1 of the target's shield reduction to ignore. */
+  pierce?: number;
 }
 
 function weaponSegment(f: Fighter): { x0: number; y0: number; x1: number; y1: number } {
