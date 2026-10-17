@@ -1,3 +1,4 @@
+import { winChance } from "./sim/odds";
 import type { FighterDef } from "./sim/types";
 
 /** The ultimate's name, read from a fresh ability instance ("" for non-leaders). */
@@ -28,6 +29,14 @@ export function videoDescription(a: FighterDef, b: FighterDef): string {
   const ua = ultimateName(a);
   const ub = ultimateName(b);
   if (ua && ub) lines.push("", `Ultimates: ${ua} vs ${ub}`);
+  const odds = winChance(a.id, b.id);
+  if (odds !== null) {
+    const pa = Math.round(odds * 100);
+    lines.push(
+      "",
+      `📊 Pre-fight odds: ${name(a)} ${pa}% vs ${name(b)} ${100 - pa}%. Who did you pick?`,
+    );
+  }
   lines.push("", "Who should fight next? Comment below! 👇");
   const sources = [a, b].flatMap((d) => d.sources ?? []);
   if (sources.length > 0) lines.push("", "Sources:", ...sources.map((s) => `- ${s}`));

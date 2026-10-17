@@ -32,6 +32,11 @@ Kaynak olarak her liderin İngilizce Wikipedia maddesi verildi (`src/sim/leaders
 | Mehmed II    | Great Bombard    | The Great Bombardment | Konstantinopolis kuşatmasındaki top atışları.                                                                                                                                                       |
 | Cleopatra    | Asp              | Spiral of Asps        | Ölümüne engerek yılanının sebep olduğu antik kaynaklarda geçen bir anlatıdır, kesin değildir; yetenek bu efsaneden esinlenen kurgudur.                                                              |
 
+## Yüz detayları
+
+- Hannibal'ın göz bandı: MÖ 217'de İtalya seferi sırasında (Arno bataklıkları) bir göz enfeksiyonu yüzünden bir gözünü kaybettiği antik kaynaklarda (Polybios, Livius) geçer. Hangi göz olduğu bilinmiyor; çizimde sol göz seçildi.
+- Diğer yüz detayları (Cengiz'in bıyığı, Leonidas'ın ve Mehmed'in sakalı, Kleopatra'nın göz kalemi) dönemin tasvirlerinden esinlenen karikatürdür, portre iddiası yoktur.
+
 ## Bayraklar
 
 - Bugünkü bayraklar: Leonidas → Yunanistan, Genghis → Moğolistan, Hannibal → Tunus (Kartaca bugünkü Tunus'taydı), Napoleon → Fransa, Mehmed II → Türkiye, Cleopatra → Mısır. Hepsi temsilî; o dönemlerde bu bayraklar yoktu.

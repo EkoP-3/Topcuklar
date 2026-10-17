@@ -44,7 +44,7 @@ if (a && b) {
       introShot = true;
       snap(world, fx);
     }
-    if (frame === 70) snap(world, fx);
+    if (frame === 140) snap(world, fx);
     if (times.length > 0) {
       if (times.some((t) => Math.abs(world.time - t) < 1 / 120)) snap(world, fx);
     } else {

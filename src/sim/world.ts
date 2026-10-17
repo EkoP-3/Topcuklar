@@ -9,6 +9,13 @@ export const ARENA = 720;
 export const STEP = 1 / 240;
 
 const INTRO_TIME = 0.8;
+/**
+ * History mode: longer intro for the "who wins?" card and the "pick your side!"
+ * countdown. Nothing random happens during the intro, so fights play out the same.
+ */
+export const HISTORY_INTRO_TIME = 2.6;
+/** Intro seconds at which the pick-your-side countdown says 3, 2, 1. */
+export const COUNTDOWN_AT = [1.4, 1.8, 2.2] as const;
 const KO_TIME = 0.5;
 const KO_TIME_SCALE = 0.3;
 /** Matches that last this long are decided on remaining HP. */
@@ -73,6 +80,8 @@ export class World {
   timeScale = 1;
   /** History mode only: close calls count up to a frenzy. */
   readonly closeCallsEnabled: boolean;
+  /** Seconds before the fight starts. */
+  readonly introTime: number;
   closeCalls = 0;
   /** Seconds of frenzy left (0 = none). */
   frenzy = 0;
@@ -100,6 +109,7 @@ export class World {
     this.rng = createRng(seed);
     this.damageDealt = defs.map(() => 0);
     this.closeCallsEnabled = defs.some((d) => d.growth);
+    this.introTime = this.closeCallsEnabled ? HISTORY_INTRO_TIME : INTRO_TIME;
 
     const count = defs.length;
     const rotation = this.rng.range(0, TAU);
@@ -307,7 +317,14 @@ export class World {
 
     if (this.phase === "intro") {
       for (const f of this.fighters) f.angle += f.def.spin * f.spinDir * dt;
-      if (this.phaseTime >= INTRO_TIME) this.startFight();
+      if (this.introTime > INTRO_TIME) {
+        COUNTDOWN_AT.forEach((at, i) => {
+          if (this.phaseTime >= at && this.phaseTime - dt < at) {
+            this.emit({ type: "countdown", n: COUNTDOWN_AT.length - i });
+          }
+        });
+      }
+      if (this.phaseTime >= this.introTime) this.startFight();
       return;
     }
 

@@ -12,7 +12,17 @@ import type {
   UnitHazard,
   ZoneHazard,
 } from "../types";
-import { ARENA, CLOSE_CALLS_FOR_FRENZY, ULT_CINEMATIC, ULT_HP, type World } from "../world";
+import {
+  ARENA,
+  CLOSE_CALLS_FOR_FRENZY,
+  COUNTDOWN_AT,
+  ULT_CINEMATIC,
+  ULT_HP,
+  type World,
+} from "../world";
+import { winChance } from "../odds";
+import { drawFace, type Mood } from "./faces";
+import { UPSET_CHANCE } from "./sfx";
 import type { Fx } from "./fx";
 import {
   BODY_FONT,
@@ -406,7 +416,7 @@ function drawArena(
     }
   }
 
-  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world.time);
+  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world);
   // Armies and projectiles go over bodies.
   for (const h of world.hazards) if (h.kind === "strike") drawStrike(ctx, h);
   for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world);
@@ -556,7 +566,44 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
   ctx.restore();
 }
 
-function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
+/** Which face a leader pulls right now (most urgent first). */
+function moodFor(world: World, f: Fighter): Mood {
+  if (!f.alive) return "ko";
+  if ((world.phase === "ko" || world.phase === "over") && world.winner === f.index) return "win";
+  if (f.stun > 0) return "dizzy";
+  if (f.hurt > 0.06) return "ouch";
+  if (f.ability?.skillState?.().ult === "active" || world.cinematic?.fighter === f.index) {
+    return "furious";
+  }
+  const ratio = f.hp / f.maxHp;
+  if (ratio < ULT_HP) return "scared";
+  const foe = world.fighters.find((o) => o.side !== f.side && o.alive);
+  if (foe && ratio - foe.hp / foe.maxHp > 0.15) return "smug";
+  if (f.speedMul < 0.5) return "focus";
+  return "determined";
+}
+
+/** Leader's HP on a small parchment tag across the bottom of the ball. */
+function hpBadge(ctx: Ctx, hp: string, r: number): void {
+  const size = Math.round(r * 0.36);
+  ctx.font = `900 ${size}px ${MONO_FONT}`;
+  const w = ctx.measureText(hp).width + size * 0.8;
+  const h = size * 1.15;
+  const y = r * 0.95;
+  roundRect(ctx, -w / 2, y - h / 2, w, h, h * 0.3);
+  ctx.fillStyle = "#f3e5c0";
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, r * 0.05);
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = INK;
+  ctx.fillText(hp, 0, y + size * 0.06);
+}
+
+function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
+  const time = world.time;
   const side = SIDES[f.side];
   const leader = f.def.reach <= 0;
   ctx.save();
@@ -633,8 +680,18 @@ function drawFighter(ctx: Ctx, f: Fighter, time: number): void {
   ctx.textBaseline = "middle";
   const hp = String(Math.max(0, Math.ceil(f.hp)));
   if (leader) {
-    ctx.font = `900 ${Math.round(f.radius * 0.58)}px ${MONO_FONT}`;
-    outlinedText(ctx, hp, 0, 3, "#fff8e8", 6);
+    const foe = world.fighters.find((o) => o.side !== f.side);
+    drawFace(
+      ctx,
+      f.def.id,
+      f.radius,
+      moodFor(world, f),
+      foe ? foe.x - f.x : 0,
+      foe ? foe.y - f.y : 0,
+      world.time + world.phaseTime * (world.phase === "fight" ? 0 : 1),
+      f.index,
+    );
+    hpBadge(ctx, hp, f.radius);
   } else {
     ctx.font = `900 ${Math.round(f.radius * 0.48)}px ${MONO_FONT}`;
     outlinedText(ctx, hp, 0, 2, "#fff8e8", 4);
@@ -1030,12 +1087,10 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
     drawUltimateBanner(ctx, world);
     return;
   }
-  if (leaders && (world.phase === "intro" || world.phase === "fight")) {
-    const t = world.phase === "intro" ? world.phaseTime : 0.8 + world.phaseTime;
-    if (t < INTRO_CARD_TIME) {
-      drawLeaderCards(ctx, world, t);
-      return;
-    }
+  if (leaders && world.phase === "intro") {
+    if (world.phaseTime < INTRO_CARD_TIME) drawLeaderCards(ctx, world, world.phaseTime);
+    else drawPickSide(ctx, world, world.phaseTime - INTRO_CARD_TIME);
+    return;
   }
 
   switch (world.phase) {
@@ -1075,6 +1130,9 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
       size = 108;
       color = SIDES[winner.side].main;
       t += 0.5;
+      const loser = world.fighters.find((f) => f.index !== winner.index);
+      const chance = leaders && loser ? winChance(winner.def.id, loser.def.id) : null;
+      if (chance !== null && chance < UPSET_CHANCE) drawUpset(ctx, t, chance);
       break;
     }
   }
@@ -1091,8 +1149,131 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
   ctx.restore();
 }
 
-/** Seconds (from the very start) the leader intro cards stay up; the fight starts under them. */
-const INTRO_CARD_TIME = 1.9;
+/** Seconds of the "who wins?" card; the rest of the intro is "pick your side!". */
+const INTRO_CARD_TIME = 1.3;
+
+/**
+ * "PICK YOUR SIDE!": both leaders face to face, the pre-fight win chances and a
+ * 3-2-1 countdown, so the viewer has picked someone before the first hit.
+ */
+function drawPickSide(ctx: Ctx, world: World, t: number): void {
+  const [a, b] = world.fighters;
+  if (!a || !b) return;
+  const left = world.introTime - INTRO_CARD_TIME - t;
+  ctx.save();
+  ctx.globalAlpha = clamp(left / 0.15, 0, 1);
+  ctx.fillStyle = "rgba(29,18,10,0.93)";
+  ctx.fillRect(0, 0, AS, AS);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const s = easeOutBack(clamp(t / 0.25, 0, 1));
+  ctx.save();
+  ctx.translate(AS / 2, 120);
+  ctx.scale(s, s);
+  ctx.font = `900 80px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "PICK YOUR SIDE!", 0, 0, GOLD, 13);
+  ctx.font = `600 34px ${BODY_FONT}`;
+  ctx.fillStyle = PAPER;
+  ctx.fillText("Comment your pick below", 0, 62);
+  ctx.restore();
+
+  const r = 118;
+  const y = 410;
+  [a, b].forEach((f, i) => {
+    const side = SIDES[f.side];
+    const dir = i === 0 ? -1 : 1;
+    const x = AS / 2 + dir * 225;
+    const pop = easeOutBack(clamp((t - 0.08 * i) / 0.3, 0, 1));
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(pop, pop);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.fillStyle = side.main;
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = side.dark;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 6, 0, TAU);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    // They stare each other down.
+    drawFace(ctx, f.def.id, r, "determined", -dir, 0, t, i);
+    drawHeadgear(ctx, f.def.id, r);
+    ctx.restore();
+    fitFont(ctx, f.def.name, 900, 52, 420, DISPLAY_FONT);
+    outlinedText(ctx, f.def.name, x, y + r + 52, side.bright, 9);
+  });
+  ctx.font = `900 76px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "VS", AS / 2, y, PAPER, 12);
+
+  const chance = winChance(a.def.id, b.def.id);
+  if (chance !== null) {
+    const pa = Math.round(chance * 100);
+    const bw = 760;
+    const bh = 58;
+    const bx = (AS - bw) / 2;
+    const by = 700;
+    ctx.font = `700 30px ${DISPLAY_FONT}`;
+    ctx.fillStyle = PAPER;
+    ctx.fillText("WIN CHANCE", AS / 2, by - 30);
+    const grow = clamp((t - 0.2) / 0.4, 0, 1);
+    const split = bx + bw * (0.5 + (pa / 100 - 0.5) * grow);
+    roundRect(ctx, bx, by, bw, bh, 10);
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = SIDES[a.side].main;
+    ctx.fillRect(bx, by, split - bx, bh);
+    ctx.fillStyle = SIDES[b.side].main;
+    ctx.fillRect(split, by, bx + bw - split, bh);
+    ctx.restore();
+    roundRect(ctx, bx, by, bw, bh, 10);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#b08a4a";
+    ctx.stroke();
+    ctx.font = `900 40px ${MONO_FONT}`;
+    ctx.textAlign = "left";
+    outlinedText(ctx, `${pa}%`, bx + 20, by + bh / 2 + 2, PAPER, 7);
+    ctx.textAlign = "right";
+    outlinedText(ctx, `${100 - pa}%`, bx + bw - 20, by + bh / 2 + 2, PAPER, 7);
+    ctx.textAlign = "center";
+  }
+
+  // 3, 2, 1 — each number pops in on its drum hit.
+  const it = world.phaseTime;
+  const tick = COUNTDOWN_AT.reduce((n, at) => (it >= at ? n + 1 : n), 0);
+  if (tick > 0) {
+    const since = it - (COUNTDOWN_AT[tick - 1] ?? 0);
+    const k = easeOutBack(clamp(since / 0.15, 0, 1));
+    ctx.save();
+    ctx.translate(AS / 2, 865);
+    ctx.scale(k, k);
+    ctx.font = `900 120px ${DISPLAY_FONT}`;
+    outlinedText(ctx, String(COUNTDOWN_AT.length - tick + 1), 0, 0, GOLD, 14);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** "UPSET!" stamped above the winner's name when the underdog won. */
+function drawUpset(ctx: Ctx, t: number, chance: number): void {
+  const k = easeOutBack(clamp((t - 0.6) / 0.25, 0, 1));
+  if (k <= 0) return;
+  ctx.save();
+  ctx.translate(AS / 2, AS / 2 - 230);
+  ctx.rotate(-0.06);
+  ctx.scale(k, k);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 130px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "UPSET!", 0, 0, "#ff6a3c", 16);
+  ctx.font = `800 40px ${DISPLAY_FONT}`;
+  outlinedText(ctx, `ONLY ${Math.round(chance * 100)}% TO WIN`, 0, 96, PAPER, 9);
+  ctx.restore();
+}
 
 /** History intro: "WHO WINS?" and a card per leader (flag, name, title, lifetime). */
 function drawLeaderCards(ctx: Ctx, world: World, t: number): void {
@@ -1207,6 +1388,7 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
     if (def) {
       ctx.save();
       ctx.translate(x, by);
+      drawFace(ctx, def.id, r, "determined", -dir, 0, t, i);
       drawHeadgear(ctx, def.id, r);
       ctx.restore();
       fitFont(ctx, def.name, 800, 50, 400, DISPLAY_FONT);

@@ -1,5 +1,9 @@
 import type { SimEvent } from "../types";
+import { winChance } from "../odds";
 import type { World } from "../world";
+
+/** Below this pre-fight win chance a victory counts as an upset. */
+export const UPSET_CHANCE = 0.4;
 
 /** Weapons that sound like heavy impacts instead of metal. */
 const BLUNT = new Set(["maul", "mace"]);
@@ -315,11 +319,25 @@ export class Sfx {
         this.noise(0.15, { filter: "highpass", freq: 2500, gain: 0.6 });
         this.noise(0.6, { filter: "lowpass", freq: 1500, slideTo: 80, gain: 0.8 });
         break;
-      case "ko":
+      case "countdown":
+        this.drum(e.n === 1 ? 0.9 : 0.6);
+        this.tone(e.n === 1 ? 392 : 294, 0.18, { type: "triangle", gain: 0.1, lowpass: 1500 });
+        break;
+      case "ko": {
+        // Upset: the underdog won — a triumphant horn sting after the K.O.
+        const loser = world.fighters[e.fighter];
+        const winner = world.fighters.find((f) => f.alive && f.side !== loser?.side);
+        const chance = winner && loser ? winChance(winner.def.id, loser.def.id) : null;
+        if (chance !== null && chance < UPSET_CHANCE) {
+          this.horn(262, 0.25, { gain: 0.12, delay: 0.55 });
+          this.horn(330, 0.25, { gain: 0.12, delay: 0.75 });
+          this.horn(392, 0.9, { gain: 0.14, delay: 0.95 });
+        }
         this.tone(120, 0.9, { type: "sawtooth", gain: 0.45, slideTo: 30 });
         this.noise(0.8, { filter: "lowpass", freq: 1800, slideTo: 120, gain: 0.7 });
         this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
         break;
+      }
       case "fight":
         this.drum(1);
         this.horn(196, 0.16, { gain: 0.12 });

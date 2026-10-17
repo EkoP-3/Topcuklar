@@ -301,6 +301,8 @@ export type RingHazard = Extract<Hazard, { kind: "ring" }>;
 /** Things that happened during a step. The renderer turns these into effects. */
 export type SimEvent =
   | { type: "fight" }
+  /** History intro: 3, 2, 1 before the fight. */
+  | { type: "countdown"; n: number }
   | {
       type: "hit";
       attacker: number;
