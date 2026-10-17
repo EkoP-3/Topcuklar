@@ -193,7 +193,14 @@ export class Sfx {
         this.noise(0.3, { filter: "bandpass", freq: 3000, slideTo: 500, q: 1.2, gain: 0.5 });
         break;
       case "summon":
-        if (e.style === "elephant") {
+        if (e.style === "terracotta") {
+          this.drum(0.5);
+          this.noise(0.12, { filter: "lowpass", freq: 600, gain: 0.3 });
+        } else if (e.style === "impi") {
+          if (!this.allow("impi", 0.2)) return;
+          this.drum(0.45);
+          this.drum(0.35, { delay: 0.12 });
+        } else if (e.style === "elephant") {
           // Trumpeting elephant.
           this.tone(330, 0.5, {
             type: "sawtooth",
@@ -226,6 +233,17 @@ export class Sfx {
           this.tone(140, 0.25, { type: "sine", gain: 0.4, slideTo: 60 });
         } else if (e.style === "asp") {
           this.noise(0.35, { filter: "highpass", freq: 4500, gain: 0.25 });
+        } else if (e.style === "axe") {
+          // Whirring axe.
+          for (let i = 0; i < 3; i++) {
+            this.noise(0.09, {
+              filter: "bandpass",
+              freq: 900 + i * 250,
+              q: 2,
+              gain: 0.3,
+              delay: i * 0.07,
+            });
+          }
         } else {
           const big = e.style === "bombard";
           this.tone(big ? 70 : 110, big ? 0.6 : 0.35, {
@@ -351,8 +369,30 @@ export class Sfx {
         this.noise(0.08, { filter: "highpass", freq: 3500, gain: 0.35 });
         this.thud(0.6);
         break;
+      case "heal":
+        if (!this.allow("heal", 0.35)) return;
+        this.bell(1320, 0.4, 0.05);
+        break;
+      case "slash":
+        // Katana: a bright "shing" and a cut through the air.
+        this.noise(0.18, { filter: "bandpass", freq: 6000, slideTo: 2500, q: 1.5, gain: 0.5 });
+        this.bell(2400, 0.35, 0.12);
+        break;
+      case "rampart":
+        this.noise(1.1, { filter: "lowpass", freq: 400, slideTo: 90, gain: 0.8 });
+        this.drum(1);
+        this.drum(0.8, { delay: 0.2 });
+        break;
       case "zone":
-        if (e.style === "fire") {
+        if (e.style === "stakes") {
+          if (!this.allow("stakes", 0.1)) return;
+          this.tone(230, 0.12, { type: "triangle", gain: 0.25, slideTo: 120 });
+          this.noise(0.05, { filter: "bandpass", freq: 1200, gain: 0.3 });
+        } else if (e.style === "banner") {
+          this.horn(262, 0.5, { gain: 0.1 });
+          this.horn(392, 0.7, { gain: 0.08, delay: 0.15 });
+          this.bell(1046, 0.6, 0.06, { delay: 0.15 });
+        } else if (e.style === "fire") {
           this.noise(1.2, { filter: "lowpass", freq: 900, slideTo: 300, gain: 0.35 });
           this.noise(0.6, { filter: "highpass", freq: 3000, gain: 0.12, delay: 0.1 });
         } else {

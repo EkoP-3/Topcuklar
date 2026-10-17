@@ -126,6 +126,10 @@ export interface Fighter {
   trail: boolean;
   /** Incoming damage is multiplied by this (shields lower it). */
   damageTakenMul: number;
+  /** All damage this fighter deals is multiplied by this (rage, banners, berserk). */
+  damageMul: number;
+  /** Renderer hint: blades spinning around the body. */
+  whirl: boolean;
   /** Renderer hint: draw a shield bubble. */
   shielded: boolean;
   /** Seconds left stunned: slowed and the ability timer is frozen. */
@@ -165,7 +169,25 @@ export type Hazard =
   | ProjectileHazard
   | SweepHazard
   | StrikeHazard
-  | ZoneHazard;
+  | ZoneHazard
+  | WallHazard;
+
+/** A stretch of wall (the Great Wall): enemies bounce off it, enemy shots stop on it. */
+export interface WallHazard {
+  kind: "wall";
+  owner: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** Half the wall's thickness. */
+  half: number;
+  ttl: number;
+  maxTtl: number;
+  damage: number;
+  /** Seconds until it may hurt each fighter again. */
+  lock: number[];
+}
 
 /** A marked spot that explodes after `delay` seconds (artillery shell, falling arrow). */
 export interface StrikeHazard {
@@ -191,7 +213,7 @@ export interface StrikeHazard {
 export interface SweepHazard {
   kind: "sweep";
   owner: number;
-  style: "elephant";
+  style: "elephant" | "knight" | "impi";
   /** Centre of the row. */
   x: number;
   y: number;
@@ -222,7 +244,7 @@ export interface SweepHazard {
 export interface UnitHazard {
   kind: "unit";
   owner: number;
-  style: "legion" | "elephant" | "guard";
+  style: "legion" | "elephant" | "guard" | "terracotta" | "impi";
   x: number;
   y: number;
   vx: number;
@@ -247,7 +269,7 @@ export interface UnitHazard {
 export interface ProjectileHazard {
   kind: "projectile";
   owner: number;
-  style: "arrow" | "ball" | "bombard" | "asp" | "musket";
+  style: "arrow" | "ball" | "bombard" | "asp" | "musket" | "axe";
   x: number;
   y: number;
   vx: number;
@@ -273,19 +295,28 @@ export interface ProjectileHazard {
   /** Wall bounces left; the next wall touch after that removes it. */
   bounces: number;
   ttl: number;
+  /** Thrown axe: seconds until it turns back toward its owner (then flies home). */
+  returnIn?: number;
+  returning?: boolean;
+  /** Fighters this axe already hit on the current leg (by index). */
+  hitIds?: number[];
 }
 
-/** A patch on the floor: a burning crater (hurts every tick) or a snake trap (bites once). */
+/**
+ * A patch on the floor: a burning crater (hurts every tick), a snake trap (bites once),
+ * stakes (hurt and throw back whoever runs in) or a holy banner (heals and empowers
+ * its owner standing near it).
+ */
 export interface ZoneHazard {
   kind: "zone";
   owner: number;
-  style: "fire" | "snake";
+  style: "fire" | "snake" | "stakes" | "banner";
   x: number;
   y: number;
   radius: number;
   ttl: number;
   maxTtl: number;
-  /** Fire: damage per second while inside. Snake: damage of the bite. */
+  /** Fire: damage per second while inside. Snake/stakes: damage of a hit. Banner: heal per second. */
   damage: number;
   poison: number;
   poisonDps: number;
@@ -344,6 +375,9 @@ export type SimEvent =
   | { type: "stun"; fighter: number }
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }
+  | { type: "heal"; fighter: number; amount: number }
+  | { type: "slash"; fighter: number; x1: number; y1: number; x2: number; y2: number }
+  | { type: "rampart"; fighter: number; x1: number; y1: number; x2: number; y2: number }
   | { type: "timeUp" };
 
 export type Phase = "intro" | "fight" | "ko" | "over";

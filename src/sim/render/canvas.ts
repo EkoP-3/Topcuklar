@@ -10,6 +10,7 @@ import type {
   StrikeHazard,
   SweepHazard,
   UnitHazard,
+  WallHazard,
   ZoneHazard,
 } from "../types";
 import {
@@ -38,7 +39,7 @@ import {
   fontsVersion,
 } from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
-import { drawEmblem } from "./emblems";
+import { drawEmblem, fleur } from "./emblems";
 import { FLAG_RATIO, drawFlag } from "./flags";
 import { drawHeadgear } from "./headgear";
 import { portraitImage } from "./images";
@@ -411,6 +412,9 @@ function drawArena(
       case "unit":
         drawUnit(ctx, h, world);
         break;
+      case "wall":
+        drawWall(ctx, h);
+        break;
       case "projectile":
         break;
     }
@@ -453,6 +457,23 @@ function drawArena(
     outlinedText(ctx, t.text, x, Math.max(24, t.y), t.color, 8 / K);
   }
   ctx.globalAlpha = 1;
+  for (const sl of fx.slashes) {
+    const k = clamp(sl.life / sl.max, 0, 1);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.globalAlpha = k;
+    ctx.beginPath();
+    ctx.moveTo(sl.x1, sl.y1);
+    ctx.lineTo(sl.x2, sl.y2);
+    ctx.lineWidth = 16 * k + 4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.lineWidth = 9 * k + 2;
+    ctx.strokeStyle = "#fff8e8";
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawNight(ctx, world, frame);
   drawSpotlight(ctx, world);
   ctx.restore();
 
@@ -496,6 +517,69 @@ function drawMapBorder(ctx: Ctx): void {
   }
 }
 
+/** The Great Wall: a stretch of stone with crenellations, rising and crumbling away. */
+function drawWall(ctx: Ctx, w: WallHazard): void {
+  const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+  const rise = clamp((w.maxTtl - w.ttl) / 0.25, 0, 1);
+  const fade = clamp(w.ttl / 0.4, 0, 1);
+  const t = w.half * 2 * rise;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.translate(w.x1, w.y1);
+  ctx.rotate(Math.atan2(w.y2 - w.y1, w.x2 - w.x1));
+  ctx.fillStyle = "rgba(43,27,15,0.25)";
+  ctx.fillRect(4, -t / 2 + 6, len, t);
+  ctx.fillStyle = "#a99a83";
+  ctx.fillRect(0, -t / 2, len, t);
+  ctx.strokeStyle = "rgba(43,27,15,0.55)";
+  ctx.lineWidth = 1.5;
+  for (let x = 0; x < len; x += 22) {
+    ctx.beginPath();
+    ctx.moveTo(x, -t / 2);
+    ctx.lineTo(x, t / 2);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(len, 0);
+  ctx.stroke();
+  // Crenellations along one edge.
+  ctx.fillStyle = "#8f8069";
+  for (let x = 4; x < len - 10; x += 26) ctx.fillRect(x, -t / 2 - 8 * rise, 13, 8 * rise);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = OUTLINE;
+  ctx.strokeRect(0, -t / 2, len, t);
+  ctx.restore();
+}
+
+/** Night attack: the map goes dark except right around the fighters, with a moon. */
+function drawNight(ctx: Ctx, world: World, frame: number): void {
+  if (world.darkness <= 0) return;
+  const k = clamp(world.darkness / 0.3, 0, 1) * clamp((2.7 - world.darkness) / 0.25, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = 0.84 * k;
+  ctx.beginPath();
+  ctx.rect(-ARENA, -ARENA, ARENA * 3, ARENA * 3);
+  for (const f of world.fighters) {
+    if (!f.alive) continue;
+    const r = f.radius * (2 + 0.1 * Math.sin(frame * 0.3 + f.index));
+    ctx.moveTo(f.x + r, f.y);
+    ctx.arc(f.x, f.y, r, 0, TAU, true);
+  }
+  ctx.fillStyle = "#0a0d1c";
+  ctx.fill("evenodd");
+  ctx.globalAlpha = k;
+  ctx.beginPath();
+  ctx.arc(ARENA - 90, 90, 38, 0, TAU);
+  ctx.fillStyle = "#f3ead6";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(ARENA - 76, 80, 34, 0, TAU);
+  ctx.fillStyle = "#0a0d1c";
+  ctx.fill();
+  ctx.restore();
+}
+
 /** Burning crater (Şahi shell) or a coiled asp waiting on the ground. */
 function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
   const fade = clamp(z.ttl / 0.4, 0, 1) * clamp((z.maxTtl - z.ttl) / 0.12, 0, 1);
@@ -537,6 +621,72 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
       ctx.strokeStyle = "rgba(60,25,10,0.7)";
       ctx.stroke();
     }
+  } else if (z.style === "stakes") {
+    // A little cluster of sharpened stakes.
+    for (const [ox, oy, h] of [
+      [-10, 6, 40],
+      [9, 4, 46],
+      [0, 12, 34],
+    ] as const) {
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.beginPath();
+      ctx.moveTo(-5, 0);
+      ctx.lineTo(-5, -h * 0.8);
+      ctx.lineTo(0, -h);
+      ctx.lineTo(5, -h * 0.8);
+      ctx.lineTo(5, 0);
+      ctx.closePath();
+      ctx.fillStyle = "#9b6a3a";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-2.5, -h * 0.86);
+      ctx.lineTo(0, -h);
+      ctx.lineTo(2.5, -h * 0.86);
+      ctx.fillStyle = "#a3221a";
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.ellipse(0, 10, z.radius, z.radius * 0.35, 0, 0, TAU);
+    ctx.fillStyle = "rgba(60,35,15,0.35)";
+    ctx.fill();
+  } else if (z.style === "banner") {
+    // Holy ground around the standard, then the standard itself.
+    ctx.beginPath();
+    ctx.arc(0, 0, z.radius, 0, TAU);
+    ctx.fillStyle = "rgba(242,193,78,0.14)";
+    ctx.fill();
+    ctx.setLineDash([12, 10]);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(176,138,74,0.85)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const big = z.radius > 180 ? 1.4 : 1;
+    ctx.scale(big, big);
+    ctx.beginPath();
+    ctx.moveTo(0, 30);
+    ctx.lineTo(0, -95);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#5a3b20";
+    ctx.stroke();
+    const wave = Math.sin(frame * 0.15) * 6;
+    ctx.beginPath();
+    ctx.moveTo(0, -92);
+    ctx.quadraticCurveTo(28, -100 + wave, 62, -88);
+    ctx.lineTo(48, -70 + wave * 0.5);
+    ctx.lineTo(62, -52);
+    ctx.quadraticCurveTo(28, -62 - wave, 0, -56);
+    ctx.closePath();
+    ctx.fillStyle = "#2a4fa8";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    fleur(ctx, 26, -74, 13, 1.5);
   } else {
     // A coiled asp, head raised.
     const r = z.radius * 1.3;
@@ -699,6 +849,32 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
 
   if (leader) drawHeadgear(ctx, f.def.id, f.radius);
 
+  if (f.whirl) {
+    // Scimitars spinning around Saladin.
+    for (let k = 0; k < 3; k++) {
+      const a = time * 14 + (k / 3) * TAU;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.translate(f.radius + 30, 0);
+      ctx.beginPath();
+      ctx.moveTo(-6, 22);
+      ctx.quadraticCurveTo(10, 0, 2, -30);
+      ctx.quadraticCurveTo(-6, 0, -12, 20);
+      ctx.closePath();
+      ctx.fillStyle = "#e8ecf2";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, f.radius + 30, 0, TAU);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(232,236,242,0.45)";
+    ctx.stroke();
+  }
+
   if (f.shielded) {
     ctx.beginPath();
     ctx.arc(0, 0, f.radius + 11, 0, TAU);
@@ -727,13 +903,60 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
   ctx.globalAlpha = clamp(u.ttl / 0.4, 0, 1);
   ctx.beginPath();
   ctx.arc(0, 0, u.radius, 0, TAU);
-  ctx.fillStyle = u.style === "elephant" ? "#5b6170" : side.main;
+  const clay = u.style === "terracotta";
+  ctx.fillStyle = u.style === "elephant" ? "#5b6170" : clay ? "#b8693f" : side.main;
   ctx.fill();
-  ctx.lineWidth = u.style === "elephant" ? 6 : 4;
-  ctx.strokeStyle = u.style === "elephant" ? side.main : side.dark;
+  ctx.lineWidth = u.style === "elephant" || clay ? 6 : 4;
+  ctx.strokeStyle = u.style === "elephant" || clay ? side.main : side.dark;
   ctx.stroke();
 
-  if (u.style === "elephant") {
+  if (clay) {
+    // Terracotta soldier: topknot, armour plates, a calm clay face.
+    const r = u.radius;
+    ctx.beginPath();
+    ctx.arc(r * 0.3, -r * 0.85, r * 0.28, 0, TAU);
+    ctx.fillStyle = "#9c5531";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(30,19,11,0.55)";
+    ctx.lineWidth = 2;
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.6, r * (0.2 + k * 0.22));
+      ctx.lineTo(r * 0.6, r * (0.2 + k * 0.22));
+      ctx.stroke();
+    }
+    ctx.fillStyle = OUTLINE;
+    ctx.fillRect(-r * 0.36, -r * 0.18, r * 0.2, r * 0.08);
+    ctx.fillRect(r * 0.16, -r * 0.18, r * 0.2, r * 0.08);
+  } else if (u.style === "impi") {
+    // Zulu warrior: cowhide shield and a short spear.
+    const r = u.radius;
+    const a = Math.atan2(u.vy, u.vx);
+    ctx.save();
+    ctx.rotate(a);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.2, r * 0.9);
+    ctx.lineTo(r * 1.5, -r * 0.2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#6b4a2a";
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.15, 0, r * 0.45, r * 0.8, 0, 0, TAU);
+    ctx.fillStyle = "#f3ead6";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.2, -r * 0.25, r * 0.18, r * 0.14, 0.4, 0, TAU);
+    ctx.ellipse(-r * 0.05, r * 0.3, r * 0.2, r * 0.15, 0.4, 0, TAU);
+    ctx.fillStyle = "#2a1a10";
+    ctx.fill();
+  } else if (u.style === "elephant") {
     if (u.vx < 0) ctx.scale(-1, 1);
     drawEmblem(ctx, "hannibal", u.radius * 0.8);
   } else if (u.style === "guard") {
@@ -857,6 +1080,32 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.stroke();
       break;
     }
+    case "axe": {
+      // Spinning bearded axe.
+      ctx.rotate(time * 22);
+      ctx.scale(p.radius / 16, p.radius / 16);
+      ctx.beginPath();
+      ctx.moveTo(-18, 0);
+      ctx.lineTo(16, 0);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = "#8a5a32";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(8, -3);
+      ctx.quadraticCurveTo(14, -20, 26, -16);
+      ctx.quadraticCurveTo(22, -2, 26, 12);
+      ctx.quadraticCurveTo(14, 8, 8, 3);
+      ctx.closePath();
+      ctx.fillStyle = "#c9cdd4";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      break;
+    }
     case "asp": {
       ctx.scale(p.radius / 12, p.radius / 12);
       ctx.beginPath();
@@ -895,14 +1144,48 @@ function drawSweep(ctx: Ctx, s: SweepHazard, world: World): void {
     // Elephants face where they run (mirrored instead of upside down when going left).
     if (s.dx < 0) ctx.scale(-1, 1);
     else if (s.dy !== 0) ctx.rotate(s.dy > 0 ? Math.PI / 2 : -Math.PI / 2);
+    const r = s.itemHalf * 0.95;
     ctx.beginPath();
-    ctx.arc(0, 0, s.itemHalf * 0.95, 0, TAU);
-    ctx.fillStyle = "#5b6170";
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.fillStyle = s.style === "elephant" ? "#5b6170" : side.main;
     ctx.fill();
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = side.main;
+    ctx.lineWidth = s.style === "elephant" ? 7 : 5;
+    ctx.strokeStyle = s.style === "elephant" ? side.main : side.dark;
     ctx.stroke();
-    drawEmblem(ctx, "hannibal", s.itemHalf * 0.85);
+    if (s.style === "elephant") {
+      drawEmblem(ctx, "hannibal", s.itemHalf * 0.85);
+    } else if (s.style === "knight") {
+      // Crusader knight: lance forward, white surcoat with a red cross, great helm.
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.3, r * 0.3);
+      ctx.lineTo(r * 2, r * 0.3);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#6b4a2a";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.62, 0, TAU);
+      ctx.fillStyle = "#f3ead6";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.fillStyle = "#c8202a";
+      ctx.fillRect(-r * 0.1, -r * 0.5, r * 0.2, r * 1);
+      ctx.fillRect(-r * 0.45, -r * 0.1, r * 0.9, r * 0.2);
+    } else {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.45, r * 0.8, 0, 0, TAU);
+      ctx.fillStyle = "#f3ead6";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = OUTLINE;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(-r * 0.05, -r * 0.25, r * 0.18, r * 0.14, 0.4, 0, TAU);
+      ctx.ellipse(r * 0.08, r * 0.3, r * 0.2, r * 0.15, 0.4, 0, TAU);
+      ctx.fillStyle = "#2a1a10";
+      ctx.fill();
+    }
     ctx.restore();
   }
 }

@@ -43,6 +43,12 @@ export function drawFace(
 
   if (id === "leonidas") beard(ctx, r, lw, 0.05);
   if (id === "mehmed") beard(ctx, r, lw, 0.3);
+  if (id === "richard") beard(ctx, r, lw, 0.15, "#b5501f");
+  if (id === "saladin") beard(ctx, r, lw, 0.25, "#1d1410");
+  if (id === "harald") {
+    beard(ctx, r, lw, 0, "#e3b54a");
+    braids(ctx, r, lw);
+  }
 
   // Eyebrows: inner end raised (+) or lowered (−).
   let browTilt = 0.04;
@@ -64,6 +70,7 @@ export function drawFace(
     } else {
       eye(ctx, ex, ey, r, lw, side, mood, blink, lx, ly, time);
       if (id === "cleopatra") eyeliner(ctx, ex, ey, r, lw, side);
+      if (id === "joan") lashes(ctx, ex, ey, r, lw, side);
     }
     // Brow (Hannibal keeps one over the patch too).
     const smugLift = mood === "smug" && side === 1 ? -0.07 : 0;
@@ -79,6 +86,13 @@ export function drawFace(
 
   if (id === "genghis") moustache(ctx, r, lw);
   if (id === "mehmed") smallMoustache(ctx, r, lw);
+  if (id === "vlad") bigMoustache(ctx, r, lw);
+  if (id === "qin") {
+    thinMoustache(ctx, r, lw);
+    goatee(ctx, r, lw);
+  }
+  if (id === "nobunaga") thinMoustache(ctx, r, lw);
+  if (id === "shaka") warPaint(ctx, r, lw);
   mouth(ctx, r, lw, mood, time);
 
   if (mood === "scared") {
@@ -266,7 +280,7 @@ function mouth(ctx: Ctx, r: number, lw: number, mood: Mood, time: number): void 
   }
 }
 
-function beard(ctx: Ctx, r: number, lw: number, top: number): void {
+function beard(ctx: Ctx, r: number, lw: number, top: number, color = BEARD): void {
   // Along the bottom of the ball from cheek to cheek, with a U cut out for the mouth.
   const a0 = Math.PI * (0.08 + top * 0.1);
   const cx = r * Math.cos(a0);
@@ -277,7 +291,7 @@ function beard(ctx: Ctx, r: number, lw: number, top: number): void {
   ctx.quadraticCurveTo(0, r * 0.95, r * 0.32, r * 0.22);
   ctx.quadraticCurveTo(r * 0.6, r * 0.2, cx, cy);
   ctx.closePath();
-  ctx.fillStyle = BEARD;
+  ctx.fillStyle = color;
   ctx.fill();
   ctx.lineWidth = lw * 0.6;
   ctx.strokeStyle = OUTLINE;
@@ -339,4 +353,93 @@ function eyeliner(ctx: Ctx, x: number, y: number, r: number, lw: number, side: -
   ctx.lineTo(x + side * er * 1.6, y - er * 0.65);
   ctx.lineWidth = lw * 1.1;
   ctx.stroke();
+}
+
+/** Two braids hanging from a Viking beard. */
+function braids(ctx: Ctx, r: number, lw: number): void {
+  for (const side of [-1, 1]) {
+    const x = side * r * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(x, r * 0.62);
+    ctx.lineTo(x + side * r * 0.04, r * 1.12);
+    ctx.lineWidth = lw * 1.6;
+    ctx.strokeStyle = "#c9962f";
+    ctx.stroke();
+    ctx.lineWidth = lw * 0.5;
+    ctx.strokeStyle = OUTLINE;
+    for (let k = 0; k < 3; k++) {
+      const y = r * (0.72 + k * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.05, y);
+      ctx.lineTo(x + r * 0.05, y + r * 0.04);
+      ctx.stroke();
+    }
+  }
+}
+
+/** Vlad's famous long, thick moustache. */
+function bigMoustache(ctx: Ctx, r: number, lw: number): void {
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.24);
+    ctx.quadraticCurveTo(side * r * 0.3, r * 0.14, side * r * 0.62, r * 0.36);
+    ctx.quadraticCurveTo(side * r * 0.4, r * 0.38, 0, r * 0.34);
+    ctx.closePath();
+    ctx.fillStyle = "#1a120c";
+    ctx.fill();
+    ctx.lineWidth = lw * 0.6;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+  }
+}
+
+function thinMoustache(ctx: Ctx, r: number, lw: number): void {
+  ctx.strokeStyle = BEARD;
+  ctx.lineWidth = lw * 0.9;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(side * r * 0.05, r * 0.28);
+    ctx.quadraticCurveTo(side * r * 0.25, r * 0.24, side * r * 0.34, r * 0.4);
+    ctx.stroke();
+  }
+}
+
+function goatee(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.09, r * 0.58);
+  ctx.lineTo(r * 0.09, r * 0.58);
+  ctx.lineTo(0, r * 0.86);
+  ctx.closePath();
+  ctx.fillStyle = BEARD;
+  ctx.fill();
+  ctx.lineWidth = lw * 0.5;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+}
+
+function lashes(ctx: Ctx, x: number, y: number, r: number, lw: number, side: -1 | 1): void {
+  const er = r * 0.19;
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = lw * 0.6;
+  for (let k = 0; k < 3; k++) {
+    const a = Math.PI * (1.25 + k * 0.12) + (side > 0 ? Math.PI * 0.26 : 0);
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * er, y + Math.sin(a) * er);
+    ctx.lineTo(x + Math.cos(a) * er * 1.4, y + Math.sin(a) * er * 1.4);
+    ctx.stroke();
+  }
+}
+
+/** White war-paint stripes on the cheeks. */
+function warPaint(ctx: Ctx, r: number, lw: number): void {
+  ctx.strokeStyle = "rgba(255,250,240,0.85)";
+  ctx.lineWidth = lw * 0.8;
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 2; k++) {
+      ctx.beginPath();
+      ctx.moveTo(side * r * 0.5, r * (0.12 + k * 0.12));
+      ctx.lineTo(side * r * 0.72, r * (0.08 + k * 0.12));
+      ctx.stroke();
+    }
+  }
 }

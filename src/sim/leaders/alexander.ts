@@ -21,7 +21,7 @@ export const alexander: FighterDef = {
   title: "King of Macedon",
   flag: "vergina",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 98 },
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 115 },
   hp: 950,
   radius: 58,
   mass: 1.1,
@@ -32,7 +32,7 @@ export const alexander: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 30,
+  contactDamage: 34,
   contactInterval: 0.45,
   createAbility: skill({
     label: ABILITY.name,

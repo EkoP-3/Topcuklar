@@ -40,6 +40,8 @@ export interface SkillSpec {
   /** Contact hit landed (outside the ultimate). */
   onHit?(world: World, self: Fighter, target: Fighter, phase: SkillPhase): void;
   onDamaged?: Ability["onDamaged"];
+  /** Runs every fight step, whatever the move is doing (always-on traits). */
+  passive?(world: World, self: Fighter, dt: number): void;
   /** Once-per-match super move, fired when HP drops to ULT_HP of max. */
   ultimate?: UltimateSpec;
 }
@@ -74,6 +76,7 @@ export function skill(spec: SkillSpec): () => Ability {
     const ability: Ability = {
       onTick(world, self, dt) {
         if (world.phase !== "fight") return;
+        spec.passive?.(world, self, dt);
         if (ult && !ultUsed && self.hp <= self.maxHp * ULT_HP) {
           ultUsed = world.beginUltimate(self, ult.name, () => {
             ult.cast(world, self);
@@ -203,4 +206,32 @@ export function steerToward(world: World, self: Fighter, k: number): void {
 export function aim(world: World, self: Fighter): number {
   const e = world.nearestEnemy(self);
   return e ? Math.atan2(e.y - self.y, e.x - self.x) : Math.atan2(self.vy, self.vx);
+}
+
+/** Turns the fighter's velocity toward a point by a fraction `k` (0..1). */
+export function steerToPoint(self: Fighter, x: number, y: number, k: number): void {
+  const a = Math.atan2(y - self.y, x - self.x);
+  const speed = Math.hypot(self.vx, self.vy);
+  self.vx += (Math.cos(a) * speed - self.vx) * Math.min(1, k);
+  self.vy += (Math.sin(a) * speed - self.vy) * Math.min(1, k);
+}
+
+/** Damages every enemy fighter whose body is within `reach` of (x, y). */
+export function hitAround(
+  world: World,
+  self: Fighter,
+  x: number,
+  y: number,
+  reach: number,
+  damage: number,
+  knockback: number,
+): number {
+  let hits = 0;
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === self.side) continue;
+    if (Math.hypot(f.x - x, f.y - y) > reach + f.radius) continue;
+    world.dealDamage(self, f, damage, f.x, f.y, knockback, { fromX: x, fromY: y });
+    hits++;
+  }
+  return hits;
 }

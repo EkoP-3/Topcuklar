@@ -1,5 +1,5 @@
 import { TAU } from "../geom";
-import { drawEmblem } from "./emblems";
+import { drawEmblem, fleur } from "./emblems";
 import { OUTLINE } from "./palette";
 
 type Ctx = CanvasRenderingContext2D;
@@ -46,6 +46,63 @@ export function drawFlag(ctx: Ctx, id: string, h: number): void {
       break;
     case "spqr":
       spqr(ctx, w, h);
+      break;
+    case "romania":
+      stripes(ctx, w, h, ["#002b7f", "#fcd116", "#ce1126"], true);
+      break;
+    case "england":
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#ce1124";
+      ctx.fillRect(w / 2 - h * 0.1, 0, h * 0.2, h);
+      ctx.fillRect(0, h * 0.4, w, h * 0.2);
+      break;
+    case "ayyubid":
+      // Yellow banner of the Ayyubids with the eagle associated with Saladin.
+      ctx.fillStyle = "#f2c230";
+      ctx.fillRect(0, 0, w, h);
+      eagle(ctx, w / 2, h / 2, h * 0.3);
+      break;
+    case "qin":
+      // Black was the Qin dynasty's colour.
+      ctx.fillStyle = "#15131a";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "#c8202a";
+      ctx.lineWidth = h * 0.1;
+      ctx.strokeRect(h * 0.1, h * 0.1, w - h * 0.2, h * 0.8);
+      ctx.translate(w / 2, h / 2);
+      drawEmblem(ctx, "qin", h * 0.32);
+      break;
+    case "fleurdelis":
+      ctx.fillStyle = "#1f3f95";
+      ctx.fillRect(0, 0, w, h);
+      fleur(ctx, w * 0.3, h * 0.36, h * 0.2, Math.max(1, h * 0.03));
+      fleur(ctx, w * 0.7, h * 0.36, h * 0.2, Math.max(1, h * 0.03));
+      fleur(ctx, w * 0.5, h * 0.72, h * 0.2, Math.max(1, h * 0.03));
+      break;
+    case "norway":
+      ctx.fillStyle = "#ba0c2f";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(w * 0.3125, 0, h * 0.25, h);
+      ctx.fillRect(0, h * 0.375, w, h * 0.25);
+      ctx.fillStyle = "#00205b";
+      ctx.fillRect(w * 0.3125 + h * 0.0625, 0, h * 0.125, h);
+      ctx.fillRect(0, h * 0.4375, w, h * 0.125);
+      break;
+    case "japan":
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, h * 0.3, 0, TAU);
+      ctx.fillStyle = "#bc002d";
+      ctx.fill();
+      break;
+    case "zulu":
+      ctx.fillStyle = "#5a3a1e";
+      ctx.fillRect(0, 0, w, h);
+      ctx.translate(w / 2, h / 2);
+      drawEmblem(ctx, "shaka", h * 0.42);
       break;
     default:
       ctx.fillStyle = "#555b6a";

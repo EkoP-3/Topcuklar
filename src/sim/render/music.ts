@@ -9,6 +9,12 @@ const MODES: Record<string, number[]> = {
   dorian: [0, 2, 3, 5, 7, 9, 10],
   phrygian: [0, 1, 3, 5, 7, 8, 10],
   harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
+  mixolydian: [0, 2, 4, 5, 7, 9, 10],
+  aeolian: [0, 2, 3, 5, 7, 8, 10],
+  /** Chinese gong mode (major pentatonic). */
+  gong: [0, 2, 4, 7, 9],
+  /** Japanese in scale. */
+  in: [0, 1, 5, 7, 8],
 };
 const DEFAULT_MODE = "dorian";
 /** Root note A2. */

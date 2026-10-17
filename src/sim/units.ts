@@ -5,14 +5,18 @@ import type {
   StrikeHazard,
   SweepHazard,
   UnitHazard,
+  WallHazard,
   ZoneHazard,
 } from "./types";
+import { closestOnSegment } from "./geom";
 import { ARENA, limitSpeed, type World } from "./world";
 
 /** Seconds a unit needs to swing toward a new heading (lower = sharper turns). */
 const UNIT_STEER = 3;
 /** A projectile passing an enemy within this gap (without hitting) is a close call. */
 const PROJECTILE_NEAR_GAP = 8;
+/** Shots hitting a fighter who stands by their own holy banner deal this much. */
+const BANNER_WARD = 0.6;
 /** Units hit by a fighter take this much of the fighter's contact damage. */
 const VS_UNIT_DAMAGE = 1.5;
 
@@ -203,6 +207,7 @@ export function updateUnits(world: World, dt: number): void {
     else if (h.kind === "sweep") updateSweep(world, h, dt);
     else if (h.kind === "strike") updateStrike(world, h, dt);
     else if (h.kind === "zone") updateZone(world, h, dt);
+    else if (h.kind === "wall") updateWall(world, h, dt);
     else continue;
     if (h.ttl <= 0) removed = true;
   }
@@ -215,7 +220,8 @@ function isGone(h: Hazard): boolean {
       h.kind === "projectile" ||
       h.kind === "sweep" ||
       h.kind === "strike" ||
-      h.kind === "zone") &&
+      h.kind === "zone" ||
+      h.kind === "wall") &&
     h.ttl <= 0
   );
 }
@@ -390,13 +396,37 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
   const owner = world.fighters[p.owner];
   if (!owner || p.ttl <= 0) return;
   p.ttl -= dt;
+  if (p.returnIn !== undefined) {
+    // Thrown axe: out, then home to the thrower.
+    p.returnIn -= dt;
+    if (!p.returning && p.returnIn <= 0) {
+      p.returning = true;
+      p.hitIds = [];
+    }
+    if (p.returning) {
+      const dx = owner.x - p.x;
+      const dy = owner.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < owner.radius + p.radius) {
+        p.ttl = 0;
+        return;
+      }
+      const speed = Math.hypot(p.vx, p.vy);
+      p.vx = (dx / d) * speed;
+      p.vy = (dy / d) * speed;
+    }
+  }
   p.x += p.vx * dt;
   p.y += p.vy * dt;
 
   const outX = p.x < world.lo + p.radius || p.x > world.hi - p.radius;
   const outY = p.y < world.lo + p.radius || p.y > world.hi - p.radius;
   if (outX || outY) {
-    if (p.bounces > 0) {
+    if (p.returning) {
+      // Flying home: slide along the wall instead of breaking on it.
+      p.x = clampTo(world, p.x, p.radius);
+      p.y = clampTo(world, p.y, p.radius);
+    } else if (p.bounces > 0) {
       p.bounces--;
       if (outX) p.vx = -p.vx;
       if (outY) p.vy = -p.vy;
@@ -441,6 +471,22 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
       world.emit({ type: "reflect", fighter: f.index, x: p.x, y: p.y });
       return;
     }
+    if (p.hitIds) {
+      // Axe: hits each fighter once per leg, then turns for home.
+      if (p.hitIds.includes(f.index)) continue;
+      p.hitIds.push(f.index);
+      const ward = underOwnBanner(world, f) ? BANNER_WARD : 1;
+      world.dealDamage(owner, f, p.damage * ward, p.x, p.y, p.knockback, {
+        fromX: f.x - p.vx,
+        fromY: f.y - p.vy,
+      });
+      if (!p.returning) {
+        p.returning = true;
+        p.returnIn = 0;
+      }
+      return;
+    }
+    if (underOwnBanner(world, f)) p.damage *= BANNER_WARD;
     const speed = Math.hypot(p.vx, p.vy) || 1;
     const hx = f.x - (p.vx / speed) * f.radius;
     const hy = f.y - (p.vy / speed) * f.radius;
@@ -465,9 +511,10 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
     if (o.kind !== "unit" || o.ttl <= 0 || !overlap(p, o)) continue;
     if (world.fighters[o.owner]?.side === owner.side) continue;
     if (p.pierced?.includes(o)) continue;
-    damageUnit(world, o, owner, p.damage, p.x, p.y);
-    // Elephants are big enough to stop any shot; explosive shells blow up on them.
-    if (p.blast > 0 || o.style === "elephant") {
+    // Zulu warriors catch shots on their cowhide shields.
+    damageUnit(world, o, owner, o.style === "impi" ? p.damage * 0.5 : p.damage, p.x, p.y);
+    // Elephants and terracotta soldiers stop any shot; explosive shells blow up on them.
+    if (p.blast > 0 || o.style === "elephant" || o.style === "terracotta") {
       explode(world, owner, p, null);
       p.ttl = 0;
       leaveBehind(world, owner, p, false);
@@ -546,6 +593,31 @@ function updateZone(world: World, z: ZoneHazard, dt: number): void {
   z.ttl -= dt;
   z.lock = Math.max(0, z.lock - dt);
   if (z.lock > 0) return;
+  if (z.style === "banner") {
+    // Holy banner: its owner heals while standing near it.
+    if (owner.alive && Math.hypot(owner.x - z.x, owner.y - z.y) <= z.radius + owner.radius) {
+      world.heal(owner, z.damage * 0.25);
+      z.lock = 0.25;
+    }
+    return;
+  }
+  if (z.style === "stakes") {
+    for (const f of world.fighters) {
+      if (!f.alive || f.side === owner.side) continue;
+      if (Math.hypot(f.x - z.x, f.y - z.y) > z.radius + f.radius) continue;
+      const dealt = world.dealDamage(owner, f, z.damage, z.x, z.y, 420, {
+        fromX: z.x,
+        fromY: z.y,
+      });
+      if (dealt > 0) {
+        f.stun = Math.max(f.stun, 0.25);
+        world.emit({ type: "stun", fighter: f.index });
+      }
+      z.lock = 0.6;
+      return;
+    }
+    return;
+  }
   for (const f of world.fighters) {
     if (!f.alive || f.side === owner.side) continue;
     if (Math.hypot(f.x - z.x, f.y - z.y) > z.radius + f.radius) continue;
@@ -564,6 +636,141 @@ function updateZone(world: World, z: ZoneHazard, dt: number): void {
       z.ttl = 0;
     }
     return;
+  }
+}
+
+/** True when the fighter stands inside one of their own banners. */
+function underOwnBanner(world: World, f: Fighter): boolean {
+  for (const h of world.hazards) {
+    if (h.kind !== "zone" || h.style !== "banner" || h.owner !== f.index || h.ttl <= 0) continue;
+    if (Math.hypot(f.x - h.x, f.y - h.y) <= h.radius + f.radius) return true;
+  }
+  return false;
+}
+
+/** Hurts enemy soldiers whose bodies are within `r` of (x, y). */
+export function damageUnitsNear(
+  world: World,
+  owner: Fighter,
+  x: number,
+  y: number,
+  r: number,
+  damage: number,
+): void {
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    if (Math.hypot(o.x - x, o.y - y) <= r + o.radius) damageUnit(world, o, owner, damage, o.x, o.y);
+  }
+}
+
+/** Hurts enemy soldiers within `r` of the segment (x1,y1)-(x2,y2). */
+export function damageUnitsAlong(
+  world: World,
+  owner: Fighter,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  r: number,
+  damage: number,
+): void {
+  for (const o of world.hazards) {
+    if (o.kind !== "unit" || o.ttl <= 0) continue;
+    if (world.fighters[o.owner]?.side === owner.side) continue;
+    const c = closestOnSegment(o.x, o.y, x1, y1, x2, y2);
+    if (c.d2 <= (r + o.radius) ** 2) damageUnit(world, o, owner, damage, o.x, o.y);
+  }
+}
+
+/** Raises a stretch of wall from (x1,y1) to (x2,y2). */
+export function spawnWall(
+  world: World,
+  owner: Fighter,
+  spec: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    half: number;
+    ttl: number;
+    damage: number;
+  },
+): WallHazard {
+  const wall: WallHazard = {
+    kind: "wall",
+    owner: owner.index,
+    ...spec,
+    maxTtl: spec.ttl,
+    lock: world.fighters.map(() => 0),
+  };
+  world.hazards.push(wall);
+  world.emit({
+    type: "rampart",
+    fighter: owner.index,
+    x1: wall.x1,
+    y1: wall.y1,
+    x2: wall.x2,
+    y2: wall.y2,
+  });
+  return wall;
+}
+
+/** Enemies bounce off the wall (and get hurt), enemy shots break on it, soldiers are pushed out. */
+function updateWall(world: World, w: WallHazard, dt: number): void {
+  const owner = world.fighters[w.owner];
+  if (!owner || w.ttl <= 0) return;
+  w.ttl -= dt;
+  for (let i = 0; i < w.lock.length; i++) w.lock[i] = Math.max(0, (w.lock[i] ?? 0) - dt);
+
+  const push = (b: { x: number; y: number; vx: number; vy: number; radius: number }): boolean => {
+    const c = closestOnSegment(b.x, b.y, w.x1, w.y1, w.x2, w.y2);
+    const min = b.radius + w.half;
+    if (c.d2 >= min * min) return false;
+    let d = Math.sqrt(c.d2);
+    let nx = (b.x - c.x) / (d || 1);
+    let ny = (b.y - c.y) / (d || 1);
+    if (d < 1e-6) {
+      // Dead centre: push out on the side it came from.
+      const tx = w.x2 - w.x1;
+      const ty = w.y2 - w.y1;
+      const tl = Math.hypot(tx, ty) || 1;
+      nx = -ty / tl;
+      ny = tx / tl;
+      if (b.vx * nx + b.vy * ny > 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      d = 0;
+    }
+    b.x = c.x + nx * min;
+    b.y = c.y + ny * min;
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) {
+      b.vx -= 2 * vn * nx;
+      b.vy -= 2 * vn * ny;
+    }
+    return true;
+  };
+
+  for (const f of world.fighters) {
+    if (!f.alive || f.side === owner.side) continue;
+    if (!push(f)) continue;
+    world.emit({ type: "wall", fighter: f.index, x: f.x, y: f.y });
+    if ((w.lock[f.index] ?? 0) <= 0) {
+      w.lock[f.index] = 0.6;
+      world.dealDamage(owner, f, w.damage, f.x, f.y, 0);
+    }
+  }
+  for (const h of world.hazards) {
+    if (h.kind === "unit" && h.ttl > 0 && world.fighters[h.owner]?.side !== owner.side) push(h);
+    if (h.kind === "projectile" && h.ttl > 0 && world.fighters[h.owner]?.side !== owner.side) {
+      const c = closestOnSegment(h.x, h.y, w.x1, w.y1, w.x2, w.y2);
+      if (c.d2 < (h.radius + w.half) ** 2) {
+        h.ttl = 0;
+        world.emit({ type: "wall", fighter: owner.index, x: h.x, y: h.y });
+      }
+    }
   }
 }
 

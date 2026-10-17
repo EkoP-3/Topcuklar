@@ -41,6 +41,30 @@ export function drawEmblem(ctx: Ctx, id: string, r: number): void {
     case "cleopatra":
       pyramid(ctx, r, lw);
       break;
+    case "vlad":
+      stake(ctx, r, lw);
+      break;
+    case "richard":
+      lionheart(ctx, r, lw);
+      break;
+    case "saladin":
+      scimitars(ctx, r, lw);
+      break;
+    case "qin":
+      terracotta(ctx, r, lw);
+      break;
+    case "joan":
+      banner(ctx, r, lw);
+      break;
+    case "harald":
+      axe(ctx, r, lw);
+      break;
+    case "nobunaga":
+      katana(ctx, r, lw);
+      break;
+    case "shaka":
+      cowhideShield(ctx, r, lw);
+      break;
   }
   ctx.restore();
 }
@@ -322,4 +346,205 @@ function cannon(ctx: Ctx, r: number, lw: number): void {
   ctx.lineWidth = lw * 0.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
+}
+
+/** A sharpened stake. */
+function stake(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.16, r * 0.85);
+  ctx.lineTo(-r * 0.16, -r * 0.45);
+  ctx.lineTo(0, -r * 0.92);
+  ctx.lineTo(r * 0.16, -r * 0.45);
+  ctx.lineTo(r * 0.16, r * 0.85);
+  ctx.closePath();
+  paint(ctx, "#a8743f", lw);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.08, -r * 0.62);
+  ctx.lineTo(0, -r * 0.92);
+  ctx.lineTo(r * 0.08, -r * 0.62);
+  ctx.closePath();
+  ctx.fillStyle = "#b3201c";
+  ctx.fill();
+}
+
+/** A crowned heart: the Lionheart. */
+function lionheart(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(0, r * 0.82);
+  ctx.bezierCurveTo(-r * 1.1, 0, -r * 0.6, -r * 0.75, 0, -r * 0.3);
+  ctx.bezierCurveTo(r * 0.6, -r * 0.75, r * 1.1, 0, 0, r * 0.82);
+  ctx.closePath();
+  paint(ctx, "#c8202a", lw);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.36, -r * 0.42);
+  ctx.lineTo(-r * 0.36, -r * 0.8);
+  ctx.lineTo(-r * 0.18, -r * 0.62);
+  ctx.lineTo(0, -r * 0.88);
+  ctx.lineTo(r * 0.18, -r * 0.62);
+  ctx.lineTo(r * 0.36, -r * 0.8);
+  ctx.lineTo(r * 0.36, -r * 0.42);
+  ctx.closePath();
+  paint(ctx, GOLD, lw * 0.8);
+}
+
+/** Two crossed scimitars. */
+function scimitars(ctx: Ctx, r: number, lw: number): void {
+  for (const side of [-1, 1]) {
+    ctx.save();
+    ctx.scale(side, 1);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.6, r * 0.62);
+    ctx.quadraticCurveTo(r * 0.1, r * 0.2, r * 0.55, -r * 0.82);
+    ctx.quadraticCurveTo(r * 0.25, r * 0.05, -r * 0.48, r * 0.72);
+    ctx.closePath();
+    paint(ctx, CREAM, lw * 0.8);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.72, r * 0.48);
+    ctx.lineTo(-r * 0.4, r * 0.86);
+    ctx.lineWidth = lw * 1.4;
+    ctx.strokeStyle = GOLD;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Terracotta warrior's head with a topknot. */
+function terracotta(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.arc(r * 0.18, -r * 0.62, r * 0.2, 0, TAU);
+  paint(ctx, "#a85c35", lw * 0.8);
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.05, r * 0.55, r * 0.68, 0, 0, TAU);
+  paint(ctx, "#c47a4c", lw);
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = lw * 0.7;
+  for (const x of [-r * 0.2, r * 0.2]) {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.1, -r * 0.05);
+    ctx.lineTo(x + r * 0.1, -r * 0.05);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.18, r * 0.38);
+  ctx.lineTo(r * 0.18, r * 0.38);
+  ctx.stroke();
+}
+
+/** Joan's standard: a pole with a swallow-tailed banner and a fleur-de-lis. */
+function banner(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.55, r * 0.9);
+  ctx.lineTo(-r * 0.55, -r * 0.9);
+  ctx.lineWidth = lw * 1.2;
+  ctx.strokeStyle = "#6b4a2a";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.55, -r * 0.85);
+  ctx.lineTo(r * 0.8, -r * 0.7);
+  ctx.lineTo(r * 0.45, -r * 0.3);
+  ctx.lineTo(r * 0.8, r * 0.1);
+  ctx.lineTo(-r * 0.55, r * 0.1);
+  ctx.closePath();
+  paint(ctx, "#2a4fa8", lw);
+  fleur(ctx, r * 0.02, -r * 0.38, r * 0.3, lw * 0.5);
+}
+
+/** A bearded Norse axe. */
+function axe(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.55, r * 0.85);
+  ctx.lineTo(r * 0.35, -r * 0.7);
+  ctx.lineWidth = lw * 1.5;
+  ctx.strokeStyle = "#6b4a2a";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.12, -r * 0.6);
+  ctx.quadraticCurveTo(r * 0.6, -r * 0.95, r * 0.88, -r * 0.55);
+  ctx.quadraticCurveTo(r * 0.6, -r * 0.4, r * 0.62, r * 0.05);
+  ctx.quadraticCurveTo(r * 0.35, -r * 0.2, r * 0.3, -r * 0.3);
+  ctx.closePath();
+  paint(ctx, "#c9cdd4", lw);
+}
+
+/** A katana, drawn diagonally. */
+function katana(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.4, r * 0.4);
+  ctx.quadraticCurveTo(r * 0.2, -r * 0.1, r * 0.82, -r * 0.82);
+  ctx.quadraticCurveTo(r * 0.3, -r * 0.05, -r * 0.3, r * 0.5);
+  ctx.closePath();
+  paint(ctx, CREAM, lw * 0.8);
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.38, r * 0.48, r * 0.16, r * 0.07, -0.8, 0, TAU);
+  paint(ctx, GOLD, lw * 0.6);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.45, r * 0.55);
+  ctx.lineTo(-r * 0.85, r * 0.9);
+  ctx.lineWidth = lw * 1.6;
+  ctx.strokeStyle = "#2a2230";
+  ctx.stroke();
+}
+
+/** Zulu cowhide shield with a spear behind it. */
+function cowhideShield(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.75, r * 0.85);
+  ctx.lineTo(r * 0.75, -r * 0.85);
+  ctx.lineWidth = lw * 1.2;
+  ctx.strokeStyle = "#6b4a2a";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.75, -r * 0.85);
+  ctx.lineTo(r * 0.6, -r * 0.55);
+  ctx.lineTo(r * 0.88, -r * 0.66);
+  ctx.closePath();
+  paint(ctx, "#c9cdd4", lw * 0.6);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 0.45, r * 0.8, 0, 0, TAU);
+  paint(ctx, CREAM, lw);
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = "#2a1a10";
+  for (const [x, y, w] of [
+    [-0.2, -0.4, 0.25],
+    [0.18, 0.1, 0.3],
+    [-0.15, 0.5, 0.22],
+  ] as const) {
+    ctx.beginPath();
+    ctx.ellipse(x * r, y * r, w * r, w * r * 0.7, 0.4, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 0.8);
+  ctx.lineTo(0, r * 0.8);
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+}
+
+/** Fleur-de-lis centred on (x, y), about `s` tall. */
+export function fleur(ctx: Ctx, x: number, y: number, s: number, lw: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  ctx.moveTo(0, -s);
+  ctx.quadraticCurveTo(s * 0.35, -s * 0.4, 0, s * 0.2);
+  ctx.quadraticCurveTo(-s * 0.35, -s * 0.4, 0, -s);
+  ctx.moveTo(-s * 0.1, s * 0.05);
+  ctx.quadraticCurveTo(-s * 0.9, -s * 0.5, -s * 0.6, s * 0.35);
+  ctx.quadraticCurveTo(-s * 0.4, s * 0.1, -s * 0.1, s * 0.2);
+  ctx.moveTo(s * 0.1, s * 0.05);
+  ctx.quadraticCurveTo(s * 0.9, -s * 0.5, s * 0.6, s * 0.35);
+  ctx.quadraticCurveTo(s * 0.4, s * 0.1, s * 0.1, s * 0.2);
+  ctx.rect(-s * 0.4, s * 0.2, s * 0.8, s * 0.14);
+  ctx.moveTo(-s * 0.08, s * 0.34);
+  ctx.lineTo(0, s * 0.75);
+  ctx.lineTo(s * 0.08, s * 0.34);
+  ctx.fillStyle = GOLD;
+  ctx.fill();
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.restore();
 }

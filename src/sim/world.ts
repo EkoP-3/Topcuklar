@@ -85,6 +85,8 @@ export class World {
   closeCalls = 0;
   /** Seconds of frenzy left (0 = none). */
   frenzy = 0;
+  /** Renderer hint: seconds left of a "night attack" (the arena goes dark). */
+  darkness = 0;
   /** Current walls: the arena spans lo..hi on both axes (shrinks during a frenzy). */
   lo = 0;
   hi = ARENA;
@@ -139,6 +141,8 @@ export class World {
         noClash: false,
         trail: false,
         damageTakenMul: 1,
+        damageMul: 1,
+        whirl: false,
         shielded: false,
         stun: 0,
         poison: 0,
@@ -160,6 +164,16 @@ export class World {
   removeHazard(hazard: Hazard): void {
     const i = this.hazards.indexOf(hazard);
     if (i >= 0) this.hazards.splice(i, 1);
+  }
+
+  /** Restores HP (never above max) and reports it. Returns the amount healed. */
+  heal(f: Fighter, amount: number): number {
+    if (this.phase !== "fight" || !f.alive) return 0;
+    const healed = Math.min(Math.round(amount), Math.floor(f.maxHp - f.hp));
+    if (healed <= 0) return 0;
+    f.hp += healed;
+    this.emit({ type: "heal", fighter: f.index, amount: healed });
+    return healed;
   }
 
   /** Nearest living fighter on another team, or null. */
@@ -205,7 +219,7 @@ export class World {
     // Shields lower damage; piercing hits ignore part of that reduction.
     const pierce = clamp(opts.pierce ?? 0, 0, 1);
     const taken = target.damageTakenMul + (1 - target.damageTakenMul) * pierce;
-    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * taken));
+    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * attacker.damageMul * taken));
     target.hp -= dmg;
     target.hurt = HURT_FLASH;
     this.damageDealt[attacker.index] = (this.damageDealt[attacker.index] ?? 0) + dmg;
@@ -409,6 +423,7 @@ export class World {
   }
 
   private updateFrenzy(dt: number): void {
+    if (this.darkness > 0) this.darkness = Math.max(0, this.darkness - dt);
     if (this.frenzy > 0 && this.phase === "fight") {
       this.frenzy = Math.max(0, this.frenzy - dt);
       if (this.frenzy === 0) this.emit({ type: "frenzy", on: false });

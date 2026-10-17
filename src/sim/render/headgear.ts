@@ -39,6 +39,30 @@ export function drawHeadgear(ctx: Ctx, id: string, r: number): void {
     case "cleopatra":
       nemes(ctx, r, lw);
       break;
+    case "vlad":
+      wallachianCap(ctx, r, lw);
+      break;
+    case "richard":
+      crusaderCrown(ctx, r, lw);
+      break;
+    case "saladin":
+      turbanHelmet(ctx, r, lw);
+      break;
+    case "qin":
+      mianguan(ctx, r, lw);
+      break;
+    case "joan":
+      bobHair(ctx, r, lw);
+      break;
+    case "harald":
+      vikingHelmet(ctx, r, lw);
+      break;
+    case "nobunaga":
+      kabuto(ctx, r, lw);
+      break;
+    case "shaka":
+      featherBand(ctx, r, lw);
+      break;
   }
   ctx.restore();
 }
@@ -262,4 +286,210 @@ function nemes(ctx: Ctx, r: number, lw: number): void {
   ctx.bezierCurveTo(r * 0.16, -r * 1.2, r * 0.12, -r * 1.5, 0, -r * 1.58);
   ctx.bezierCurveTo(-r * 0.12, -r * 1.5, -r * 0.16, -r * 1.2, 0, -r * 1.05);
   paint(ctx, "#e8b93c", lw * 0.7);
+}
+
+/** Vlad's portrait cap: red velvet, pearl band, a jewel and a plume. */
+function wallachianCap(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.72, -r * 0.6);
+  ctx.bezierCurveTo(-r * 0.8, -r * 1.5, r * 0.6, -r * 1.65, r * 0.78, -r * 0.62);
+  ctx.closePath();
+  paint(ctx, "#a3121c", lw);
+  // pearl band
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.66, r * 0.78, r * 0.14, 0, 0, TAU);
+  paint(ctx, "#6b0d14", lw * 0.8);
+  for (let i = -5; i <= 5; i++) {
+    ctx.beginPath();
+    ctx.arc(i * r * 0.13, -r * 0.66 + Math.abs(i) * r * 0.01, r * 0.045, 0, TAU);
+    ctx.fillStyle = "#f6f0e2";
+    ctx.fill();
+  }
+  // jewel and plume
+  ctx.beginPath();
+  ctx.moveTo(r * 0.05, -r * 1.05);
+  ctx.quadraticCurveTo(r * 0.5, -r * 1.75, r * 0.25, -r * 1.95);
+  ctx.quadraticCurveTo(r * 0.2, -r * 1.5, -r * 0.05, -r * 1.08);
+  ctx.closePath();
+  paint(ctx, "#f2e6c8", lw * 0.6);
+  ctx.beginPath();
+  ctx.arc(0, -r * 1.02, r * 0.11, 0, TAU);
+  paint(ctx, GOLD, lw * 0.6);
+  ctx.beginPath();
+  ctx.arc(0, -r * 1.02, r * 0.05, 0, TAU);
+  ctx.fillStyle = "#2f6fd3";
+  ctx.fill();
+}
+
+/** Mail coif under a gold crown with crosses. */
+function crusaderCrown(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.1, r * 0.98, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.closePath();
+  paint(ctx, "#9aa0a8", lw);
+  ctx.strokeStyle = "rgba(8,10,17,0.3)";
+  ctx.lineWidth = lw * 0.4;
+  for (let i = -3; i <= 3; i++) {
+    ctx.beginPath();
+    ctx.arc(i * r * 0.22, -r * 0.62, r * 0.08, 0, Math.PI);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.62, -r * 0.82);
+  ctx.lineTo(-r * 0.62, -r * 1.12);
+  for (let i = 0; i < 4; i++) {
+    const x = -r * 0.62 + (i + 0.5) * r * 0.31;
+    ctx.lineTo(x, -r * 1.02);
+    ctx.lineTo(x + r * 0.155, -r * 1.12);
+  }
+  ctx.lineTo(r * 0.62, -r * 0.82);
+  ctx.closePath();
+  paint(ctx, GOLD, lw);
+  for (const x of [-r * 0.47, 0, r * 0.47]) {
+    ctx.beginPath();
+    ctx.moveTo(x, -r * 1.12);
+    ctx.lineTo(x, -r * 1.36);
+    ctx.moveTo(x - r * 0.08, -r * 1.27);
+    ctx.lineTo(x + r * 0.08, -r * 1.27);
+    ctx.lineWidth = lw * 0.9;
+    ctx.strokeStyle = "#c08a1e";
+    ctx.stroke();
+  }
+}
+
+/** Spiked helmet wrapped in a turban. */
+function turbanHelmet(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.12, -r * 1.25);
+  ctx.lineTo(0, -r * 1.75);
+  ctx.lineTo(r * 0.12, -r * 1.25);
+  ctx.closePath();
+  paint(ctx, "#c9cdd4", lw * 0.7);
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.55, r * 0.72, Math.PI * 1.1, Math.PI * 1.9);
+  ctx.closePath();
+  paint(ctx, "#c9cdd4", lw);
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.72, r * 0.8, r * 0.24, 0, 0, TAU);
+  paint(ctx, "#f4f1ea", lw);
+  ctx.strokeStyle = "#2e7d4f";
+  ctx.lineWidth = lw * 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.7, -r * 0.62);
+  ctx.quadraticCurveTo(0, -r * 0.92, r * 0.7, -r * 0.82);
+  ctx.stroke();
+}
+
+/** Imperial mianguan: a flat board with strings of beads. */
+function mianguan(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.rect(-r * 0.32, -r * 1.2, r * 0.64, r * 0.5);
+  paint(ctx, "#1c1a22", lw);
+  ctx.beginPath();
+  ctx.rect(-r * 0.95, -r * 1.36, r * 1.9, r * 0.18);
+  paint(ctx, "#1c1a22", lw);
+  ctx.strokeStyle = "#c8202a";
+  ctx.lineWidth = lw * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.95, -r * 1.27);
+  ctx.lineTo(r * 0.95, -r * 1.27);
+  ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const x = -r * 0.85 + i * r * 0.34;
+    ctx.beginPath();
+    ctx.moveTo(x, -r * 1.18);
+    ctx.lineTo(x, -r * 0.82);
+    ctx.lineWidth = lw * 0.4;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.arc(x, -r * (1.08 - k * 0.11), r * 0.04, 0, TAU);
+      ctx.fillStyle = k % 2 === 0 ? "#e8b93c" : "#3fae7a";
+      ctx.fill();
+    }
+  }
+}
+
+/** Joan's short bob haircut. */
+function bobHair(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.98, -r * 0.05);
+  ctx.bezierCurveTo(-r * 1.15, -r * 1.25, r * 1.15, -r * 1.25, r * 0.98, -r * 0.05);
+  ctx.quadraticCurveTo(r * 0.82, r * 0.05, r * 0.72, -r * 0.18);
+  ctx.quadraticCurveTo(r * 0.55, -r * 0.62, 0, -r * 0.6);
+  ctx.quadraticCurveTo(-r * 0.55, -r * 0.62, -r * 0.72, -r * 0.18);
+  ctx.quadraticCurveTo(-r * 0.82, r * 0.05, -r * 0.98, -r * 0.05);
+  ctx.closePath();
+  paint(ctx, "#6b3f1f", lw);
+  ctx.strokeStyle = "rgba(255,230,190,0.35)";
+  ctx.lineWidth = lw * 0.6;
+  ctx.beginPath();
+  ctx.arc(-r * 0.15, -r * 0.55, r * 0.5, Math.PI * 1.15, Math.PI * 1.45);
+  ctx.stroke();
+}
+
+/** Norse helmet: no horns (they are a 19th-century invention), a band and a nose guard. */
+function vikingHelmet(ctx: Ctx, r: number, lw: number): void {
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.42, r * 0.8, Math.PI * 1.06, Math.PI * 1.94);
+  ctx.closePath();
+  paint(ctx, "#9aa0a8", lw);
+  ctx.beginPath();
+  ctx.rect(-r * 0.8, -r * 0.62, r * 1.6, r * 0.16);
+  paint(ctx, "#7a6a4a", lw * 0.8);
+  ctx.beginPath();
+  ctx.rect(-r * 0.06, -r * 1.2, r * 0.12, r * 0.6);
+  paint(ctx, "#7a6a4a", lw * 0.6);
+  // nose guard
+  ctx.beginPath();
+  ctx.rect(-r * 0.06, -r * 0.48, r * 0.12, r * 0.42);
+  paint(ctx, "#9aa0a8", lw * 0.7);
+}
+
+/** Samurai kabuto with a golden crescent crest. */
+function kabuto(ctx: Ctx, r: number, lw: number): void {
+  // neck guard
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.95, -r * 0.32);
+  ctx.quadraticCurveTo(0, -r * 0.95, r * 0.95, -r * 0.32);
+  ctx.lineTo(r * 0.75, -r * 0.62);
+  ctx.quadraticCurveTo(0, -r * 1.05, -r * 0.75, -r * 0.62);
+  ctx.closePath();
+  paint(ctx, "#2a2230", lw);
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.55, r * 0.66, Math.PI * 1.08, Math.PI * 1.92);
+  ctx.closePath();
+  paint(ctx, "#1c1a22", lw);
+  // crescent maedate
+  ctx.beginPath();
+  ctx.arc(0, -r * 1.25, r * 0.55, Math.PI * 0.05, Math.PI * 0.95, true);
+  ctx.arc(0, -r * 1.12, r * 0.42, Math.PI * 0.92, Math.PI * 0.08);
+  ctx.closePath();
+  paint(ctx, GOLD, lw * 0.7);
+}
+
+/** Leopard-skin headband with tall feathers. */
+function featherBand(ctx: Ctx, r: number, lw: number): void {
+  for (const [x, h, c] of [
+    [-r * 0.35, 1.7, "#3a3f4a"],
+    [0, 1.9, "#d8dde6"],
+    [r * 0.35, 1.7, "#3a3f4a"],
+  ] as const) {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.08, -r * 0.8);
+    ctx.quadraticCurveTo(x - r * 0.14, -r * h * 0.85, x, -r * h);
+    ctx.quadraticCurveTo(x + r * 0.14, -r * h * 0.85, x + r * 0.08, -r * 0.8);
+    ctx.closePath();
+    paint(ctx, c, lw * 0.6);
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.74, r * 0.82, r * 0.17, 0, 0, TAU);
+  paint(ctx, "#d9a441", lw);
+  for (let i = -3; i <= 3; i++) {
+    ctx.beginPath();
+    ctx.arc(i * r * 0.2, -r * 0.74 + (i % 2) * r * 0.05, r * 0.04, 0, TAU);
+    ctx.fillStyle = "#3a2414";
+    ctx.fill();
+  }
 }

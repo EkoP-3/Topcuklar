@@ -30,7 +30,7 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 21,
+  contactDamage: 22,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,

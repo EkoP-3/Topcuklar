@@ -72,7 +72,7 @@ export const cleopatra: FighterDef = {
               knockback: 60,
               blast: 0,
               poison: 4,
-              poisonDps: 48,
+              poisonDps: 47,
               bounces: 0,
               ttl: 1.6,
             });

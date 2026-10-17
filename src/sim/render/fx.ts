@@ -46,6 +46,15 @@ interface Shockwave {
   color: string;
 }
 
+interface Slash {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  life: number;
+  max: number;
+}
+
 const MAX_PARTICLES = 1600;
 const POISON_GREEN = "#4fbf3a";
 /** Dark flecks of ink mixed into sparks so they read on parchment. */
@@ -64,6 +73,8 @@ export class Fx {
   trail: TrailDot[] = [];
   /** Expanding rings (explosions). */
   rings: Shockwave[] = [];
+  /** Fading katana cuts. */
+  slashes: Slash[] = [];
   /** Current screen shake offset in arena units. */
   shakeX = 0;
   shakeY = 0;
@@ -123,6 +134,9 @@ export class Fx {
       t.life -= dt;
     }
     this.texts = this.texts.filter((t) => t.life > 0);
+
+    for (const sl of this.slashes) sl.life -= dt;
+    this.slashes = this.slashes.filter((sl) => sl.life > 0);
 
     for (const r of this.rings) r.life -= dt;
     this.rings = this.rings.filter((r) => r.life > 0);
@@ -315,8 +329,41 @@ export class Fx {
         this.addShake(10);
         break;
       }
+      case "heal": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.text(f.x, f.y - f.radius - 20, `+${e.amount}`, "#3fae4a", 30, 0.7);
+        this.burst(f.x, f.y, 4, ["#7fdc6a", "#f2c14e"], 140, 0.4, 6);
+        break;
+      }
+      case "slash":
+        this.slashes.push({ x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, life: 0.4, max: 0.4 });
+        this.burst(e.x2, e.y2, 14, ["#fff8e8", INK_SPECK], 420, 0.35, 7);
+        this.addShake(12);
+        break;
+      case "rampart": {
+        const n = 8;
+        for (let i = 0; i <= n; i++) {
+          const t = i / n;
+          this.burst(e.x1 + (e.x2 - e.x1) * t, e.y1 + (e.y2 - e.y1) * t, 4, DUST, 220, 0.6, 12);
+        }
+        this.addShake(24);
+        break;
+      }
       case "zone":
-        if (e.style === "fire") {
+        if (e.style === "stakes") {
+          this.burst(e.x, e.y, 8, ["#9b6a3a", INK_SPECK], 180, 0.35, 7);
+        } else if (e.style === "banner") {
+          this.burst(e.x, e.y, 18, ["#f2c14e", "#2a4fa8", "#fff3a0"], 300, 0.6, 9);
+          this.rings.push({
+            x: e.x,
+            y: e.y,
+            radius: e.radius,
+            life: 0.35,
+            max: 0.35,
+            color: "#f2c14e",
+          });
+        } else if (e.style === "fire") {
           this.burst(e.x, e.y, 24, ["#ff8a2a", "#ffd45e", "#c23a1b", INK_SPECK], 300, 0.7, 12);
         } else {
           this.burst(e.x, e.y, 10, [POISON_GREEN, "#2e6b22"], 160, 0.4, 7);
