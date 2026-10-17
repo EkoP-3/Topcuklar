@@ -557,22 +557,28 @@ function drawNight(ctx: Ctx, world: World, frame: number): void {
   if (world.darkness <= 0) return;
   const k = clamp(world.darkness / 0.3, 0, 1) * clamp((2.7 - world.darkness) / 0.25, 0, 1);
   ctx.save();
-  ctx.globalAlpha = 0.84 * k;
-  ctx.beginPath();
-  ctx.rect(-ARENA, -ARENA, ARENA * 3, ARENA * 3);
+  // Dark everywhere except the union of the lights around the fighters
+  // (one clip per light, so overlapping lights do not cancel out).
   for (const f of world.fighters) {
     if (!f.alive) continue;
     const r = f.radius * (2 + 0.1 * Math.sin(frame * 0.3 + f.index));
-    ctx.moveTo(f.x + r, f.y);
+    ctx.beginPath();
+    ctx.rect(-ARENA, -ARENA, ARENA * 3, ARENA * 3);
     ctx.arc(f.x, f.y, r, 0, TAU, true);
+    ctx.clip("evenodd");
   }
+  ctx.globalAlpha = 0.84 * k;
   ctx.fillStyle = "#0a0d1c";
-  ctx.fill("evenodd");
+  ctx.fillRect(-ARENA, -ARENA, ARENA * 3, ARENA * 3);
+  ctx.restore();
+  // Crescent moon.
+  ctx.save();
   ctx.globalAlpha = k;
   ctx.beginPath();
   ctx.arc(ARENA - 90, 90, 38, 0, TAU);
   ctx.fillStyle = "#f3ead6";
   ctx.fill();
+  ctx.clip();
   ctx.beginPath();
   ctx.arc(ARENA - 76, 80, 34, 0, TAU);
   ctx.fillStyle = "#0a0d1c";
@@ -849,13 +855,14 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
 
   if (leader) drawHeadgear(ctx, f.def.id, f.radius);
 
-  if (f.whirl) {
-    // Scimitars spinning around Saladin.
+  if (f.whirl > 0) {
+    // Scimitars spinning around Saladin, out to where the cuts actually land.
+    const ring = f.whirl - 12;
     for (let k = 0; k < 3; k++) {
       const a = time * 14 + (k / 3) * TAU;
       ctx.save();
       ctx.rotate(a);
-      ctx.translate(f.radius + 30, 0);
+      ctx.translate(ring - 10, 0);
       ctx.beginPath();
       ctx.moveTo(-6, 22);
       ctx.quadraticCurveTo(10, 0, 2, -30);
@@ -869,7 +876,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       ctx.restore();
     }
     ctx.beginPath();
-    ctx.arc(0, 0, f.radius + 30, 0, TAU);
+    ctx.arc(0, 0, ring, 0, TAU);
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(232,236,242,0.45)";
     ctx.stroke();

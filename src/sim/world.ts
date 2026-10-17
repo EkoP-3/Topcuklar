@@ -142,7 +142,7 @@ export class World {
         trail: false,
         damageTakenMul: 1,
         damageMul: 1,
-        whirl: false,
+        whirl: 0,
         shielded: false,
         stun: 0,
         poison: 0,
@@ -352,6 +352,7 @@ export class World {
     for (const f of this.fighters) {
       if (f.alive) this.statusEffects(f, dt);
       // A stunned fighter's ability is frozen in place.
+      if (f.alive && this.phase === "fight") f.ability?.passive?.(this, f, dt);
       if (f.alive && f.stun <= 0 && f.ability?.onTick) f.ability.onTick(this, f, dt);
     }
     for (const f of this.fighters) if (f.alive) this.move(f, dt);
@@ -726,6 +727,9 @@ export class World {
 
   private finish(winner: number): void {
     this.winner = winner;
+    // A night attack fades out over the K.O. instead of hiding it.
+    this.darkness = Math.min(this.darkness, 0.3);
+    for (const f of this.fighters) f.whirl = 0;
     this.phase = "ko";
     this.phaseTime = 0;
     this.timeScale = KO_TIME_SCALE;

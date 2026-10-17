@@ -19,7 +19,7 @@ export const vlad: FighterDef = {
   title: "Prince of Wallachia",
   flag: "romania",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 52 },
+  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 54 },
   hp: 1000,
   radius: 56,
   mass: 1.1,
@@ -30,7 +30,7 @@ export const vlad: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 27,
+  contactDamage: 28,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -49,7 +49,7 @@ export const vlad: FighterDef = {
           y: enemy.y + enemy.vy * t + world.rng.range(-45, 45),
           radius: 22,
           ttl: 5,
-          damage: 52,
+          damage: 54,
           poison: 0,
           poisonDps: 0,
         });

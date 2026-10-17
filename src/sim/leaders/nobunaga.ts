@@ -1,11 +1,11 @@
-import { ARENA, DEFAULT_RELAX } from "../world";
+import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
 import { closestOnSegment } from "../geom";
 import { damageUnitsAlong, fireProjectile } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
 /** The cut of the iai slash. */
-const SLASH = { damage: 114, knockback: 380 };
+const SLASH = { damage: 111, knockback: 380 };
 const ABILITY = { name: "IAI SLASH", text: "Lightning dash that cuts everything in its path" };
 
 export const nobunaga: FighterDef = {
@@ -21,7 +21,7 @@ export const nobunaga: FighterDef = {
   title: "Unifier of Japan",
   flag: "japan",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "SLASH DMG", base: 114 },
+  growth: { perSecond: 0.015, stat: "SLASH DMG", base: 111 },
   hp: 960,
   radius: 54,
   mass: 1,
@@ -32,7 +32,7 @@ export const nobunaga: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 34,
+  contactDamage: 33,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -46,6 +46,9 @@ export const nobunaga: FighterDef = {
       world.emit({ type: "charge", fighter: self.index });
     },
     whileWindup(world, self) {
+      // Held every tick so an ultimate in between cannot leave him half-paused.
+      self.speedMul = 0.15;
+      self.relax = 8;
       self.angle = aim(world, self);
     },
     cast(world, self, level) {
@@ -55,8 +58,8 @@ export const nobunaga: FighterDef = {
       const r = self.radius;
       const x1 = self.x;
       const y1 = self.y;
-      const x2 = Math.min(ARENA - r, Math.max(r, x1 + Math.cos(self.angle) * dist));
-      const y2 = Math.min(ARENA - r, Math.max(r, y1 + Math.sin(self.angle) * dist));
+      const x2 = Math.min(world.hi - r, Math.max(world.lo + r, x1 + Math.cos(self.angle) * dist));
+      const y2 = Math.min(world.hi - r, Math.max(world.lo + r, y1 + Math.sin(self.angle) * dist));
       // One step: he is simply on the other side.
       self.x = x2;
       self.y = y2;
@@ -88,7 +91,7 @@ export const nobunaga: FighterDef = {
             style: "musket",
             speed: 1100,
             radius: 8,
-            damage: 32,
+            damage: 31,
             knockback: 90,
             blast: 0,
             poison: 0,

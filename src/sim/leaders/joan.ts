@@ -7,22 +7,31 @@ const ABILITY = {
   text: "Raises her banner: heals, hits harder, shrugs off shots",
 };
 /** The rallying shockwave of the great banner. */
-const RALLY = { damage: 87, knockback: 600 };
+const RALLY = { damage: 82, knockback: 600 };
 /** HP per second healed by the banners (fixed: tuning scales damage, not healing). */
 const HEAL = { banner: 24, great: 45 };
 const BANNER = 130;
 const GREAT_BANNER = 230;
 
-/** The banner each Joan is carrying (two Joans can meet). */
+/** The banner each Joan is carrying (two Joans can meet), and her great banner. */
 const banners = new WeakMap<Fighter, ZoneHazard>();
+const greatBanners = new WeakMap<Fighter, ZoneHazard>();
 
 /** She carries the standard into the fight: it moves with her. */
-function carry(world: Parameters<typeof steerToward>[0], self: Fighter, dt: number): void {
-  const b = banners.get(self);
-  if (b && b.ttl > 0) {
+function carry(
+  world: Parameters<typeof steerToward>[0],
+  self: Fighter,
+  dt: number,
+  freezeRegular = false,
+): void {
+  for (const b of [banners.get(self), greatBanners.get(self)]) {
+    if (!b || b.ttl <= 0) continue;
     b.x = self.x;
     b.y = self.y;
   }
+  // While the great banner flies, the regular one waits (its skill timer is paused too).
+  const regular = banners.get(self);
+  if (freezeRegular && regular && regular.ttl > 0) regular.ttl += dt;
   steerToward(world, self, 2 * dt);
 }
 
@@ -39,7 +48,7 @@ export const joan: FighterDef = {
   title: "The Maid of Orléans",
   flag: "fleurdelis",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 67 },
+  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 64 },
   hp: 980,
   radius: 54,
   mass: 1,
@@ -50,7 +59,7 @@ export const joan: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 59,
+  contactDamage: 56,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -98,13 +107,13 @@ export const joan: FighterDef = {
           poison: 0,
           poisonDps: 0,
         });
-        banners.set(self, z);
+        greatBanners.set(self, z);
         world.emit({ type: "stomp", fighter: self.index, x: self.x, y: self.y, radius: 200 });
         hitAround(world, self, self.x, self.y, 200, RALLY.damage, RALLY.knockback);
         damageUnitsNear(world, self, self.x, self.y, 200, RALLY.damage);
       },
       whileActive(world, self, dt) {
-        carry(world, self, dt);
+        carry(world, self, dt, true);
       },
     },
   }),

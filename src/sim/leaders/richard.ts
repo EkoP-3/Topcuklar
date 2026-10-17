@@ -4,7 +4,7 @@ import { damageUnitsNear, spawnSweep } from "../units";
 import { hitAround, skill, ticks } from "./kit";
 
 /** The war cry. */
-const CRY = { damage: 65, knockback: 520 };
+const CRY = { damage: 62, knockback: 520 };
 const ABILITY = { name: "LIONHEART", text: "War cry knockback; hits harder as HP drops" };
 
 export const richard: FighterDef = {
@@ -20,7 +20,7 @@ export const richard: FighterDef = {
   title: "King of England",
   flag: "england",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 65 },
+  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 62 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -31,7 +31,7 @@ export const richard: FighterDef = {
   damage: 0,
   knockback: 150,
   hitInterval: 0.5,
-  contactDamage: 45,
+  contactDamage: 43,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -60,7 +60,10 @@ export const richard: FighterDef = {
     ultimate: {
       name: "ARSUF",
       active: 1.2,
-      cast() {},
+      cast(_world, self) {
+        // A war cry being drawn in is cut short: the knights are coming.
+        self.speedMul = 1;
+      },
       whileActive(world, self, dt, t) {
         // Two waves of crusader knights ride across the field.
         if (ticks(t, dt, 0.7, 0.05) === 0) return;
@@ -70,7 +73,7 @@ export const richard: FighterDef = {
           depth: 80,
           count: 4,
           itemHalf: 40,
-          damage: 84,
+          damage: 80,
           knockback: 650,
           stun: 0.3,
         });

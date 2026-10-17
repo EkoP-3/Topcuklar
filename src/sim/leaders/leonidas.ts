@@ -21,7 +21,7 @@ export const leonidas: FighterDef = {
   title: "King of Sparta",
   flag: "greece",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BASH DMG", base: 76 },
+  growth: { perSecond: 0.015, stat: "BASH DMG", base: 75 },
   hp: 1200,
   radius: 60,
   mass: 1.4,

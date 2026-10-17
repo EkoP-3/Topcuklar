@@ -17,7 +17,7 @@ export const shaka: FighterDef = {
   title: "King of the Zulu",
   flag: "zulu",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 34 },
+  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 36 },
   hp: 1000,
   radius: 56,
   mass: 1.05,
@@ -28,7 +28,7 @@ export const shaka: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 43,
+  contactDamage: 45,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -48,8 +48,14 @@ export const shaka: FighterDef = {
       for (const side of [-1, 1]) {
         for (let i = 0; i < perSide; i++) {
           const along = (i - (perSide - 1) / 2) * 44;
-          const x = enemy.x + px * side * 210 + Math.cos(a) * along;
-          const y = enemy.y + py * side * 210 + Math.sin(a) * along;
+          // Inside the current walls; a flank squeezed onto the enemy flips to the other side.
+          const inside = (v: number) => Math.min(world.hi - 22, Math.max(world.lo + 22, v));
+          let x = inside(enemy.x + px * side * 210 + Math.cos(a) * along);
+          let y = inside(enemy.y + py * side * 210 + Math.sin(a) * along);
+          if (Math.hypot(x - enemy.x, y - enemy.y) < enemy.radius + 60) {
+            x = inside(enemy.x - px * side * 210 + Math.cos(a) * along);
+            y = inside(enemy.y - py * side * 210 + Math.sin(a) * along);
+          }
           // ...and charge straight in.
           spawnUnit(
             world,
@@ -60,7 +66,7 @@ export const shaka: FighterDef = {
               mass: 0.8,
               speed: 420,
               hp: 50,
-              damage: 34,
+              damage: 36,
               knockback: 200,
               stun: 0,
               hitInterval: 0.6,
@@ -97,7 +103,7 @@ export const shaka: FighterDef = {
             depth: 60,
             count: 6,
             itemHalf: 24,
-            damage: 72,
+            damage: 77,
             knockback: 450,
             stun: 0.2,
             dir,

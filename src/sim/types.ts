@@ -67,6 +67,8 @@ export interface WallHit {
 /** Behaviour hooks a character can plug into. All optional. */
 export interface Ability {
   onTick?(world: World, self: Fighter, dt: number): void;
+  /** Always-on trait, run every fight step even while stunned. */
+  passive?(world: World, self: Fighter, dt: number): void;
   onWallHit?(world: World, self: Fighter, hit: WallHit): void;
   onHitDealt?(world: World, self: Fighter, target: Fighter, damage: number): void;
   /** Called after this fighter took damage (after reductions). */
@@ -128,8 +130,8 @@ export interface Fighter {
   damageTakenMul: number;
   /** All damage this fighter deals is multiplied by this (rage, banners, berserk). */
   damageMul: number;
-  /** Renderer hint: blades spinning around the body. */
-  whirl: boolean;
+  /** Renderer hint: reach of blades spinning around the body (0 = none). */
+  whirl: number;
   /** Renderer hint: draw a shield bubble. */
   shielded: boolean;
   /** Seconds left stunned: slowed and the ability timer is frozen. */
@@ -187,6 +189,8 @@ export interface WallHazard {
   damage: number;
   /** Seconds until it may hurt each fighter again. */
   lock: number[];
+  /** Side of the wall (+1/-1) each fighter started on; it is always pushed back there. */
+  side: number[];
 }
 
 /** A marked spot that explodes after `delay` seconds (artillery shell, falling arrow). */

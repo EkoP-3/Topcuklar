@@ -28,7 +28,7 @@ export const hannibal: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 27,
+  contactDamage: 28,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,

@@ -40,7 +40,7 @@ export interface SkillSpec {
   /** Contact hit landed (outside the ultimate). */
   onHit?(world: World, self: Fighter, target: Fighter, phase: SkillPhase): void;
   onDamaged?: Ability["onDamaged"];
-  /** Runs every fight step, whatever the move is doing (always-on traits). */
+  /** Runs every fight step, whatever the move is doing, even while stunned (always-on traits). */
   passive?(world: World, self: Fighter, dt: number): void;
   /** Once-per-match super move, fired when HP drops to ULT_HP of max. */
   ultimate?: UltimateSpec;
@@ -76,7 +76,6 @@ export function skill(spec: SkillSpec): () => Ability {
     const ability: Ability = {
       onTick(world, self, dt) {
         if (world.phase !== "fight") return;
-        spec.passive?.(world, self, dt);
         if (ult && !ultUsed && self.hp <= self.maxHp * ULT_HP) {
           ultUsed = world.beginUltimate(self, ult.name, () => {
             ult.cast(world, self);
@@ -144,6 +143,7 @@ export function skill(spec: SkillSpec): () => Ability {
       ability.shieldPierce = () => f(phase);
     }
     if (spec.onDamaged) ability.onDamaged = spec.onDamaged;
+    if (spec.passive) ability.passive = spec.passive;
 
     function startWindup(world: World, self: Fighter, seconds: number): void {
       if (seconds <= 0) {

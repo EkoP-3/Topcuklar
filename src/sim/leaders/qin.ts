@@ -1,10 +1,12 @@
-import { ARENA, DEFAULT_RELAX } from "../world";
+import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
 import { countUnits, spawnUnit, spawnWall } from "../units";
 import { aim, fan, skill } from "./kit";
 
 const ABILITY = { name: "TERRACOTTA ARMY", text: "Clay soldiers march slowly and block shots" };
 const WALL_HALF_LENGTH = 220;
+/** Damage when the enemy is slammed into the wall. */
+const WALL = { damage: 60 };
 
 export const qin: FighterDef = {
   id: "qin",
@@ -19,7 +21,7 @@ export const qin: FighterDef = {
   title: "First Emperor of China",
   flag: "qin",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 39 },
+  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 40 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -30,7 +32,7 @@ export const qin: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 37,
+  contactDamage: 38,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -51,7 +53,7 @@ export const qin: FighterDef = {
             mass: 2,
             speed: 150,
             hp: 140,
-            damage: 39,
+            damage: 40,
             knockback: 260,
             stun: 0,
             hitInterval: 0.8,
@@ -67,22 +69,41 @@ export const qin: FighterDef = {
       cast(world, self) {
         const enemy = world.nearestEnemy(self);
         if (!enemy) return;
-        // A wall rises just behind the enemy, across the line between them...
+        // A wall rises just behind the enemy, across the line between them. It is
+        // shortened along its own line (never bent) to stay inside the arena.
         const a = Math.atan2(enemy.y - self.y, enemy.x - self.x);
-        const cx = enemy.x + Math.cos(a) * (enemy.radius + 45);
-        const cy = enemy.y + Math.sin(a) * (enemy.radius + 45);
-        const px = -Math.sin(a) * WALL_HALF_LENGTH;
-        const py = Math.cos(a) * WALL_HALF_LENGTH;
-        const clampA = (v: number) => Math.min(ARENA, Math.max(0, v));
-        spawnWall(world, self, {
-          x1: clampA(cx - px),
-          y1: clampA(cy - py),
-          x2: clampA(cx + px),
-          y2: clampA(cy + py),
-          half: 14,
-          ttl: 4,
-          damage: 59,
-        });
+        const half = 14;
+        const lo = world.lo + half;
+        const hi = world.hi - half;
+        const inside = (v: number) => Math.min(hi, Math.max(lo, v));
+        const cx = inside(enemy.x + Math.cos(a) * (enemy.radius + 45));
+        const cy = inside(enemy.y + Math.sin(a) * (enemy.radius + 45));
+        const ux = -Math.sin(a);
+        const uy = Math.cos(a);
+        const reach = (dir: number): number => {
+          let t = WALL_HALF_LENGTH;
+          for (const [c, u] of [
+            [cx, ux * dir],
+            [cy, uy * dir],
+          ] as const) {
+            if (u > 1e-9) t = Math.min(t, (hi - c) / u);
+            else if (u < -1e-9) t = Math.min(t, (lo - c) / u);
+          }
+          return Math.max(0, t);
+        };
+        const t1 = reach(-1);
+        const t2 = reach(1);
+        if (t1 + t2 >= 80) {
+          spawnWall(world, self, {
+            x1: cx - ux * t1,
+            y1: cy - uy * t1,
+            x2: cx + ux * t2,
+            y2: cy + uy * t2,
+            half,
+            ttl: 4,
+            damage: WALL.damage,
+          });
+        }
         // ...and the emperor drives them into it.
         self.speedMul = 2.6;
         self.relax = 6;

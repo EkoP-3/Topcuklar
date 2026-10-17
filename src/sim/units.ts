@@ -460,6 +460,12 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
       p.vx = Math.cos(a) * speed;
       p.vy = Math.sin(a) * speed;
       p.owner = f.index;
+      if (p.returnIn !== undefined) {
+        // A parried axe flies back as a plain shot instead of homing to its new owner.
+        delete p.returnIn;
+        p.returning = false;
+        delete p.hitIds;
+      }
       // Bounced shots come back weaker.
       p.damage *= 0.5;
       p.poison *= 0.5;
@@ -697,12 +703,18 @@ export function spawnWall(
     damage: number;
   },
 ): WallHazard {
+  // Each fighter stays on the side of the wall it started on.
+  const side = world.fighters.map((f) => {
+    const cross = (spec.x2 - spec.x1) * (f.y - spec.y1) - (spec.y2 - spec.y1) * (f.x - spec.x1);
+    return cross >= 0 ? 1 : -1;
+  });
   const wall: WallHazard = {
     kind: "wall",
     owner: owner.index,
     ...spec,
     maxTtl: spec.ttl,
     lock: world.fighters.map(() => 0),
+    side,
   };
   world.hazards.push(wall);
   world.emit({
@@ -722,53 +734,71 @@ function updateWall(world: World, w: WallHazard, dt: number): void {
   if (!owner || w.ttl <= 0) return;
   w.ttl -= dt;
   for (let i = 0; i < w.lock.length; i++) w.lock[i] = Math.max(0, (w.lock[i] ?? 0) - dt);
+  const tx = w.x2 - w.x1;
+  const ty = w.y2 - w.y1;
+  const tl = Math.hypot(tx, ty) || 1;
 
-  const push = (b: { x: number; y: number; vx: number; vy: number; radius: number }): boolean => {
+  /** Pushes a body out of the wall; returns true when it was moving into it (an impact). */
+  const push = (
+    b: { x: number; y: number; vx: number; vy: number; radius: number },
+    keepSide: number | null,
+  ): boolean => {
     const c = closestOnSegment(b.x, b.y, w.x1, w.y1, w.x2, w.y2);
     const min = b.radius + w.half;
     if (c.d2 >= min * min) return false;
-    let d = Math.sqrt(c.d2);
-    let nx = (b.x - c.x) / (d || 1);
-    let ny = (b.y - c.y) / (d || 1);
-    if (d < 1e-6) {
-      // Dead centre: push out on the side it came from.
-      const tx = w.x2 - w.x1;
-      const ty = w.y2 - w.y1;
-      const tl = Math.hypot(tx, ty) || 1;
+    const d = Math.sqrt(c.d2);
+    let nx: number;
+    let ny: number;
+    const onSpan = Math.abs((b.x - c.x) * tx + (b.y - c.y) * ty) < 1e-6 * tl;
+    if (keepSide !== null && onSpan) {
+      // Alongside the wall: always out to the side it belongs to.
+      nx = (-ty / tl) * keepSide;
+      ny = (tx / tl) * keepSide;
+    } else if (d > 1e-6) {
+      nx = (b.x - c.x) / d;
+      ny = (b.y - c.y) / d;
+    } else {
       nx = -ty / tl;
       ny = tx / tl;
       if (b.vx * nx + b.vy * ny > 0) {
         nx = -nx;
         ny = -ny;
       }
-      d = 0;
     }
-    b.x = c.x + nx * min;
-    b.y = c.y + ny * min;
+    const along = (b.x - c.x) * nx + (b.y - c.y) * ny;
+    b.x += nx * (min - along);
+    b.y += ny * (min - along);
     const vn = b.vx * nx + b.vy * ny;
     if (vn < 0) {
       b.vx -= 2 * vn * nx;
       b.vy -= 2 * vn * ny;
     }
-    return true;
+    return vn < 0;
   };
 
   for (const f of world.fighters) {
     if (!f.alive || f.side === owner.side) continue;
-    if (!push(f)) continue;
-    world.emit({ type: "wall", fighter: f.index, x: f.x, y: f.y });
-    if ((w.lock[f.index] ?? 0) <= 0) {
-      w.lock[f.index] = 0.6;
-      world.dealDamage(owner, f, w.damage, f.x, f.y, 0);
-    }
+    const hit = push(f, w.side[f.index] ?? null);
+    // Never let the wall shove anyone through the arena's own walls.
+    f.x = clampTo(world, f.x, f.radius);
+    f.y = clampTo(world, f.y, f.radius);
+    if (!hit || (w.lock[f.index] ?? 0) > 0) continue;
+    w.lock[f.index] = 0.6;
+    const c = closestOnSegment(f.x, f.y, w.x1, w.y1, w.x2, w.y2);
+    world.emit({ type: "wall", fighter: f.index, x: c.x, y: c.y });
+    world.dealDamage(owner, f, w.damage, c.x, c.y, 0);
   }
   for (const h of world.hazards) {
-    if (h.kind === "unit" && h.ttl > 0 && world.fighters[h.owner]?.side !== owner.side) push(h);
+    if (h.kind === "unit" && h.ttl > 0 && world.fighters[h.owner]?.side !== owner.side) {
+      push(h, null);
+      h.x = clampTo(world, h.x, h.radius);
+      h.y = clampTo(world, h.y, h.radius);
+    }
     if (h.kind === "projectile" && h.ttl > 0 && world.fighters[h.owner]?.side !== owner.side) {
       const c = closestOnSegment(h.x, h.y, w.x1, w.y1, w.x2, w.y2);
       if (c.d2 < (h.radius + w.half) ** 2) {
         h.ttl = 0;
-        world.emit({ type: "wall", fighter: owner.index, x: h.x, y: h.y });
+        world.emit({ type: "wall", fighter: owner.index, x: c.x, y: c.y });
       }
     }
   }
@@ -808,7 +838,10 @@ function damageUnit(
   // Testudo: legionaries close to the enemy lock shields and take half damage.
   const enemy = nearestEnemyFighter(world, world.fighters[u.owner]?.side ?? -1, u.x, u.y);
   const testudo = u.style === "legion" && enemy && Math.hypot(enemy.x - u.x, enemy.y - u.y) < 130;
-  u.hp -= Math.max(1, Math.round(amount * world.power(attacker) * (testudo ? 0.7 : 1)));
+  u.hp -= Math.max(
+    1,
+    Math.round(amount * world.power(attacker) * attacker.damageMul * (testudo ? 0.7 : 1)),
+  );
   u.hurt = 0.15;
   world.emit({ type: "bump", x, y, strength: 500 });
   if (u.hp <= 0) {

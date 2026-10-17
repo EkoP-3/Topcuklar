@@ -283,7 +283,7 @@ export class Fx {
       }
       case "shoot": {
         const f = world.fighters[e.fighter];
-        if (!f || e.style === "arrow" || e.style === "asp") break;
+        if (!f || e.style === "arrow" || e.style === "asp" || e.style === "axe") break;
         const big = e.style === "bombard";
         this.burst(
           f.x,
