@@ -17,6 +17,7 @@ import {
   ARENA,
   CLOSE_CALLS_FOR_FRENZY,
   COUNTDOWN_AT,
+  nightStrength,
   ULT_CINEMATIC,
   ULT_HP,
   type World,
@@ -554,8 +555,8 @@ function drawWall(ctx: Ctx, w: WallHazard): void {
 
 /** Night attack: the map goes dark except right around the fighters, with a moon. */
 function drawNight(ctx: Ctx, world: World, frame: number): void {
-  if (world.darkness <= 0) return;
-  const k = clamp(world.darkness / 0.3, 0, 1) * clamp((2.7 - world.darkness) / 0.25, 0, 1);
+  const k = nightStrength(world.darkness);
+  if (k <= 0) return;
   ctx.save();
   // Dark everywhere except the union of the lights around the fighters
   // (one clip per light, so overlapping lights do not cancel out).

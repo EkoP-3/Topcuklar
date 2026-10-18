@@ -45,17 +45,24 @@ export const shaka: FighterDef = {
       const a = Math.atan2(enemy.y - self.y, enemy.x - self.x);
       const px = -Math.sin(a);
       const py = Math.cos(a);
+      const spots: { x: number; y: number }[] = [];
       for (const side of [-1, 1]) {
         for (let i = 0; i < perSide; i++) {
           const along = (i - (perSide - 1) / 2) * 44;
-          // Inside the current walls; a flank squeezed onto the enemy flips to the other side.
+          // Inside the current walls; a flank squeezed onto the enemy (against a wall)
+          // goes round behind the enemy instead, never onto the other horn's spots.
           const inside = (v: number) => Math.min(world.hi - 22, Math.max(world.lo + 22, v));
           let x = inside(enemy.x + px * side * 210 + Math.cos(a) * along);
           let y = inside(enemy.y + py * side * 210 + Math.sin(a) * along);
           if (Math.hypot(x - enemy.x, y - enemy.y) < enemy.radius + 60) {
-            x = inside(enemy.x - px * side * 210 + Math.cos(a) * along);
-            y = inside(enemy.y - py * side * 210 + Math.sin(a) * along);
+            const spread = side * (30 + Math.abs(along));
+            x = inside(enemy.x + Math.cos(a) * 190 + px * spread);
+            y = inside(enemy.y + Math.sin(a) * 190 + py * spread);
+            if (Math.hypot(x - enemy.x, y - enemy.y) < enemy.radius + 60) continue;
           }
+          // Squeezed into a corner, two warriors could land on one spot: one is enough.
+          if (spots.some((p) => Math.hypot(p.x - x, p.y - y) < 40)) continue;
+          spots.push({ x, y });
           // ...and charge straight in.
           spawnUnit(
             world,

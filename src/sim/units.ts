@@ -599,9 +599,27 @@ function updateZone(world: World, z: ZoneHazard, dt: number): void {
   z.ttl -= dt;
   z.lock = Math.max(0, z.lock - dt);
   if (z.lock > 0) return;
+  if (z.style === "banner" && !owner.alive) {
+    z.ttl = 0;
+    return;
+  }
   if (z.style === "banner") {
-    // Holy banner: its owner heals while standing near it.
-    if (owner.alive && Math.hypot(owner.x - z.x, owner.y - z.y) <= z.radius + owner.radius) {
+    // Holy banner: its owner heals while standing near it (the great banner, when it
+    // flies, replaces the regular one instead of adding to it).
+    const outranked = world.hazards.some(
+      (h) =>
+        h !== z &&
+        h.kind === "zone" &&
+        h.style === "banner" &&
+        h.owner === z.owner &&
+        h.ttl > 0 &&
+        h.radius > z.radius,
+    );
+    if (
+      !outranked &&
+      owner.alive &&
+      Math.hypot(owner.x - z.x, owner.y - z.y) <= z.radius + owner.radius
+    ) {
       world.heal(owner, z.damage * 0.25);
       z.lock = 0.25;
     }
@@ -778,6 +796,12 @@ function updateWall(world: World, w: WallHazard, dt: number): void {
 
   for (const f of world.fighters) {
     if (!f.alive || f.side === owner.side) continue;
+    // Remember the side it approaches from while it is clear of the wall (it may
+    // legally walk round an open end), so a touch never warps it through.
+    const clear = closestOnSegment(f.x, f.y, w.x1, w.y1, w.x2, w.y2);
+    if (clear.d2 >= (f.radius + w.half) ** 2) {
+      w.side[f.index] = tx * (f.y - w.y1) - ty * (f.x - w.x1) >= 0 ? 1 : -1;
+    }
     const hit = push(f, w.side[f.index] ?? null);
     // Never let the wall shove anyone through the arena's own walls.
     f.x = clampTo(world, f.x, f.radius);

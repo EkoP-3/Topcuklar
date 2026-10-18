@@ -14,6 +14,17 @@ const INTRO_TIME = 0.8;
  * countdown. Nothing random happens during the intro, so fights play out the same.
  */
 export const HISTORY_INTRO_TIME = 2.6;
+/** Night attack: seconds of darkness, and how long it takes to fade in and out. */
+export const NIGHT_TIME = 2.7;
+export const NIGHT_FADE_IN = 0.25;
+export const NIGHT_FADE_OUT = 0.3;
+
+/** How dark a night attack makes the arena (0..1) with `left` seconds of it remaining. */
+export function nightStrength(left: number): number {
+  if (left <= 0) return 0;
+  return clamp(left / NIGHT_FADE_OUT, 0, 1) * clamp((NIGHT_TIME - left) / NIGHT_FADE_IN, 0, 1);
+}
+
 /** Intro seconds at which the pick-your-side countdown says 3, 2, 1. */
 export const COUNTDOWN_AT = [1.4, 1.8, 2.2] as const;
 const KO_TIME = 0.5;
@@ -360,6 +371,12 @@ export class World {
     this.collideBodies();
     if (this.phase === "fight") this.weapons();
     updateUnits(this, dt);
+    // Body and soldier pushes come after the wall bounce; keep every fighter inside.
+    for (const f of this.fighters) {
+      if (!f.alive) continue;
+      f.x = clamp(f.x, this.lo + f.radius, this.hi - f.radius);
+      f.y = clamp(f.y, this.lo + f.radius, this.hi - f.radius);
+    }
     if (this.closeCallsEnabled) this.watchCloseCalls(dt);
 
     this.clashCooldown = Math.max(0, this.clashCooldown - dt);
@@ -728,7 +745,8 @@ export class World {
   private finish(winner: number): void {
     this.winner = winner;
     // A night attack fades out over the K.O. instead of hiding it.
-    this.darkness = Math.min(this.darkness, 0.3);
+    // Start the fade-out from however dark it is on screen right now (no jump).
+    this.darkness = Math.min(this.darkness, NIGHT_FADE_OUT * nightStrength(this.darkness));
     for (const f of this.fighters) f.whirl = 0;
     this.phase = "ko";
     this.phaseTime = 0;

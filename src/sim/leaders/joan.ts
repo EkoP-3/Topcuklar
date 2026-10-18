@@ -12,27 +12,31 @@ const RALLY = { damage: 82, knockback: 600 };
 const HEAL = { banner: 24, great: 45 };
 const BANNER = 130;
 const GREAT_BANNER = 230;
+/**
+ * Banners live as long as the move that raised them: they get a long life here and
+ * are taken down when the move ends (the move's timer pauses for stuns and ultimate
+ * intros, so a fixed life would run out early).
+ */
+const UNTIL_LOWERED = 99;
 
 /** The banner each Joan is carrying (two Joans can meet), and her great banner. */
 const banners = new WeakMap<Fighter, ZoneHazard>();
 const greatBanners = new WeakMap<Fighter, ZoneHazard>();
 
 /** She carries the standard into the fight: it moves with her. */
-function carry(
-  world: Parameters<typeof steerToward>[0],
-  self: Fighter,
-  dt: number,
-  freezeRegular = false,
-): void {
+function carry(world: Parameters<typeof steerToward>[0], self: Fighter, dt: number): void {
   for (const b of [banners.get(self), greatBanners.get(self)]) {
     if (!b || b.ttl <= 0) continue;
     b.x = self.x;
     b.y = self.y;
   }
-  // While the great banner flies, the regular one waits (its skill timer is paused too).
-  const regular = banners.get(self);
-  if (freezeRegular && regular && regular.ttl > 0) regular.ttl += dt;
   steerToward(world, self, 2 * dt);
+}
+
+function lower(map: WeakMap<Fighter, ZoneHazard>, self: Fighter): void {
+  const b = map.get(self);
+  if (b) b.ttl = 0;
+  map.delete(self);
 }
 
 export const joan: FighterDef = {
@@ -77,13 +81,13 @@ export const joan: FighterDef = {
       }
       self.damageMul = mul;
     },
-    cast(world, self, level) {
+    cast(world, self) {
       const z = spawnZone(world, self, {
         style: "banner",
         x: self.x,
         y: self.y,
         radius: BANNER,
-        ttl: 3 + level,
+        ttl: UNTIL_LOWERED,
         damage: HEAL.banner,
         poison: 0,
         poisonDps: 0,
@@ -92,6 +96,9 @@ export const joan: FighterDef = {
     },
     whileActive(world, self, dt) {
       carry(world, self, dt);
+    },
+    onEnd(_world, self) {
+      lower(banners, self);
     },
     ultimate: {
       name: "SIEGE OF ORLÉANS",
@@ -102,7 +109,7 @@ export const joan: FighterDef = {
           x: self.x,
           y: self.y,
           radius: GREAT_BANNER,
-          ttl: 4,
+          ttl: UNTIL_LOWERED,
           damage: HEAL.great,
           poison: 0,
           poisonDps: 0,
@@ -113,7 +120,10 @@ export const joan: FighterDef = {
         damageUnitsNear(world, self, self.x, self.y, 200, RALLY.damage);
       },
       whileActive(world, self, dt) {
-        carry(world, self, dt, true);
+        carry(world, self, dt);
+      },
+      onEnd(_world, self) {
+        lower(greatBanners, self);
       },
     },
   }),

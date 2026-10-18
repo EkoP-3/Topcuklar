@@ -58,24 +58,48 @@ export const nobunaga: FighterDef = {
       const r = self.radius;
       const x1 = self.x;
       const y1 = self.y;
-      const x2 = Math.min(world.hi - r, Math.max(world.lo + r, x1 + Math.cos(self.angle) * dist));
-      const y2 = Math.min(world.hi - r, Math.max(world.lo + r, y1 + Math.sin(self.angle) * dist));
+      const cx = Math.cos(self.angle);
+      const cy = Math.sin(self.angle);
+      const inX = (v: number) => Math.min(world.hi - r, Math.max(world.lo + r, v));
+      const inY = inX;
+      // The cut runs the full dash line, even if he has to land short of it.
+      const xc = inX(x1 + cx * dist);
+      const yc = inY(y1 + cy * dist);
+      let x2 = xc;
+      let y2 = yc;
+      // Never land inside an enemy (the push-out could shove him through a wall):
+      // step clean past them, or stop short if there is no room behind them.
+      for (const f of world.fighters) {
+        if (!f.alive || f.side === self.side) continue;
+        const gap = r + f.radius + 2;
+        if (Math.hypot(x2 - f.x, y2 - f.y) >= gap) continue;
+        const along = (f.x - x1) * cx + (f.y - y1) * cy;
+        const px = inX(x1 + cx * (along + gap));
+        const py = inY(y1 + cy * (along + gap));
+        if (Math.hypot(px - f.x, py - f.y) >= gap - 0.5) {
+          x2 = px;
+          y2 = py;
+        } else {
+          x2 = inX(x1 + cx * Math.max(0, along - gap));
+          y2 = inY(y1 + cy * Math.max(0, along - gap));
+        }
+      }
       // One step: he is simply on the other side.
       self.x = x2;
       self.y = y2;
       self.vx = Math.cos(self.angle) * 700;
       self.vy = Math.sin(self.angle) * 700;
-      world.emit({ type: "slash", fighter: self.index, x1, y1, x2, y2 });
+      world.emit({ type: "slash", fighter: self.index, x1, y1, x2: xc, y2: yc });
       for (const f of world.fighters) {
         if (!f.alive || f.side === self.side) continue;
-        const c = closestOnSegment(f.x, f.y, x1, y1, x2, y2);
+        const c = closestOnSegment(f.x, f.y, x1, y1, xc, yc);
         if (c.d2 > (f.radius + r * 0.7) ** 2) continue;
         world.dealDamage(self, f, SLASH.damage, c.x, c.y, SLASH.knockback, {
           fromX: c.x,
           fromY: c.y,
         });
       }
-      damageUnitsAlong(world, self, x1, y1, x2, y2, r * 0.7, SLASH.damage);
+      damageUnitsAlong(world, self, x1, y1, xc, yc, r * 0.7, SLASH.damage);
     },
     ultimate: {
       name: "NAGASHINO",

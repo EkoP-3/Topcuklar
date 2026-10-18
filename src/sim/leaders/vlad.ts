@@ -1,4 +1,4 @@
-import { DEFAULT_RELAX } from "../world";
+import { DEFAULT_RELAX, NIGHT_TIME } from "../world";
 import type { FighterDef } from "../types";
 import { spawnZone } from "../units";
 import { skill, steerToward, ticks } from "./kit";
@@ -59,7 +59,7 @@ export const vlad: FighterDef = {
       name: "NIGHT ATTACK",
       active: 2.4,
       cast(world, self) {
-        world.darkness = 2.7;
+        world.darkness = NIGHT_TIME;
         self.speedMul = 1.6;
         self.relax = 10;
         self.trail = true;

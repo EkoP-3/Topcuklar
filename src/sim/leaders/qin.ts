@@ -39,10 +39,8 @@ export const qin: FighterDef = {
     firstAt: 1.8,
     cooldown: 5,
     cast(world, self, level) {
-      const count = Math.max(
-        0,
-        Math.min(level + 1, level + 3 - countUnits(world, self, "terracotta")),
-      );
+      const wave = level + 1;
+      const count = Math.max(0, Math.min(wave, 2 * wave - countUnits(world, self, "terracotta")));
       for (const a of fan(aim(world, self), count, 0.7)) {
         spawnUnit(
           world,
