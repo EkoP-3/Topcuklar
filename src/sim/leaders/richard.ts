@@ -4,7 +4,7 @@ import { damageUnitsNear, spawnSweep } from "../units";
 import { hitAround, skill, ticks } from "./kit";
 
 /** The war cry. */
-const CRY = { damage: 62, knockback: 520 };
+const CRY = { damage: 64, knockback: 520 };
 const ABILITY = { name: "LIONHEART", text: "War cry knockback; hits harder as HP drops" };
 
 export const richard: FighterDef = {
@@ -20,7 +20,7 @@ export const richard: FighterDef = {
   title: "King of England",
   flag: "england",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 62 },
+  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 64 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -73,7 +73,7 @@ export const richard: FighterDef = {
           depth: 80,
           count: 4,
           itemHalf: 40,
-          damage: 80,
+          damage: 82,
           knockback: 650,
           stun: 0.3,
         });

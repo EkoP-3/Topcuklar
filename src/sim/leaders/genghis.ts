@@ -19,7 +19,7 @@ export const genghis: FighterDef = {
   title: "Great Khan of the Mongols",
   flag: "mongolia",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 28 },
+  growth: { perSecond: 0.015, stat: "ARROW DMG", base: 29 },
   hp: 950,
   radius: 52,
   mass: 0.9,
@@ -30,7 +30,7 @@ export const genghis: FighterDef = {
   damage: 0,
   knockback: 120,
   hitInterval: 0.5,
-  contactDamage: 22,
+  contactDamage: 23,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -47,7 +47,7 @@ export const genghis: FighterDef = {
           style: "arrow",
           speed: ARROW_SPEED,
           radius: 9,
-          damage: 28,
+          damage: 29,
           knockback: 60,
           blast: 0,
           poison: 0,
@@ -77,7 +77,7 @@ export const genghis: FighterDef = {
             y: enemy.y + enemy.vy * 0.35 + Math.sin(a) * d,
             radius: 26,
             delay: 0.35,
-            damage: 23,
+            damage: 24,
             knockback: 40,
           });
         }

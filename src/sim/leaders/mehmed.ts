@@ -19,7 +19,7 @@ export const mehmed: FighterDef = {
   title: "Ottoman Sultan",
   flag: "turkey",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 101 },
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 103 },
   hp: 1050,
   radius: 59,
   mass: 1.2,
@@ -55,7 +55,7 @@ export const mehmed: FighterDef = {
           style: "bombard",
           speed: BALL_SPEED,
           radius: 27,
-          damage: 101,
+          damage: 103,
           knockback: 600,
           blast: 130,
           poison: 0,
@@ -85,7 +85,7 @@ export const mehmed: FighterDef = {
             y: enemy.y + enemy.vy * 0.7 + world.rng.range(-70, 70),
             radius: 95,
             delay: 0.8,
-            damage: 75,
+            damage: 78,
             knockback: 450,
           });
         }
@@ -97,7 +97,7 @@ export const mehmed: FighterDef = {
             y: enemy.y,
             radius: 160,
             delay: 1,
-            damage: 152,
+            damage: 156,
             knockback: 900,
           });
         }

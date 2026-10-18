@@ -6,7 +6,7 @@ import { aim, fan, skill } from "./kit";
 const ABILITY = { name: "TERRACOTTA ARMY", text: "Clay soldiers march slowly and block shots" };
 const WALL_HALF_LENGTH = 220;
 /** Damage when the enemy is slammed into the wall. */
-const WALL = { damage: 60 };
+const WALL = { damage: 62 };
 
 export const qin: FighterDef = {
   id: "qin",

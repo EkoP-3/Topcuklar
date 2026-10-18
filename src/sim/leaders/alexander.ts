@@ -21,7 +21,7 @@ export const alexander: FighterDef = {
   title: "King of Macedon",
   flag: "vergina",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 121 },
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 124 },
   hp: 950,
   radius: 58,
   mass: 1.1,

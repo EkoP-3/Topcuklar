@@ -4,7 +4,7 @@ import { hitAround, skill, steerToward, ticks } from "./kit";
 
 /** One cut of the whirl. */
 const HATTIN = { heal: 150 };
-const CUT = { damage: 42, knockback: 160 };
+const CUT = { damage: 41, knockback: 160 };
 const ABILITY = { name: "SCIMITAR WHIRL", text: "Spins his blades, cutting all around him" };
 
 /** Per-fighter whirl clock and reach (two Saladins can meet). */
@@ -23,7 +23,7 @@ export const saladin: FighterDef = {
   title: "Sultan of Egypt and Syria",
   flag: "ayyubid",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 42 },
+  growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 41 },
   hp: 1000,
   radius: 56,
   mass: 1.05,
@@ -76,7 +76,7 @@ export const saladin: FighterDef = {
             y: enemy.y + Math.sin(a) * 130,
             radius: 55,
             ttl: 3,
-            damage: 80,
+            damage: 79,
             poison: 0,
             poisonDps: 0,
           });
