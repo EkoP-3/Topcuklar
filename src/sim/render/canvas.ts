@@ -2268,7 +2268,7 @@ function drawDomainTitle(ctx: Ctx, world: World): boolean {
     const w = 640;
     const h = 34;
     const x = (AS - w) / 2;
-    const y = 70;
+    const y = 104;
     const split = x + w * (0.5 + d.push * 0.5);
     ctx.save();
     ctx.textAlign = "center";
