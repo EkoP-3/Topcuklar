@@ -1,8 +1,11 @@
 import type { FighterDef } from "../types";
 import { countUnits, spawnSweep, spawnUnit } from "../units";
 import { skill } from "./kit";
+import { every, raidersFromEdges } from "./domains";
 
 const ABILITY = { name: "BUFFALO HORNS", text: "Warriors appear on both flanks and close in" };
+
+const KRAAL = { radius: 20, speed: 420, hp: 50, damage: 22, knockback: 200, ttl: 4.5 };
 
 export const shaka: FighterDef = {
   id: "shaka",
@@ -17,7 +20,14 @@ export const shaka: FighterDef = {
   title: "King of the Zulu",
   flag: "zulu",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 36 },
+  domain: {
+    name: "KWABULAWAYO",
+    rule: "The royal kraal: warriors pour in from every side",
+    tick(world, self, dt, t) {
+      if (every(t, dt, 2.2)) raidersFromEdges(world, self, 2, KRAAL);
+    },
+  },
+  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 37 },
   hp: 1000,
   radius: 56,
   mass: 1.05,
@@ -28,7 +38,7 @@ export const shaka: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 45,
+  contactDamage: 46,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -73,7 +83,7 @@ export const shaka: FighterDef = {
               mass: 0.8,
               speed: 420,
               hp: 50,
-              damage: 36,
+              damage: 37,
               knockback: 200,
               stun: 0,
               hitInterval: 0.6,
@@ -110,7 +120,7 @@ export const shaka: FighterDef = {
             depth: 60,
             count: 6,
             itemHalf: 24,
-            damage: 77,
+            damage: 78,
             knockback: 450,
             stun: 0.2,
             dir,

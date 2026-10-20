@@ -6,7 +6,9 @@ import { aim, fan, skill } from "./kit";
 const ABILITY = { name: "TERRACOTTA ARMY", text: "Clay soldiers march slowly and block shots" };
 const WALL_HALF_LENGTH = 220;
 /** Damage when the enemy is slammed into the wall. */
-const WALL = { damage: 62 };
+const WALL = { damage: 58 };
+
+const GREAT_WALL = { damage: 6 };
 
 export const qin: FighterDef = {
   id: "qin",
@@ -21,7 +23,25 @@ export const qin: FighterDef = {
   title: "First Emperor of China",
   flag: "qin",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 40 },
+  domain: {
+    name: "THE GREAT WALL",
+    rule: "Stretches of wall: the enemy crashes into them",
+    onWin(world, self) {
+      // One long stretch of wall across the middle, with a way round at each end.
+      const span = world.hi - world.lo;
+      const y = world.lo + span * 0.5;
+      spawnWall(world, self, {
+        x1: world.lo + span * 0.22,
+        y1: y,
+        x2: world.lo + span * 0.78,
+        y2: y,
+        half: 12,
+        ttl: 99,
+        damage: GREAT_WALL.damage,
+      });
+    },
+  },
+  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 38 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -32,7 +52,7 @@ export const qin: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 38,
+  contactDamage: 36,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -51,7 +71,7 @@ export const qin: FighterDef = {
             mass: 2,
             speed: 150,
             hp: 140,
-            damage: 40,
+            damage: 38,
             knockback: 260,
             stun: 0,
             hitInterval: 0.8,

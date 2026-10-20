@@ -1,6 +1,6 @@
 import { TAU, clamp, closestOnSegment, segmentDistanceSq } from "./geom";
 import { createRng, type Rng } from "./rng";
-import type { Fighter, FighterDef, Hazard, Phase, SimEvent, WallHit } from "./types";
+import type { Boost, Fighter, FighterDef, Hazard, Phase, SimEvent, WallHit } from "./types";
 import { updateUnits } from "./units";
 
 /** Arena is a square of ARENA x ARENA world units. */
@@ -14,6 +14,39 @@ const INTRO_TIME = 0.8;
  * countdown. Nothing random happens during the intro, so fights play out the same.
  */
 export const HISTORY_INTRO_TIME = 2.6;
+/** Domain Expansion timeline (fight seconds) and the clash length. */
+export const DOMAIN_FIRST_AT = 15;
+export const DOMAIN_SECOND_AT = 16.5;
+export const DOMAIN_CLASH_TIME = 2.5;
+/** The guaranteed hit a winning domain lands on the enemy. */
+const DOMAIN_HIT = 45;
+
+export type DomainPhase = "none" | "expanding" | "clash" | "owned";
+
+export interface DomainState {
+  phase: DomainPhase;
+  /** Fighter who opened first / answered (-1 when none). */
+  first: number;
+  second: number;
+  /** Winner once owned. */
+  owner: number;
+  /** Seconds in the current phase. */
+  t: number;
+  /** Clash: damage dealt by first and second since the clash began. */
+  clashDealt: [number, number];
+  /** -1..1: who is winning the clash (+ = first). */
+  push: number;
+  /** Clash divider: direction from first to second at the start, and the midpoint. */
+  axisX: number;
+  axisY: number;
+  midX: number;
+  midY: number;
+  cracked: boolean;
+  shattered: boolean;
+}
+
+export const NO_BOOST: Readonly<Boost> = { damage: 1, guard: 1, speed: 1, skillRate: 1 };
+
 /** Night attack: seconds of darkness, and how long it takes to fade in and out. */
 export const NIGHT_TIME = 2.7;
 export const NIGHT_FADE_IN = 0.25;
@@ -91,6 +124,8 @@ export class World {
   timeScale = 1;
   /** History mode only: close calls count up to a frenzy. */
   readonly closeCallsEnabled: boolean;
+  /** Any leader here has a Domain Expansion. */
+  readonly domainsEnabled: boolean;
   /** Seconds before the fight starts. */
   readonly introTime: number;
   closeCalls = 0;
@@ -111,8 +146,31 @@ export class World {
   private approachY = 0;
   /** Sim-seconds of close-call slow motion left. */
   private slowmo = 0;
-  /** An ultimate's slow-motion intro in progress (history mode). */
-  cinematic: { fighter: number; name: string; t: number; cast: () => void } | null = null;
+  /** An ultimate's (or a domain's) slow-motion intro in progress (history mode). */
+  cinematic: {
+    fighter: number;
+    name: string;
+    t: number;
+    cast: () => void;
+    kind: "ultimate" | "domain";
+  } | null = null;
+  /** Domain Expansion progress (history mode). */
+  domain: DomainState = {
+    phase: "none",
+    first: -1,
+    second: -1,
+    owner: -1,
+    t: 0,
+    clashDealt: [0, 0],
+    push: 0,
+    axisX: 1,
+    axisY: 0,
+    midX: ARENA / 2,
+    midY: ARENA / 2,
+    cracked: false,
+    shattered: false,
+  };
+  private clashStart: number[] = [];
   private freeze = 0;
   private acc = 0;
   private clashCooldown = 0;
@@ -122,6 +180,7 @@ export class World {
     this.rng = createRng(seed);
     this.damageDealt = defs.map(() => 0);
     this.closeCallsEnabled = defs.some((d) => d.growth);
+    this.domainsEnabled = defs.some((d) => d.domain);
     this.introTime = this.closeCallsEnabled ? HISTORY_INTRO_TIME : INTRO_TIME;
 
     const count = defs.length;
@@ -153,6 +212,7 @@ export class World {
         trail: false,
         damageTakenMul: 1,
         damageMul: 1,
+        boost: { ...NO_BOOST },
         whirl: 0,
         shielded: false,
         stun: 0,
@@ -230,7 +290,17 @@ export class World {
     // Shields lower damage; piercing hits ignore part of that reduction.
     const pierce = clamp(opts.pierce ?? 0, 0, 1);
     const taken = target.damageTakenMul + (1 - target.damageTakenMul) * pierce;
-    const dmg = Math.max(1, Math.round(amount * this.power(attacker) * attacker.damageMul * taken));
+    const dmg = Math.max(
+      1,
+      Math.round(
+        amount *
+          this.power(attacker) *
+          attacker.damageMul *
+          attacker.boost.damage *
+          taken *
+          target.boost.guard,
+      ),
+    );
     target.hp -= dmg;
     target.hurt = HURT_FLASH;
     this.damageDealt[attacker.index] = (this.damageDealt[attacker.index] ?? 0) + dmg;
@@ -270,7 +340,7 @@ export class World {
    */
   beginUltimate(f: Fighter, name: string, cast: () => void): boolean {
     if (this.cinematic || this.phase !== "fight") return false;
-    this.cinematic = { fighter: f.index, name, t: 0, cast };
+    this.cinematic = { fighter: f.index, name, t: 0, cast, kind: "ultimate" };
     this.timeScale = ULT_TIME_SCALE;
     this.emit({ type: "ultimate", fighter: f.index, name });
     return true;
@@ -378,6 +448,7 @@ export class World {
       f.y = clamp(f.y, this.lo + f.radius, this.hi - f.radius);
     }
     if (this.closeCallsEnabled) this.watchCloseCalls(dt);
+    if (this.phase === "fight" && this.domainsEnabled) this.updateDomain(dt);
 
     this.clashCooldown = Math.max(0, this.clashCooldown - dt);
     for (const f of this.fighters) {
@@ -397,7 +468,9 @@ export class World {
           const caster = this.fighters[c.fighter];
           if (caster?.alive) {
             c.cast();
-            this.emit({ type: "ultimateCast", fighter: c.fighter, name: c.name });
+            if (c.kind === "ultimate") {
+              this.emit({ type: "ultimateCast", fighter: c.fighter, name: c.name });
+            }
           }
         }
       }
@@ -409,6 +482,127 @@ export class World {
       this.phaseTime = 0;
       this.timeScale = 1;
     }
+  }
+
+  /** Domain Expansion: who opens when, the clash, and the winner's lasting rule. */
+  private updateDomain(dt: number): void {
+    const d = this.domain;
+    d.t += dt;
+    const holders = this.fighters.filter((f) => f.alive && f.def.domain);
+    if (d.phase === "none") {
+      if (this.time < DOMAIN_FIRST_AT || this.cinematic || holders.length === 0) return;
+      // Whoever is behind on HP opens first.
+      let first = holders[0];
+      for (const f of holders.slice(1)) {
+        if (!first) break;
+        const a = f.hp / f.maxHp;
+        const b = first.hp / first.maxHp;
+        if (a < b - 1e-9 || (Math.abs(a - b) <= 1e-9 && this.rng.next() < 0.5)) first = f;
+      }
+      if (!first) return;
+      const opener = first;
+      this.openDomain(opener, () => {
+        d.phase = "expanding";
+        d.first = opener.index;
+        d.t = 0;
+        d.cracked = true;
+        this.emit({ type: "cracks" });
+      });
+      return;
+    }
+    if (d.phase === "expanding") {
+      if (this.time < DOMAIN_SECOND_AT || this.cinematic) return;
+      const first = this.fighters[d.first];
+      if (!first?.alive) return;
+      const second = holders.find((f) => f.index !== d.first);
+      if (!second) {
+        this.winDomain(first);
+        return;
+      }
+      this.openDomain(second, () => {
+        d.phase = "clash";
+        d.second = second.index;
+        d.t = 0;
+        this.clashStart = [...this.damageDealt];
+        const dx = second.x - first.x;
+        const dy = second.y - first.y;
+        const len = Math.hypot(dx, dy) || 1;
+        d.axisX = dx / len;
+        d.axisY = dy / len;
+        d.midX = clamp((first.x + second.x) / 2, ARENA * 0.25, ARENA * 0.75);
+        d.midY = clamp((first.y + second.y) / 2, ARENA * 0.25, ARENA * 0.75);
+        this.emit({ type: "domainClash" });
+      });
+      return;
+    }
+    if (d.phase === "clash") {
+      const a = d.first;
+      const b = d.second;
+      const da = (this.damageDealt[a] ?? 0) - (this.clashStart[a] ?? 0);
+      const db = (this.damageDealt[b] ?? 0) - (this.clashStart[b] ?? 0);
+      d.clashDealt = [da, db];
+      d.push = clamp((da - db) / (da + db + 60), -1, 1);
+      if (d.t < DOMAIN_CLASH_TIME || this.cinematic) return;
+      const fa = this.fighters[a];
+      const fb = this.fighters[b];
+      if (!fa || !fb) return;
+      let winner = da > db ? fa : fb;
+      if (da === db) {
+        const ra = fa.hp / fa.maxHp;
+        const rb = fb.hp / fb.maxHp;
+        winner = ra > rb ? fa : rb > ra ? fb : this.rng.next() < 0.5 ? fa : fb;
+      }
+      if (!winner.alive) winner = winner === fa ? fb : fa;
+      this.winDomain(winner);
+      return;
+    }
+    // Owned: the winner's domain rule runs until the end.
+    const owner = this.fighters[d.owner];
+    if (owner?.alive) owner.def.domain?.tick?.(this, owner, dt, d.t);
+  }
+
+  private openDomain(f: Fighter, onOpen: () => void): void {
+    const name = f.def.domain?.name ?? "";
+    this.cinematic = {
+      fighter: f.index,
+      name,
+      t: 0,
+      kind: "domain",
+      cast: () => {
+        onOpen();
+        this.emit({ type: "domainOpen", fighter: f.index, name });
+      },
+    };
+    this.timeScale = ULT_TIME_SCALE;
+    this.emit({ type: "domainCast", fighter: f.index, name });
+  }
+
+  private winDomain(f: Fighter): void {
+    const d = this.domain;
+    const spec = f.def.domain;
+    d.phase = "owned";
+    d.owner = f.index;
+    d.t = 0;
+    d.cracked = true;
+    d.shattered = true;
+    this.emit({ type: "wallsShatter" });
+    this.emit({ type: "domainWon", fighter: f.index, name: spec?.name ?? "" });
+    if (!spec) return;
+    Object.assign(f.boost, spec.buff ?? {});
+    const enemy = this.nearestEnemy(f);
+    if (enemy) {
+      Object.assign(enemy.boost, spec.curse ?? {});
+      // Sure hit: the domain's first blow always lands.
+      this.dealDamage(f, enemy, DOMAIN_HIT, enemy.x, enemy.y, 380, { fromX: f.x, fromY: f.y });
+      this.emit({
+        type: "domainHit",
+        fighter: f.index,
+        target: enemy.index,
+        x: enemy.x,
+        y: enemy.y,
+      });
+    }
+    spec.onWin?.(this, f);
   }
 
   private startFight(): void {
@@ -501,7 +695,8 @@ export class World {
   private move(f: Fighter, dt: number): void {
     const speed = Math.hypot(f.vx, f.vy);
     const boost = this.frenzy > 0 ? FRENZY_SPEED : 1;
-    const target = f.def.baseSpeed * f.speedMul * boost * (f.stun > 0 ? STUN_SLOW : 1);
+    const target =
+      f.def.baseSpeed * f.speedMul * f.boost.speed * boost * (f.stun > 0 ? STUN_SLOW : 1);
     const next = speed + (target - speed) * Math.min(1, f.relax * dt);
     if (speed < 1e-3) {
       f.vx = Math.cos(f.angle) * next;

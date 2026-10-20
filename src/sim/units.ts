@@ -864,7 +864,13 @@ function damageUnit(
   const testudo = u.style === "legion" && enemy && Math.hypot(enemy.x - u.x, enemy.y - u.y) < 130;
   u.hp -= Math.max(
     1,
-    Math.round(amount * world.power(attacker) * attacker.damageMul * (testudo ? 0.7 : 1)),
+    Math.round(
+      amount *
+        world.power(attacker) *
+        attacker.damageMul *
+        attacker.boost.damage *
+        (testudo ? 0.7 : 1),
+    ),
   );
   u.hurt = 0.15;
   world.emit({ type: "bump", x, y, strength: 500 });

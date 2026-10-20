@@ -98,7 +98,8 @@ export function skill(spec: SkillSpec): () => Ability {
           world.emit({ type: "levelUp", fighter: self.index, level });
         }
 
-        timer -= dt;
+        // A domain can speed up the move's cooldown.
+        timer -= phase === "cooldown" ? dt * self.boost.skillRate : dt;
         if (phase === "cooldown") {
           if (timer > 0) return;
           chargesLeft = (spec.charges?.(level) ?? 1) - 1;

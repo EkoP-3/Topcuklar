@@ -1,9 +1,12 @@
 import type { FighterDef } from "../types";
 import { fireProjectile, leadAngle, spawnUnit, unitsOf } from "../units";
 import { fan, skill, ticks } from "./kit";
+import { every, shellAtEnemy } from "./domains";
 
 const BALL_SPEED = 900;
 const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce twice" };
+
+const AUSTERLITZ = { radius: 70, delay: 0.8, damage: 34, knockback: 320 };
 
 export const napoleon: FighterDef = {
   id: "napoleon",
@@ -18,6 +21,13 @@ export const napoleon: FighterDef = {
   title: "Emperor of the French",
   flag: "france",
   ability: ABILITY,
+  domain: {
+    name: "AUSTERLITZ",
+    rule: "The Grand Battery: shells rain on the enemy",
+    tick(world, self, dt, t) {
+      if (every(t, dt, 1.1)) shellAtEnemy(world, self, AUSTERLITZ);
+    },
+  },
   growth: { perSecond: 0.015, stat: "CANNON DMG", base: 73 },
   hp: 860,
   radius: 48,

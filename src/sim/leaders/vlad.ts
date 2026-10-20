@@ -2,9 +2,12 @@ import { DEFAULT_RELAX, NIGHT_TIME } from "../world";
 import type { FighterDef } from "../types";
 import { spawnZone } from "../units";
 import { skill, steerToward, ticks } from "./kit";
+import { every, zoneAtEnemy } from "./domains";
 
 const DASH_SPEED = 1450;
 const ABILITY = { name: "STAKES", text: "Plants stakes that hurt and stun on touch" };
+
+const FOREST = { damage: 46 };
 
 export const vlad: FighterDef = {
   id: "vlad",
@@ -19,7 +22,15 @@ export const vlad: FighterDef = {
   title: "Prince of Wallachia",
   flag: "romania",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 53 },
+  domain: {
+    name: "FOREST OF THE IMPALED",
+    rule: "Stakes spring up wherever the enemy runs",
+    tick(world, self, dt, t) {
+      if (every(t, dt, 2.8))
+        zoneAtEnemy(world, self, { style: "stakes", radius: 22, ttl: 5, damage: FOREST.damage });
+    },
+  },
+  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 54 },
   hp: 1000,
   radius: 56,
   mass: 1.1,
@@ -30,7 +41,7 @@ export const vlad: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 28,
+  contactDamage: 29,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -49,7 +60,7 @@ export const vlad: FighterDef = {
           y: enemy.y + enemy.vy * t + world.rng.range(-45, 45),
           radius: 22,
           ttl: 5,
-          damage: 53,
+          damage: 54,
           poison: 0,
           poisonDps: 0,
         });

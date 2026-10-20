@@ -1,6 +1,7 @@
 import type { Fighter, FighterDef } from "../types";
 import { damageUnitsNear, spawnZone } from "../units";
 import { hitAround, skill, steerToward, ticks } from "./kit";
+import { drain, every, zoneAtEnemy } from "./domains";
 
 /** One cut of the whirl. */
 const HATTIN = { heal: 150 };
@@ -9,6 +10,9 @@ const ABILITY = { name: "SCIMITAR WHIRL", text: "Spins his blades, cutting all a
 
 /** Per-fighter whirl clock and reach (two Saladins can meet). */
 const whirls = new WeakMap<Fighter, { t: number; reach: number }>();
+
+/** Thirst (HP per second) and the grass fires. */
+const HATTIN_HEAT = { damage: 2, fire: 30 };
 
 export const saladin: FighterDef = {
   id: "saladin",
@@ -23,6 +27,15 @@ export const saladin: FighterDef = {
   title: "Sultan of Egypt and Syria",
   flag: "ayyubid",
   ability: ABILITY,
+  domain: {
+    name: "HATTIN",
+    rule: "Thirst and burning grass: the enemy wilts",
+    tick(world, self, dt, t) {
+      drain(world, self, dt, t, HATTIN_HEAT.damage);
+      if (every(t, dt, 2.5))
+        zoneAtEnemy(world, self, { style: "fire", radius: 55, ttl: 2.5, damage: HATTIN_HEAT.fire });
+    },
+  },
   growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 41 },
   hp: 1000,
   radius: 56,
@@ -34,7 +47,7 @@ export const saladin: FighterDef = {
   damage: 0,
   knockback: 130,
   hitInterval: 0.5,
-  contactDamage: 58,
+  contactDamage: 57,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -76,7 +89,7 @@ export const saladin: FighterDef = {
             y: enemy.y + Math.sin(a) * 130,
             radius: 55,
             ttl: 3,
-            damage: 79,
+            damage: 78,
             poison: 0,
             poisonDps: 0,
           });

@@ -2,9 +2,12 @@ import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
 import { fireProjectile, leadAngle, spawnStrike } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
+import { every, shellAtEnemy } from "./domains";
 
 const BALL_SPEED = 760;
 const ABILITY = { name: "GREAT BOMBARD", text: "Giant shell that leaves a burning crater" };
+
+const CONSTANTINOPLE = { radius: 120, delay: 1, damage: 73, knockback: 600 };
 
 export const mehmed: FighterDef = {
   id: "mehmed",
@@ -19,7 +22,14 @@ export const mehmed: FighterDef = {
   title: "Ottoman Sultan",
   flag: "turkey",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 103 },
+  domain: {
+    name: "CONSTANTINOPLE",
+    rule: "The walls fall: giant shells rain down",
+    tick(world, self, dt, t) {
+      if (every(t, dt, 1.7)) shellAtEnemy(world, self, CONSTANTINOPLE);
+    },
+  },
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 108 },
   hp: 1050,
   radius: 59,
   mass: 1.2,
@@ -30,7 +40,7 @@ export const mehmed: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 23,
+  contactDamage: 24,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -55,7 +65,7 @@ export const mehmed: FighterDef = {
           style: "bombard",
           speed: BALL_SPEED,
           radius: 27,
-          damage: 103,
+          damage: 108,
           knockback: 600,
           blast: 130,
           poison: 0,
@@ -85,7 +95,7 @@ export const mehmed: FighterDef = {
             y: enemy.y + enemy.vy * 0.7 + world.rng.range(-70, 70),
             radius: 95,
             delay: 0.8,
-            damage: 78,
+            damage: 82,
             knockback: 450,
           });
         }
@@ -97,7 +107,7 @@ export const mehmed: FighterDef = {
             y: enemy.y,
             radius: 160,
             delay: 1,
-            damage: 156,
+            damage: 163,
             knockback: 900,
           });
         }

@@ -1,13 +1,14 @@
 import type { Fighter, FighterDef, ZoneHazard } from "../types";
 import { damageUnitsNear, spawnZone } from "../units";
 import { hitAround, skill, steerToward } from "./kit";
+import { mend } from "./domains";
 
 const ABILITY = {
   name: "HOLY BANNER",
   text: "Raises her banner: heals, hits harder, shrugs off shots",
 };
 /** The rallying shockwave of the great banner. */
-const RALLY = { damage: 82, knockback: 600 };
+const RALLY = { damage: 84, knockback: 600 };
 /** HP per second healed by the banners (fixed: tuning scales damage, not healing). */
 const HEAL = { banner: 24, great: 45 };
 const BANNER = 130;
@@ -52,7 +53,15 @@ export const joan: FighterDef = {
   title: "The Maid of Orléans",
   flag: "fleurdelis",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 64 },
+  domain: {
+    name: "ORLÉANS",
+    rule: "The siege is lifted: Joan heals and holds firm",
+    buff: { guard: 0.95 },
+    tick(world, self, dt, t) {
+      mend(world, self, dt, t, 3);
+    },
+  },
+  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 66 },
   hp: 980,
   radius: 54,
   mass: 1,
@@ -63,7 +72,7 @@ export const joan: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 56,
+  contactDamage: 58,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,

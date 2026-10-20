@@ -1,8 +1,11 @@
 import type { FighterDef } from "../types";
 import { spawnUnit, countUnits } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
+import { hurtOnWalls } from "./domains";
 
 const ABILITY = { name: "LEGIONS", text: "Legionaries chase and lock shields" };
+
+const ALESIA = { damage: 18, knockback: 260 };
 
 export const caesar: FighterDef = {
   id: "caesar",
@@ -17,6 +20,13 @@ export const caesar: FighterDef = {
   title: "Dictator of Rome",
   flag: "spqr",
   ability: ABILITY,
+  domain: {
+    name: "ALESIA",
+    rule: "Siege walls: the enemy is hurt on every wall hit",
+    tick(world, self, dt) {
+      hurtOnWalls(world, self, dt, ALESIA);
+    },
+  },
   growth: { perSecond: 0.015, stat: "LEGION DMG", base: 30 },
   hp: 970,
   radius: 58,

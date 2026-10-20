@@ -37,6 +37,9 @@ if (a && b) {
     const cast = world.events.some((e) => e.type === "ultimateCast");
     const near = world.events.some((e) => e.type === "nearMiss");
     const frenzy = world.events.some((e) => e.type === "frenzy" && e.on);
+    const domainCast = world.events.some((e) => e.type === "domainCast");
+    const clash = world.events.some((e) => e.type === "domainClash");
+    const shatter = world.events.some((e) => e.type === "wallsShatter");
     fx.consume(world);
     fx.update(1 / 60, world);
     frame++;
@@ -54,7 +57,10 @@ if (a && b) {
         nearShots++;
         castFrames.push(frame + 8);
       }
-      if (frenzy) castFrames.push(frame + 20, frame + 150);
+      if (frenzy && !domainCast) castFrames.push(frame + 20);
+      if (domainCast) castFrames.push(frame + 8, frame + 50);
+      if (clash) castFrames.push(frame + 70);
+      if (shatter) castFrames.push(frame + 4, frame + 60);
       if (shots.some((s) => s.at === frame) || castFrames.includes(frame)) snap(world, fx);
     }
   }

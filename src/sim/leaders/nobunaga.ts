@@ -21,6 +21,11 @@ export const nobunaga: FighterDef = {
   title: "Unifier of Japan",
   flag: "japan",
   ability: ABILITY,
+  domain: {
+    name: "AZUCHI CASTLE",
+    rule: "Under the cherry blossoms: slashes come far quicker",
+    buff: { skillRate: 2 },
+  },
   growth: { perSecond: 0.015, stat: "SLASH DMG", base: 116 },
   hp: 960,
   radius: 54,

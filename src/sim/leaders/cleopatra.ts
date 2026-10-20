@@ -1,9 +1,13 @@
 import type { FighterDef } from "../types";
 import { fireProjectile, leadAngle } from "../units";
 import { fan, skill, ticks } from "./kit";
+import { drain } from "./domains";
 
 const ASP_SPEED = 700;
 const ABILITY = { name: "ASP", text: "Poison asps; misses become snake traps" };
+
+/** HP per second the enemy loses. */
+const NILE = { damage: 5 };
 
 export const cleopatra: FighterDef = {
   id: "cleopatra",
@@ -18,7 +22,14 @@ export const cleopatra: FighterDef = {
   title: "Queen of Egypt",
   flag: "egypt",
   ability: ABILITY,
-  growth: { perSecond: 0.015, stat: "POISON/S", base: 29 },
+  domain: {
+    name: "THE NILE",
+    rule: "Asps of the Nile: the enemy keeps losing HP",
+    tick(world, self, dt, t) {
+      drain(world, self, dt, t, NILE.damage);
+    },
+  },
+  growth: { perSecond: 0.015, stat: "POISON/S", base: 30 },
   hp: 970,
   radius: 55,
   mass: 1,
@@ -29,7 +40,7 @@ export const cleopatra: FighterDef = {
   damage: 0,
   knockback: 130,
   hitInterval: 0.5,
-  contactDamage: 26,
+  contactDamage: 27,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -48,7 +59,7 @@ export const cleopatra: FighterDef = {
           knockback: 80,
           blast: 0,
           poison: 4,
-          poisonDps: 29,
+          poisonDps: 30,
           bounces: 1,
           leaves: "snake",
           ttl: 3,
@@ -68,11 +79,11 @@ export const cleopatra: FighterDef = {
               style: "asp",
               speed: 560,
               radius: 15,
-              damage: 26,
+              damage: 27,
               knockback: 60,
               blast: 0,
               poison: 4,
-              poisonDps: 47,
+              poisonDps: 48,
               bounces: 0,
               ttl: 1.6,
             });

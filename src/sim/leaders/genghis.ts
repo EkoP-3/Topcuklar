@@ -19,6 +19,11 @@ export const genghis: FighterDef = {
   title: "Great Khan of the Mongols",
   flag: "mongolia",
   ability: ABILITY,
+  domain: {
+    name: "THE STEPPE",
+    rule: "Endless steppe: a faster rider and quicker volleys",
+    buff: { speed: 1.12, skillRate: 1.2 },
+  },
   growth: { perSecond: 0.015, stat: "ARROW DMG", base: 29 },
   hp: 950,
   radius: 52,

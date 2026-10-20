@@ -369,6 +369,40 @@ export class Sfx {
         this.noise(0.08, { filter: "highpass", freq: 3500, gain: 0.35 });
         this.thud(0.6);
         break;
+      case "domainCast":
+        // A deep gong and a swelling brass chord.
+        this.bell(98, 2.2, 0.35);
+        this.drum(1);
+        for (const f of [98, 147, 196]) this.horn(f, 1.4, { gain: 0.08, delay: 0.05 });
+        this.noise(1.2, { filter: "bandpass", freq: 200, slideTo: 2400, q: 0.8, gain: 0.25 });
+        break;
+      case "domainOpen":
+        this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 30 });
+        break;
+      case "cracks":
+        for (let i = 0; i < 4; i++) {
+          this.noise(0.08, { filter: "highpass", freq: 2500, gain: 0.4, delay: i * 0.09 });
+        }
+        this.thud(0.8);
+        break;
+      case "domainClash":
+        for (let i = 0; i < 8; i++) this.drum(0.5 + (i % 2) * 0.3, { delay: i * 0.11 });
+        this.horn(147, 0.6, { gain: 0.12 });
+        this.horn(156, 0.6, { gain: 0.1 });
+        break;
+      case "wallsShatter":
+        this.noise(1.6, { filter: "lowpass", freq: 2200, slideTo: 80, gain: 0.9 });
+        this.tone(45, 1.4, { type: "sine", gain: 0.9, slideTo: 22 });
+        for (let i = 0; i < 5; i++) this.thud(1, i * 0.12);
+        break;
+      case "domainWon":
+        for (const f of [131, 196, 262, 330]) this.horn(f, 1.6, { gain: 0.08, delay: 0.15 });
+        this.drum(1.2, { delay: 0.1 });
+        break;
+      case "domainHit":
+        this.thud(1);
+        this.bell(660, 0.8, 0.15);
+        break;
       case "heal":
         if (!this.allow("heal", 0.35)) return;
         this.bell(1320, 0.4, 0.05);
@@ -413,10 +447,10 @@ export class Sfx {
   }
 
   /** Heavy blunt impact: a body thump with a little leather slap on top. */
-  private thud(power: number): void {
-    this.tone(150 * rand(0.9, 1.1), 0.22, { type: "sine", gain: 0.7 * power, slideTo: 45 });
-    this.noise(0.12, { filter: "lowpass", freq: 900, gain: 0.55 * power });
-    this.noise(0.03, { filter: "bandpass", freq: 1800, q: 1.2, gain: 0.25 * power });
+  private thud(power: number, delay = 0): void {
+    this.tone(150 * rand(0.9, 1.1), 0.22, { type: "sine", gain: 0.7 * power, slideTo: 45, delay });
+    this.noise(0.12, { filter: "lowpass", freq: 900, gain: 0.55 * power, delay });
+    this.noise(0.03, { filter: "bandpass", freq: 1800, q: 1.2, gain: 0.25 * power, delay });
   }
 
   /** Struck metal: inharmonic partials that ring out. */

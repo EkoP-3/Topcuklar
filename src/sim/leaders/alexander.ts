@@ -21,6 +21,11 @@ export const alexander: FighterDef = {
   title: "King of Macedon",
   flag: "vergina",
   ability: ABILITY,
+  domain: {
+    name: "GAUGAMELA",
+    rule: "Open plain: Alexander charges far more often",
+    buff: { skillRate: 1.25 },
+  },
   growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 124 },
   hp: 950,
   radius: 58,

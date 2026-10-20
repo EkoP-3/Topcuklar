@@ -17,6 +17,7 @@ import {
   ARENA,
   CLOSE_CALLS_FOR_FRENZY,
   COUNTDOWN_AT,
+  DOMAIN_CLASH_TIME,
   nightStrength,
   ULT_CINEMATIC,
   ULT_HP,
@@ -24,6 +25,7 @@ import {
 } from "../world";
 import { winChance } from "../odds";
 import { drawFace, type Mood } from "./faces";
+import { domainLayer } from "./domains";
 import { UPSET_CHANCE } from "./sfx";
 import type { Fx } from "./fx";
 import {
@@ -109,6 +111,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     drawArena(ctx, world, fx, frame, extras, cam);
     drawSkillCards(ctx, world);
     drawCloseCalls(ctx, world);
+    drawDomainBadge(ctx, world);
     ctx.restore();
 
     drawOverlay(ctx, fx, overlay);
@@ -383,6 +386,7 @@ function drawArena(
     ctx.scale(cam.zoom, cam.zoom);
     ctx.translate(-zx, -zy);
   }
+  drawDomain(ctx, world, frame);
   drawDangerZone(ctx, world, frame);
   for (const h of world.hazards) if (h.kind === "zone") drawZone(ctx, h, frame);
 
@@ -480,7 +484,11 @@ function drawArena(
 
   drawBanner(ctx, world, extras);
   ctx.restore();
-  drawMapBorder(ctx);
+  if (world.domain.shattered) drawBrokenBorder(ctx, world);
+  else {
+    drawMapBorder(ctx);
+    if (world.domain.cracked) drawCracks(ctx, world);
+  }
 }
 
 /** Ink double rule around the map with small diamonds at the corners. */
@@ -1378,6 +1386,7 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
     drawUltimateBanner(ctx, world);
     return;
   }
+  if (world.phase === "fight" && drawDomainTitle(ctx, world)) return;
   if (leaders && world.phase === "intro") {
     if (world.phaseTime < INTRO_CARD_TIME) drawLeaderCards(ctx, world, world.phaseTime);
     else drawPickSide(ctx, world, world.phaseTime - INTRO_CARD_TIME);
@@ -1637,7 +1646,7 @@ function drawUltimateBanner(ctx: Ctx, world: World): void {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `800 52px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "ULTIMATE", 0, -60, GOLD, 11);
+  outlinedText(ctx, c.kind === "domain" ? "DOMAIN EXPANSION" : "ULTIMATE", 0, -60, GOLD, 11);
   fitFont(ctx, c.name, 800, 120, AS - 60, DISPLAY_FONT);
   outlinedText(ctx, c.name, 0, 30, SIDES[f.side].bright, 16);
   ctx.restore();
@@ -1786,6 +1795,8 @@ function drawCloseCalls(ctx: Ctx, world: World): void {
 function levelBanner(world: World): { level: number; t: number } | null {
   if (!world.fighters.some((f) => f.def.growth)) return null;
   for (let i = 0; i < LEVEL_TIMES.length; i++) {
+    // At 15 s the Domain Expansion takes the stage instead.
+    if (i === 0 && world.domainsEnabled) continue;
     const t = world.time - (LEVEL_TIMES[i] ?? 0);
     if (t >= 0 && t < 1.2) return { level: i + 2, t };
   }
@@ -2088,4 +2099,249 @@ function easeOutBack(t: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+}
+
+// --- Domain Expansion -------------------------------------------------------------
+
+/** The domains themselves: one spreading, two clashing, or the winner's everywhere. */
+function drawDomain(ctx: Ctx, world: World, frame: number): void {
+  const d = world.domain;
+  if (d.phase === "none") return;
+  const first = world.fighters[d.first];
+  const layer = (f: Fighter) => domainLayer(f.def.id, AS, 1);
+  ctx.save();
+  if (d.phase === "expanding" && first) {
+    // Grows out of the caster.
+    const r = ARENA * 0.85 * (1 - (1 - clamp(d.t / 1.2, 0, 1)) ** 3);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(first.x, first.y, r, 0, TAU);
+    ctx.clip();
+    ctx.drawImage(layer(first), 0, 0, ARENA, ARENA);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(first.x, first.y, r, 0, TAU);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = SIDES[first.side].bright;
+    ctx.stroke();
+  } else if (d.phase === "clash") {
+    const second = world.fighters[d.second];
+    if (first && second) {
+      // A wavering seam, pushed toward whoever is losing the clash.
+      const shift = d.push * ARENA * 0.3;
+      const px = d.midX + d.axisX * shift;
+      const py = d.midY + d.axisY * shift;
+      const nx = -d.axisY;
+      const ny = d.axisX;
+      const seam: [number, number][] = [];
+      for (let i = -12; i <= 12; i++) {
+        const along = (i / 12) * ARENA * 1.5;
+        const wob = (noise(i, Math.floor(frame / 2)) - 0.5) * 34;
+        seam.push([px + nx * along + d.axisX * wob, py + ny * along + d.axisY * wob]);
+      }
+      const half = (dir: number) => {
+        ctx.beginPath();
+        seam.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        const far = ARENA * 3 * dir;
+        const last = seam[seam.length - 1] ?? [0, 0];
+        const firstPt = seam[0] ?? [0, 0];
+        ctx.lineTo(last[0] + d.axisX * far, last[1] + d.axisY * far);
+        ctx.lineTo(firstPt[0] + d.axisX * far, firstPt[1] + d.axisY * far);
+        ctx.closePath();
+      };
+      ctx.save();
+      half(-1);
+      ctx.clip();
+      ctx.drawImage(layer(first), 0, 0, ARENA, ARENA);
+      ctx.restore();
+      ctx.save();
+      half(1);
+      ctx.clip();
+      ctx.drawImage(layer(second), 0, 0, ARENA, ARENA);
+      ctx.restore();
+      // The seam crackles with both colours.
+      ctx.beginPath();
+      seam.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      ctx.lineWidth = 18;
+      ctx.strokeStyle = "rgba(255,246,222,0.55)";
+      ctx.stroke();
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = frame % 6 < 3 ? SIDES[first.side].bright : SIDES[second.side].bright;
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+    }
+  } else if (d.phase === "owned") {
+    const owner = world.fighters[d.owner];
+    const loser = world.fighters[d.owner === d.first ? d.second : d.first];
+    if (owner) {
+      const k = clamp(d.t / 0.7, 0, 1);
+      if (k < 1 && loser && d.second >= 0) ctx.drawImage(layer(loser), 0, 0, ARENA, ARENA);
+      ctx.save();
+      if (k < 1) {
+        ctx.beginPath();
+        ctx.arc(owner.x, owner.y, ARENA * 1.5 * (1 - (1 - k) ** 2), 0, TAU);
+        ctx.clip();
+      }
+      ctx.drawImage(layer(owner), 0, 0, ARENA, ARENA);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/** Cracks spreading in from the map's ink border (first Domain Expansion). */
+function drawCracks(ctx: Ctx, world: World): void {
+  const d = world.domain;
+  const grow = d.phase === "expanding" ? clamp(d.t / 0.5, 0, 1) : 1;
+  const more = d.phase === "clash" ? clamp(d.t / DOMAIN_CLASH_TIME, 0, 1) : 0;
+  const count = 10 + Math.round(more * 8);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < count; i++) {
+    const edge = i % 4;
+    const at = 0.1 + 0.8 * noise(i, 7);
+    const len = (60 + 110 * noise(i, 8)) * grow * (1 + more * 0.6);
+    let x = AX + (edge === 1 ? AS : edge === 3 ? 0 : at * AS);
+    let y = AY + (edge === 2 ? AS : edge === 0 ? 0 : at * AS);
+    const inX = edge === 1 ? -1 : edge === 3 ? 1 : 0;
+    const inY = edge === 2 ? -1 : edge === 0 ? 1 : 0;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    const steps = 5;
+    for (let k = 1; k <= steps; k++) {
+      const side = (noise(i * 13 + k, 9) - 0.5) * 36;
+      x += inX * (len / steps) + (inY !== 0 ? side : 0);
+      y += inY * (len / steps) + (inX !== 0 ? side : 0);
+      ctx.lineTo(x, y);
+    }
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "rgba(255,240,210,0.5)";
+    ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** After the walls shatter: broken ink rule and rubble around the domain. */
+function drawBrokenBorder(ctx: Ctx, world: World): void {
+  ctx.save();
+  ctx.setLineDash([46, 30, 18, 40]);
+  roundRect(ctx, AX, AY, AS, AS, AR);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 9;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const t = world.domain.t;
+  for (let i = 0; i < 40; i++) {
+    const edge = i % 4;
+    const at = noise(i, 21) * AS;
+    const off = (noise(i, 22) - 0.5) * 30;
+    const x = AX + (edge === 1 ? AS + off : edge === 3 ? off : at);
+    const y = AY + (edge === 2 ? AS + off : edge === 0 ? off : at);
+    const r = 5 + noise(i, 23) * 9;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(noise(i, 24) * TAU + t * 0.2);
+    ctx.fillStyle = noise(i, 25) < 0.5 ? "#7a6a58" : "#4a3a2a";
+    ctx.fillRect(-r, -r * 0.7, r * 2, r * 1.4);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = OUTLINE;
+    ctx.strokeRect(-r, -r * 0.7, r * 2, r * 1.4);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/** Clash tug-of-war bar, then the winning domain's name and rule. */
+function drawDomainTitle(ctx: Ctx, world: World): boolean {
+  const d = world.domain;
+  if (world.cinematic) return false;
+  if (d.phase === "clash") {
+    const a = world.fighters[d.first];
+    const b = world.fighters[d.second];
+    if (!a || !b) return false;
+    const w = 640;
+    const h = 34;
+    const x = (AS - w) / 2;
+    const y = 70;
+    const split = x + w * (0.5 + d.push * 0.5);
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `900 46px ${DISPLAY_FONT}`;
+    outlinedText(ctx, "DOMAIN CLASH", AS / 2, y - 34, GOLD, 10);
+    roundRect(ctx, x, y, w, h, 8);
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = SIDES[a.side].main;
+    ctx.fillRect(x, y, split - x, h);
+    ctx.fillStyle = SIDES[b.side].main;
+    ctx.fillRect(split, y, x + w - split, h);
+    ctx.restore();
+    roundRect(ctx, x, y, w, h, 8);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#b08a4a";
+    ctx.stroke();
+    ctx.font = `800 22px ${DISPLAY_FONT}`;
+    ctx.textAlign = "left";
+    outlinedText(ctx, a.def.domain?.name ?? "", x + 12, y + h / 2 + 1, PAPER, 5);
+    ctx.textAlign = "right";
+    outlinedText(ctx, b.def.domain?.name ?? "", x + w - 12, y + h / 2 + 1, PAPER, 5);
+    ctx.restore();
+    return false;
+  }
+  if (d.phase !== "owned" || d.t > 2.4) return false;
+  const owner = world.fighters[d.owner];
+  const spec = owner?.def.domain;
+  if (!owner || !spec) return false;
+  const k = easeOutBack(clamp(d.t / 0.3, 0, 1));
+  const fade = 1 - clamp((d.t - 1.9) / 0.5, 0, 1);
+  const y = owner.y * K < AS / 2 ? AS * 0.74 : AS * 0.2;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.translate(AS / 2, y);
+  ctx.scale(k, k);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 40px ${DISPLAY_FONT}`;
+  outlinedText(ctx, `${owner.def.name}'S DOMAIN`, 0, -64, GOLD, 9);
+  fitFont(ctx, spec.name, 900, 104, AS - 60, DISPLAY_FONT);
+  outlinedText(ctx, spec.name, 0, 4, SIDES[owner.side].bright, 15);
+  ctx.font = `600 34px ${BODY_FONT}`;
+  outlinedText(ctx, spec.rule, 0, 70, PAPER, 7);
+  ctx.restore();
+  return false;
+}
+
+/** Small tag on the arena's bottom edge naming the domain in force. */
+function drawDomainBadge(ctx: Ctx, world: World): void {
+  const d = world.domain;
+  if (d.phase !== "owned" || world.phase === "over") return;
+  const owner = world.fighters[d.owner];
+  const name = owner?.def.domain?.name;
+  if (!owner || !name) return;
+  ctx.save();
+  ctx.font = `900 24px ${DISPLAY_FONT}`;
+  const w = ctx.measureText(name).width + 60;
+  const h = 44;
+  const x = W / 2 - w / 2;
+  const y = AY + AS - h / 2;
+  roundRect(ctx, x, y, w, h, 8);
+  ctx.fillStyle = "#efe0bb";
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  ctx.fillStyle = SIDES[owner.side].main;
+  ctx.fillRect(x + 12, y + h / 2 - 6, 12, 12);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = INK;
+  ctx.fillText(name, W / 2 + 8, y + h / 2 + 1);
+  ctx.restore();
 }

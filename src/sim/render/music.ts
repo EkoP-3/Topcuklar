@@ -39,6 +39,7 @@ export function musicState(world: World): MusicState {
   const [a, b] = world.fighters;
   let lead = a;
   if (a && b && b.hp / b.maxHp > a.hp / a.maxHp) lead = b;
+  if (world.domain.phase === "owned") lead = world.fighters[world.domain.owner] ?? lead;
   if (world.winner >= 0) lead = world.fighters[world.winner] ?? lead;
   return {
     phase: world.phase,

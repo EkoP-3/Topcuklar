@@ -17,6 +17,9 @@ const NAME_W = Math.max(8, ...ROSTER.map((d) => d.name.length)) + 1;
 
 /** Fighters that fired their ultimate in the last played match. */
 let ultUsers: number[] = [];
+/** Domain winner of the last match (-1 = none) and whether the domains clashed. */
+let domainWinner = -1;
+let domainClashed = false;
 let nearMisses = 0;
 let frenzies = 0;
 const firstFrenzyAt: number[] = [];
@@ -24,12 +27,16 @@ const firstFrenzyAt: number[] = [];
 function play(seed: number, a: FighterDef, b: FighterDef): World {
   const world = new World(seed, [a, b]);
   ultUsers = [];
+  domainWinner = -1;
+  domainClashed = false;
   let frenzyThisMatch = false;
   let frames = 0;
   while (world.phase !== "over" && frames < 60 * 200) {
     world.advance(FRAME);
     for (const e of world.events) {
       if (e.type === "ultimate") ultUsers.push(e.fighter);
+      else if (e.type === "domainWon") domainWinner = e.fighter;
+      else if (e.type === "domainClash") domainClashed = true;
       else if (e.type === "nearMiss") nearMisses++;
       else if (e.type === "frenzy" && e.on) {
         if (!frenzyThisMatch) firstFrenzyAt.push(world.time);
@@ -79,6 +86,10 @@ let ultMatches = 0;
 let ultWins = 0;
 let games = 0;
 let durationSum = 0;
+let domainMatches = 0;
+let clashMatches = 0;
+let domainWins = 0;
+const domainByLeader = new Map<string, { won: number; matches: number }>();
 
 console.log(`\n${rosterArg}: win rate of ROW against COLUMN (${perPair} matches per pair)`);
 console.log(["".padEnd(NAME_W), ...ROSTER.map((d) => d.name.slice(0, 8).padStart(8))].join(" "));
@@ -108,6 +119,18 @@ for (const row of ROSTER) {
       ultWins += ultUsers.filter((i) => i === world.winner).length;
       const winner = world.fighters[world.winner];
       if (winner && winner.hp / winner.maxHp <= 0.15) closeFinishes++;
+      if (domainWinner >= 0) {
+        domainMatches++;
+        if (domainClashed) clashMatches++;
+        if (domainWinner === world.winner) domainWins++;
+        const holder = world.fighters[domainWinner];
+        if (holder) {
+          const d = domainByLeader.get(holder.def.id) ?? { won: 0, matches: 0 };
+          d.matches++;
+          if (domainWinner === world.winner) d.won++;
+          domainByLeader.set(holder.def.id, d);
+        }
+      }
     }
     const t = totals.get(row.id);
     if (t) {
@@ -156,4 +179,17 @@ if (ultCount > 0) {
   );
 }
 
+if (domainMatches > 0) {
+  console.log(
+    `domains: settled in ${((domainMatches / games) * 100).toFixed(1)}% of matches, ` +
+      `clashed in ${((clashMatches / games) * 100).toFixed(1)}%, ` +
+      `domain owner won ${((domainWins / domainMatches) * 100).toFixed(1)}%`,
+  );
+  console.log(
+    "  domain owner win rate: " +
+      [...domainByLeader.entries()]
+        .map(([id, d]) => `${id} ${Math.round((d.won / d.matches) * 100)}%`)
+        .join(", "),
+  );
+}
 if (failed) process.exit(1);

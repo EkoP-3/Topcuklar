@@ -329,6 +329,65 @@ export class Fx {
         this.addShake(10);
         break;
       }
+      case "domainCast": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        const side = SIDES[f.side];
+        this.burst(f.x, f.y, 50, [side.bright, "#f2c14e", INK_SPECK], 700, 0.9, 12);
+        this.rings.push({ x: f.x, y: f.y, radius: 300, life: 0.5, max: 0.5, color: side.bright });
+        this.flash = Math.max(this.flash, 0.35);
+        this.addShake(14);
+        break;
+      }
+      case "domainOpen": {
+        const f = world.fighters[e.fighter];
+        if (!f) break;
+        this.rings.push({ x: f.x, y: f.y, radius: 520, life: 0.7, max: 0.7, color: "#f2c14e" });
+        break;
+      }
+      case "cracks":
+        for (let i = 0; i < 8; i++) {
+          const along = 40 + (i / 7) * 640;
+          const edge = i % 4;
+          const x = edge === 1 ? 715 : edge === 3 ? 5 : along;
+          const y = edge === 2 ? 715 : edge === 0 ? 5 : along;
+          this.burst(x, y, 8, DUST, 240, 0.6, 10);
+        }
+        this.addShake(20);
+        break;
+      case "domainClash":
+        this.texts.push({
+          x: 360,
+          y: 330,
+          vy: -20,
+          life: 1.1,
+          max: 1.1,
+          text: "DOMAIN CLASH!",
+          color: "#f2c14e",
+          size: 110,
+        });
+        this.flash = Math.max(this.flash, 0.5);
+        this.addShake(28);
+        break;
+      case "wallsShatter":
+        // The arena's walls burst into rubble all round.
+        for (let i = 0; i < 24; i++) {
+          const along = 20 + (i % 6) * 136;
+          const edge = Math.floor(i / 6);
+          const x = edge === 1 ? 715 : edge === 3 ? 5 : along;
+          const y = edge === 2 ? 715 : edge === 0 ? 5 : along;
+          this.burst(x, y, 10, ["#7a6a58", "#4a3a2a", "#b89a6a", INK_SPECK], 520, 1, 14);
+        }
+        this.flash = Math.max(this.flash, 0.6);
+        this.addShake(46);
+        break;
+      case "domainHit": {
+        this.text(e.x, e.y - 50, "SURE HIT!", "#f2c14e", 64, 1.1);
+        this.burst(e.x, e.y, 36, ["#f2c14e", "#fff3a0", INK_SPECK], 600, 0.7, 12);
+        this.rings.push({ x: e.x, y: e.y, radius: 160, life: 0.4, max: 0.4, color: "#f2c14e" });
+        this.addShake(22);
+        break;
+      }
       case "heal": {
         const f = world.fighters[e.fighter];
         if (!f) break;

@@ -53,6 +53,40 @@ export interface FighterDef {
    * signature number shown growing in the bottom panel, e.g. "BOMBARD DMG" 170.
    */
   growth?: { perSecond: number; stat: string; base: number };
+  /** History mode: the leader's Domain Expansion (big move at 15-17 s). */
+  domain?: DomainSpec;
+}
+
+/** Multipliers a domain grants (or inflicts); all 1 when no domain is active. */
+export interface Boost {
+  /** Damage dealt. */
+  damage: number;
+  /** Damage taken. */
+  guard: number;
+  /** Cruising speed. */
+  speed: number;
+  /** How fast the signature move's cooldown runs. */
+  skillRate: number;
+}
+
+/**
+ * Domain Expansion: at 15 s the leader who is behind opens their historical
+ * battlefield, at 16.5 s the other one answers and the domains clash; the winner's
+ * domain takes over the arena with its own rule until the end of the match.
+ */
+export interface DomainSpec {
+  /** Place, shown huge: "THERMOPYLAE". */
+  name: string;
+  /** Short English line telling what the domain does. */
+  rule: string;
+  /** Multipliers for the owner while the domain stands. */
+  buff?: Partial<Boost>;
+  /** Multipliers for the enemy while the domain stands. */
+  curse?: Partial<Boost>;
+  /** Once, when the domain wins. */
+  onWin?(world: World, self: Fighter): void;
+  /** Every fight step while the domain stands; `t` = seconds since it won. */
+  tick?(world: World, self: Fighter, dt: number, t: number): void;
 }
 
 export interface WallHit {
@@ -130,6 +164,8 @@ export interface Fighter {
   damageTakenMul: number;
   /** All damage this fighter deals is multiplied by this (rage, banners, berserk). */
   damageMul: number;
+  /** Domain multipliers (see Boost). */
+  boost: Boost;
   /** Renderer hint: reach of blades spinning around the body (0 = none). */
   whirl: number;
   /** Renderer hint: draw a shield bubble. */
@@ -380,6 +416,15 @@ export type SimEvent =
   | { type: "poison"; fighter: number }
   | { type: "ko"; fighter: number; x: number; y: number }
   | { type: "heal"; fighter: number; amount: number }
+  /** Domain Expansion announced (slow-motion banner), then opened. */
+  | { type: "domainCast"; fighter: number; name: string }
+  | { type: "domainOpen"; fighter: number; name: string }
+  /** The arena's walls crack (first domain) and shatter (when a domain wins). */
+  | { type: "cracks" }
+  | { type: "wallsShatter" }
+  | { type: "domainClash" }
+  | { type: "domainWon"; fighter: number; name: string }
+  | { type: "domainHit"; fighter: number; target: number; x: number; y: number }
   | { type: "slash"; fighter: number; x1: number; y1: number; x2: number; y2: number }
   | { type: "rampart"; fighter: number; x1: number; y1: number; x2: number; y2: number }
   | { type: "timeUp" };
