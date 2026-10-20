@@ -48,6 +48,29 @@ Kaynak olarak her liderin İngilizce Wikipedia maddesi verildi (`src/sim/leaders
 | Oda Nobunaga | Iai Slash        | Nagashino             | İai: kılıcı çekip tek hamlede kesme sanatı. Nagashino tüfek yaylımları.                                                                                                                            |
 | Shaka Zulu   | Buffalo Horns    | Impi Charge           | Impi: Zulu alayı. Boynuz düzeni iki kanattan kuşatma yapar.                                                                                                                                         |
 
+## Domain Expansion alanları
+
+"Domain Expansion" adı JJK (Jujutsu Kaisen) animesindeki tekniğe gönderme; tarihî bir terim değil. Alanların her biri liderin en bilinen savaş alanı ya da merkezidir:
+
+| Lider | Alan | Tarihî dayanak |
+|---|---|---|
+| Alexander | Gaugamela | MÖ 331, Pers ordusuna karşı kazandığı büyük meydan muharebesi; Persler arabalar için düzlüğü tesviye etmişti. |
+| Genghis | The Steppe | Moğol bozkırı, atlı okçuluğun anavatanı. |
+| Caesar | Alesia | MÖ 52; Sezar şehri iç içe iki tahkimat halkasıyla kuşattı. |
+| Hannibal | The Alps | MÖ 218 Alpler geçişi; kar ve buzla geçen sefer. |
+| Napoleon | Austerlitz | 1805; donmuş göletler ve Pratzen tepesi topçusu anlatısı. |
+| Leonidas | Thermopylae | MÖ 480; dağ ile deniz arasındaki dar geçit. |
+| Mehmed II | Constantinople | 1453; kara surları ve büyük toplar. |
+| Cleopatra | The Nile | Ptolemaios Mısırı'nın can damarı; "Nil engerekleri" kurgudur. |
+| Vlad III | Forest of the Impaled | 1462'de Osmanlı ordusunun Târgoviște yakınında gördüğü kazıklı alan anlatısı (kaynaklarda sayılar abartılı olabilir). |
+| Richard I | Arsuf | 1191; deniz kıyısı boyunca ilerleyen haçlı ordusu. |
+| Saladin | Hattin | 1187; susuz kalan haçlı ordusu ve tutuşturulan kuru otlar. |
+| Qin | The Great Wall | Qin döneminde eski surlar birleştirildi; bugünkü Seddin büyük kısmı Ming dönemindendir. |
+| Joan of Arc | Orléans | 1429; Loire kıyısındaki kuşatmanın kaldırılması. |
+| Harald III | The Fjords | Norveç kıyıları ve Viking gemileri (temsilî). |
+| Oda Nobunaga | Azuchi Castle | Nobunaga'nın 1576'da yaptırdığı şato; kiraz çiçekleri temsilîdir. |
+| Shaka | KwaBulawayo | Shaka'nın kraliyet köyü (ikhanda). |
+
 ## Yüz detayları
 
 - Hannibal'ın göz bandı: MÖ 217'de İtalya seferi sırasında (Arno bataklıkları) bir göz enfeksiyonu yüzünden bir gözünü kaybettiği antik kaynaklarda (Polybios, Livius) geçer. Hangi göz olduğu bilinmiyor; çizimde sol göz seçildi.
