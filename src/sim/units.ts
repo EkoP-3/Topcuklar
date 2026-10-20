@@ -194,7 +194,7 @@ export function unitsOf(world: World, owner: Fighter, style: UnitHazard["style"]
 export function countUnits(world: World, owner: Fighter, style: UnitHazard["style"]): number {
   let n = 0;
   for (const h of world.hazards)
-    if (h.kind === "unit" && h.owner === owner.index && h.style === style) n++;
+    if (h.kind === "unit" && h.owner === owner.index && h.style === style && !h.fromDomain) n++;
   return n;
 }
 

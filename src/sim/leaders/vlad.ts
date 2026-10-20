@@ -26,11 +26,11 @@ export const vlad: FighterDef = {
     name: "FOREST OF THE IMPALED",
     rule: "Stakes spring up wherever the enemy runs",
     tick(world, self, dt, t) {
-      if (every(t, dt, 2.8))
+      if (every(t, dt, 3.5))
         zoneAtEnemy(world, self, { style: "stakes", radius: 22, ttl: 5, damage: FOREST.damage });
     },
   },
-  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 54 },
+  growth: { perSecond: 0.015, stat: "STAKE DMG", base: 55 },
   hp: 1000,
   radius: 56,
   mass: 1.1,
@@ -60,7 +60,7 @@ export const vlad: FighterDef = {
           y: enemy.y + enemy.vy * t + world.rng.range(-45, 45),
           radius: 22,
           ttl: 5,
-          damage: 54,
+          damage: 55,
           poison: 0,
           poisonDps: 0,
         });

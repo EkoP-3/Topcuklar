@@ -7,7 +7,7 @@ import { every, shellAtEnemy } from "./domains";
 const BALL_SPEED = 760;
 const ABILITY = { name: "GREAT BOMBARD", text: "Giant shell that leaves a burning crater" };
 
-const CONSTANTINOPLE = { radius: 120, delay: 1, damage: 73, knockback: 600 };
+const CONSTANTINOPLE = { radius: 120, delay: 1, damage: 74, knockback: 600 };
 
 export const mehmed: FighterDef = {
   id: "mehmed",
@@ -29,7 +29,7 @@ export const mehmed: FighterDef = {
       if (every(t, dt, 1.7)) shellAtEnemy(world, self, CONSTANTINOPLE);
     },
   },
-  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 108 },
+  growth: { perSecond: 0.015, stat: "BOMBARD DMG", base: 110 },
   hp: 1050,
   radius: 59,
   mass: 1.2,
@@ -65,7 +65,7 @@ export const mehmed: FighterDef = {
           style: "bombard",
           speed: BALL_SPEED,
           radius: 27,
-          damage: 108,
+          damage: 110,
           knockback: 600,
           blast: 130,
           poison: 0,
@@ -95,7 +95,7 @@ export const mehmed: FighterDef = {
             y: enemy.y + enemy.vy * 0.7 + world.rng.range(-70, 70),
             radius: 95,
             delay: 0.8,
-            damage: 82,
+            damage: 83,
             knockback: 450,
           });
         }
@@ -107,7 +107,7 @@ export const mehmed: FighterDef = {
             y: enemy.y,
             radius: 160,
             delay: 1,
-            damage: 163,
+            damage: 166,
             knockback: 900,
           });
         }

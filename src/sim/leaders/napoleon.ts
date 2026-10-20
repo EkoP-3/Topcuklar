@@ -6,7 +6,7 @@ import { every, shellAtEnemy } from "./domains";
 const BALL_SPEED = 900;
 const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce twice" };
 
-const AUSTERLITZ = { radius: 70, delay: 0.8, damage: 34, knockback: 320 };
+const AUSTERLITZ = { radius: 90, delay: 0.8, damage: 34, knockback: 320 };
 
 export const napoleon: FighterDef = {
   id: "napoleon",
@@ -25,10 +25,10 @@ export const napoleon: FighterDef = {
     name: "AUSTERLITZ",
     rule: "The Grand Battery: shells rain on the enemy",
     tick(world, self, dt, t) {
-      if (every(t, dt, 1.1)) shellAtEnemy(world, self, AUSTERLITZ);
+      if (every(t, dt, 0.9)) shellAtEnemy(world, self, AUSTERLITZ);
     },
   },
-  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 73 },
+  growth: { perSecond: 0.015, stat: "CANNON DMG", base: 74 },
   hp: 860,
   radius: 48,
   mass: 0.85,
@@ -54,7 +54,7 @@ export const napoleon: FighterDef = {
           style: "ball",
           speed: BALL_SPEED,
           radius: 16,
-          damage: 73,
+          damage: 74,
           knockback: 420,
           blast: 0,
           poison: 0,

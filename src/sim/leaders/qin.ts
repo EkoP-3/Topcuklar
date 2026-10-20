@@ -1,4 +1,4 @@
-import { DEFAULT_RELAX } from "../world";
+import { ARENA, DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
 import { countUnits, spawnUnit, spawnWall } from "../units";
 import { aim, fan, skill } from "./kit";
@@ -6,7 +6,7 @@ import { aim, fan, skill } from "./kit";
 const ABILITY = { name: "TERRACOTTA ARMY", text: "Clay soldiers march slowly and block shots" };
 const WALL_HALF_LENGTH = 220;
 /** Damage when the enemy is slammed into the wall. */
-const WALL = { damage: 58 };
+const WALL = { damage: 60 };
 
 const GREAT_WALL = { damage: 6 };
 
@@ -27,21 +27,20 @@ export const qin: FighterDef = {
     name: "THE GREAT WALL",
     rule: "Stretches of wall: the enemy crashes into them",
     onWin(world, self) {
-      // One long stretch of wall across the middle, with a way round at each end.
-      const span = world.hi - world.lo;
-      const y = world.lo + span * 0.5;
+      // One stretch of wall across the middle, with room to go round each end even
+      // while the arena is shrunk (sized from the full arena, not the current walls).
       spawnWall(world, self, {
-        x1: world.lo + span * 0.22,
-        y1: y,
-        x2: world.lo + span * 0.78,
-        y2: y,
+        x1: ARENA * 0.32,
+        y1: ARENA / 2,
+        x2: ARENA * 0.68,
+        y2: ARENA / 2,
         half: 12,
         ttl: 99,
         damage: GREAT_WALL.damage,
       });
     },
   },
-  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 38 },
+  growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 39 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -52,7 +51,7 @@ export const qin: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 36,
+  contactDamage: 37,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -71,7 +70,7 @@ export const qin: FighterDef = {
             mass: 2,
             speed: 150,
             hp: 140,
-            damage: 38,
+            damage: 39,
             knockback: 260,
             stun: 0,
             hitInterval: 0.8,

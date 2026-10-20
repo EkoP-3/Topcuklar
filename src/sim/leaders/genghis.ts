@@ -22,7 +22,7 @@ export const genghis: FighterDef = {
   domain: {
     name: "THE STEPPE",
     rule: "Endless steppe: a faster rider and quicker volleys",
-    buff: { speed: 1.12, skillRate: 1.2 },
+    buff: { speed: 1.15, skillRate: 1.4 },
   },
   growth: { perSecond: 0.015, stat: "ARROW DMG", base: 29 },
   hp: 950,

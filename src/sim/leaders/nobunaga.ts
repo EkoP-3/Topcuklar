@@ -5,7 +5,7 @@ import { damageUnitsAlong, fireProjectile } from "../units";
 import { aim, fan, skill, ticks } from "./kit";
 
 /** The cut of the iai slash. */
-const SLASH = { damage: 116, knockback: 380 };
+const SLASH = { damage: 117, knockback: 380 };
 const ABILITY = { name: "IAI SLASH", text: "Lightning dash that cuts everything in its path" };
 
 export const nobunaga: FighterDef = {
@@ -26,7 +26,7 @@ export const nobunaga: FighterDef = {
     rule: "Under the cherry blossoms: slashes come far quicker",
     buff: { skillRate: 2 },
   },
-  growth: { perSecond: 0.015, stat: "SLASH DMG", base: 116 },
+  growth: { perSecond: 0.015, stat: "SLASH DMG", base: 117 },
   hp: 960,
   radius: 54,
   mass: 1,
@@ -37,7 +37,7 @@ export const nobunaga: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 34,
+  contactDamage: 35,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -120,7 +120,7 @@ export const nobunaga: FighterDef = {
             style: "musket",
             speed: 1100,
             radius: 8,
-            damage: 31,
+            damage: 32,
             knockback: 90,
             blast: 0,
             poison: 0,

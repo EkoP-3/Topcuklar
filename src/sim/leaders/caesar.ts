@@ -27,7 +27,7 @@ export const caesar: FighterDef = {
       hurtOnWalls(world, self, dt, ALESIA);
     },
   },
-  growth: { perSecond: 0.015, stat: "LEGION DMG", base: 30 },
+  growth: { perSecond: 0.015, stat: "LEGION DMG", base: 31 },
   hp: 970,
   radius: 58,
   mass: 1,
@@ -38,7 +38,7 @@ export const caesar: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 27,
+  contactDamage: 28,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -58,7 +58,7 @@ export const caesar: FighterDef = {
             mass: 0.35,
             speed: 340,
             hp: 95,
-            damage: 30,
+            damage: 31,
             knockback: 90,
             stun: 0,
             hitInterval: 0.6,

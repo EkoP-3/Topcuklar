@@ -13,16 +13,31 @@ export function every(t: number, dt: number, interval: number, start = 0.6): boo
   return ticks(t, dt, interval, start) > 0;
 }
 
+const drainLeft = new WeakMap<Fighter, number>();
+const mendLeft = new WeakMap<Fighter, number>();
+
+/** Whole points due this tick, carrying the fraction over (like poison does). */
+function owed(store: WeakMap<Fighter, number>, key: Fighter, amount: number): number {
+  const total = (store.get(key) ?? 0) + amount;
+  const whole = Math.floor(total);
+  store.set(key, total - whole);
+  return whole;
+}
+
 /** Damage over time on the enemy, dealt in quarter-second ticks. */
 export function drain(world: World, self: Fighter, dt: number, t: number, perSecond: number): void {
   if (!every(t, dt, 0.25, 0)) return;
   const enemy = world.nearestEnemy(self);
-  if (enemy) world.dealDamage(self, enemy, perSecond * 0.25, enemy.x, enemy.y, 0, { dot: true });
+  if (!enemy) return;
+  const amount = owed(drainLeft, self, perSecond * 0.25);
+  if (amount > 0) world.dealDamage(self, enemy, amount, enemy.x, enemy.y, 0, { dot: true });
 }
 
 /** Healing for the owner in quarter-second ticks. */
 export function mend(world: World, self: Fighter, dt: number, t: number, perSecond: number): void {
-  if (every(t, dt, 0.25, 0)) world.heal(self, perSecond * 0.25);
+  if (!every(t, dt, 0.25, 0)) return;
+  const amount = owed(mendLeft, self, perSecond * 0.25);
+  if (amount > 0) world.heal(self, amount);
 }
 
 /** A marked shell where the enemy is heading (artillery, bombards). */
@@ -116,7 +131,7 @@ export function raidersFromEdges(
     const inset = spec.radius + 6;
     const x = edge === 0 ? world.lo + inset : edge === 1 ? world.hi - inset : along;
     const y = edge === 2 ? world.lo + inset : edge === 3 ? world.hi - inset : along;
-    spawnUnit(
+    const unit = spawnUnit(
       world,
       self,
       {
@@ -134,5 +149,6 @@ export function raidersFromEdges(
       Math.atan2(enemy.y - y, enemy.x - x),
       { x, y },
     );
+    unit.fromDomain = true;
   }
 }

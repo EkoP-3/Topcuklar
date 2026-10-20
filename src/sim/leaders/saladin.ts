@@ -5,7 +5,7 @@ import { drain, every, zoneAtEnemy } from "./domains";
 
 /** One cut of the whirl. */
 const HATTIN = { heal: 150 };
-const CUT = { damage: 41, knockback: 160 };
+const CUT = { damage: 42, knockback: 160 };
 const ABILITY = { name: "SCIMITAR WHIRL", text: "Spins his blades, cutting all around him" };
 
 /** Per-fighter whirl clock and reach (two Saladins can meet). */
@@ -32,11 +32,11 @@ export const saladin: FighterDef = {
     rule: "Thirst and burning grass: the enemy wilts",
     tick(world, self, dt, t) {
       drain(world, self, dt, t, HATTIN_HEAT.damage);
-      if (every(t, dt, 2.5))
+      if (every(t, dt, 4.5))
         zoneAtEnemy(world, self, { style: "fire", radius: 55, ttl: 2.5, damage: HATTIN_HEAT.fire });
     },
   },
-  growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 41 },
+  growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 42 },
   hp: 1000,
   radius: 56,
   mass: 1.05,
@@ -47,7 +47,7 @@ export const saladin: FighterDef = {
   damage: 0,
   knockback: 130,
   hitInterval: 0.5,
-  contactDamage: 57,
+  contactDamage: 58,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -89,7 +89,7 @@ export const saladin: FighterDef = {
             y: enemy.y + Math.sin(a) * 130,
             radius: 55,
             ttl: 3,
-            damage: 78,
+            damage: 79,
             poison: 0,
             poisonDps: 0,
           });

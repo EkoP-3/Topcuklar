@@ -5,7 +5,7 @@ import { hitAround, skill, ticks } from "./kit";
 import { mend } from "./domains";
 
 /** The war cry. */
-const CRY = { damage: 63, knockback: 520 };
+const CRY = { damage: 65, knockback: 520 };
 const ABILITY = { name: "LIONHEART", text: "War cry knockback; hits harder as HP drops" };
 
 export const richard: FighterDef = {
@@ -28,7 +28,7 @@ export const richard: FighterDef = {
       mend(world, self, dt, t, 7);
     },
   },
-  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 63 },
+  growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 65 },
   hp: 1000,
   radius: 58,
   mass: 1.2,
@@ -39,7 +39,7 @@ export const richard: FighterDef = {
   damage: 0,
   knockback: 150,
   hitInterval: 0.5,
-  contactDamage: 42,
+  contactDamage: 43,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -81,7 +81,7 @@ export const richard: FighterDef = {
           depth: 80,
           count: 4,
           itemHalf: 40,
-          damage: 81,
+          damage: 83,
           knockback: 650,
           stun: 0.3,
         });

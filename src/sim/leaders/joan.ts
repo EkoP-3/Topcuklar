@@ -8,7 +8,7 @@ const ABILITY = {
   text: "Raises her banner: heals, hits harder, shrugs off shots",
 };
 /** The rallying shockwave of the great banner. */
-const RALLY = { damage: 84, knockback: 600 };
+const RALLY = { damage: 85, knockback: 600 };
 /** HP per second healed by the banners (fixed: tuning scales damage, not healing). */
 const HEAL = { banner: 24, great: 45 };
 const BANNER = 130;
@@ -55,13 +55,13 @@ export const joan: FighterDef = {
   ability: ABILITY,
   domain: {
     name: "ORLÉANS",
-    rule: "The siege is lifted: Joan heals and holds firm",
+    rule: "The siege is lifted: Joan slowly heals",
     buff: { guard: 0.95 },
     tick(world, self, dt, t) {
       mend(world, self, dt, t, 3);
     },
   },
-  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 66 },
+  growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 67 },
   hp: 980,
   radius: 54,
   mass: 1,
@@ -72,7 +72,7 @@ export const joan: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 58,
+  contactDamage: 59,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,

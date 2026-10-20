@@ -303,6 +303,8 @@ export interface UnitHazard {
   lock: number;
   ttl: number;
   hurt: number;
+  /** Summoned by a domain rule (not counted against the move's own unit cap). */
+  fromDomain?: boolean;
 }
 
 /** Arrow, cannonball or similar: flies straight, hurts the first enemy it touches. */

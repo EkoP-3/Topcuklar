@@ -23,8 +23,8 @@ export const leonidas: FighterDef = {
   ability: ABILITY,
   domain: {
     name: "THERMOPYLAE",
-    rule: "The narrow pass: Leonidas takes far less damage",
-    buff: { guard: 0.95 },
+    rule: "The narrow pass: Leonidas takes less damage",
+    buff: { guard: 0.9 },
   },
   growth: { perSecond: 0.015, stat: "BASH DMG", base: 80 },
   hp: 1200,

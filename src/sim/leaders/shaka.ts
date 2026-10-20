@@ -24,10 +24,10 @@ export const shaka: FighterDef = {
     name: "KWABULAWAYO",
     rule: "The royal kraal: warriors pour in from every side",
     tick(world, self, dt, t) {
-      if (every(t, dt, 2.2)) raidersFromEdges(world, self, 2, KRAAL);
+      if (every(t, dt, 3)) raidersFromEdges(world, self, 2, KRAAL);
     },
   },
-  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 37 },
+  growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 38 },
   hp: 1000,
   radius: 56,
   mass: 1.05,
@@ -38,7 +38,7 @@ export const shaka: FighterDef = {
   damage: 0,
   knockback: 140,
   hitInterval: 0.5,
-  contactDamage: 46,
+  contactDamage: 47,
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
@@ -83,7 +83,7 @@ export const shaka: FighterDef = {
               mass: 0.8,
               speed: 420,
               hp: 50,
-              damage: 37,
+              damage: 38,
               knockback: 200,
               stun: 0,
               hitInterval: 0.6,
@@ -120,7 +120,7 @@ export const shaka: FighterDef = {
             depth: 60,
             count: 6,
             itemHalf: 24,
-            damage: 78,
+            damage: 80,
             knockback: 450,
             stun: 0.2,
             dir,

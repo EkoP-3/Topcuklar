@@ -487,6 +487,8 @@ export class World {
   /** Domain Expansion: who opens when, the clash, and the winner's lasting rule. */
   private updateDomain(dt: number): void {
     const d = this.domain;
+    // Someone fell this step: let checkEnd finish the match before any domain moves.
+    if (this.fighters.some((f) => f.alive && f.hp <= 0)) return;
     d.t += dt;
     const holders = this.fighters.filter((f) => f.alive && f.def.domain);
     if (d.phase === "none") {

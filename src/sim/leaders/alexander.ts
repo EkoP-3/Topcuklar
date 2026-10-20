@@ -23,10 +23,10 @@ export const alexander: FighterDef = {
   ability: ABILITY,
   domain: {
     name: "GAUGAMELA",
-    rule: "Open plain: Alexander charges far more often",
-    buff: { skillRate: 1.25 },
+    rule: "Open plain: Alexander charges more often",
+    buff: { skillRate: 1.5 },
   },
-  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 124 },
+  growth: { perSecond: 0.015, stat: "CHARGE DMG", base: 127 },
   hp: 950,
   radius: 58,
   mass: 1.1,
@@ -37,7 +37,7 @@ export const alexander: FighterDef = {
   damage: 0,
   knockback: 160,
   hitInterval: 0.5,
-  contactDamage: 35,
+  contactDamage: 36,
   contactInterval: 0.45,
   createAbility: skill({
     label: ABILITY.name,
