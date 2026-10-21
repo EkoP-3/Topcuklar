@@ -24,6 +24,7 @@ import {
   type World,
 } from "../world";
 import { winChance } from "../odds";
+import { liveChance } from "../live";
 import { drawFace, type Mood } from "./faces";
 import { domainLayer } from "./domains";
 import { UPSET_CHANCE } from "./sfx";
@@ -87,6 +88,8 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
   const background = buildBackground(quality);
   const overlay = buildOverlay(quality);
   const hpLag: number[] = [];
+  /** Smoothed live win chance of the first fighter (null = not shown). */
+  let winShown: number | null = null;
   let frame = 0;
   const cam: Camera = { zoom: 1, x: ARENA / 2, y: ARENA / 2 };
 
@@ -107,7 +110,10 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     ctx.save();
     ctx.translate(fx.shakeX, fx.shakeY);
     ctx.drawImage(background, 0, 0, W, H);
-    drawTopPanel(ctx, world, hpLag);
+    const live = world.phase === "intro" ? null : liveChance(world);
+    if (live === null) winShown = null;
+    else winShown = winShown === null ? live : winShown + (live - winShown) * 0.08;
+    drawTopPanel(ctx, world, hpLag, winShown);
     drawArena(ctx, world, fx, frame, extras, cam);
     drawSkillCards(ctx, world);
     drawCloseCalls(ctx, world);
@@ -158,11 +164,22 @@ function followCamera(cam: Camera, world: World): void {
 // --- layout pieces -------------------------------------------------------------
 
 /** Top of the frame: flag + name and the HP bar for each side, "VS" and the clock. */
-function drawTopPanel(ctx: Ctx, world: World, hpLag: number[]): void {
+function drawTopPanel(ctx: Ctx, world: World, hpLag: number[], win: number | null): void {
   const [a, b] = world.fighters;
   if (!a || !b) return;
   drawFighterPanel(ctx, a, hpLag[a.index] ?? 1, 60, "left");
   drawFighterPanel(ctx, b, hpLag[b.index] ?? 1, W - 60, "right");
+  if (win !== null) {
+    // Live win chance under each HP bar (the leader's number in gold).
+    const pa = Math.round(win * 100);
+    const pb = 100 - pa;
+    ctx.textBaseline = "alphabetic";
+    ctx.font = `900 30px ${DISPLAY_FONT}`;
+    ctx.textAlign = "left";
+    outlinedText(ctx, `WIN ${pa}%`, 60, 326, pa > pb ? GOLD : SIDES[a.side].light, 6);
+    ctx.textAlign = "right";
+    outlinedText(ctx, `${pb}% WIN`, W - 60, 326, pb > pa ? GOLD : SIDES[b.side].light, 6);
+  }
 
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
