@@ -41,6 +41,8 @@ import {
   PAPER_DARK,
   SIDES,
   fontsVersion,
+  matchColors,
+  setMatchColors,
 } from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem, fleur } from "./emblems";
@@ -95,6 +97,8 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
 
   const draw = (world: World, fx: Fx, extras: DrawExtras = {}): void => {
     frame++;
+    const [fa, fb] = world.fighters;
+    if (fa && fb) setMatchColors(fa.def.id, fb.def.id);
     ctx.setTransform(quality, 0, 0, quality, 0, 0);
     ctx.fillStyle = LEATHER;
     ctx.fillRect(0, 0, W, H);
@@ -1686,8 +1690,9 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
 
   const r = 120;
   const y = 460;
+  const colors = next ? matchColors(next[0].id, next[1].id) : SIDES;
   ([-1, 1] as const).forEach((dir, i) => {
-    const side = SIDES[i === 0 ? 0 : 1];
+    const side = colors[i === 0 ? 0 : 1];
     const def = next?.[i] ?? null;
     const x = dir * 230;
     // Gentle bob so the card does not look frozen.
@@ -2360,45 +2365,32 @@ function drawDomainBadge(ctx: Ctx, world: World): void {
   ctx.restore();
 }
 
-/** Live win chance as a tug-of-war bar under the HP bars, styled like them. */
+/** Live win chance: one shared bar under the HP bars, like the one on the "pick your side" card. */
 function drawWinBar(ctx: Ctx, a: Fighter, b: Fighter, win: number): void {
   const x = 60;
   const w = W - 120;
   const y = 300;
-  const h = 24;
+  const h = 26;
   const pa = Math.round(win * 100);
-  const pb = 100 - pa;
   const split = x + w * clamp(win, 0, 1);
-  roundRect(ctx, x, y, w, h, 6);
-  ctx.fillStyle = "#0f0905";
-  ctx.fill();
+  roundRect(ctx, x, y, w, h, 8);
   ctx.save();
   ctx.clip();
   ctx.fillStyle = SIDES[a.side].main;
   ctx.fillRect(x, y, split - x, h);
   ctx.fillStyle = SIDES[b.side].main;
   ctx.fillRect(split, y, x + w - split, h);
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  ctx.fillRect(x, y + 3, w, h * 0.3);
-  // Even-odds notch.
-  ctx.fillStyle = "rgba(30,19,11,0.55)";
-  ctx.fillRect(x + w / 2 - 1.5, y, 3, h);
   ctx.restore();
-  roundRect(ctx, x, y, w, h, 6);
-  ctx.strokeStyle = "#b08a4a";
+  roundRect(ctx, x, y, w, h, 8);
   ctx.lineWidth = 4;
+  ctx.strokeStyle = "#b08a4a";
   ctx.stroke();
-  // Gold marker at the split.
-  ctx.fillStyle = OUTLINE;
-  ctx.fillRect(split - 4, y - 6, 8, h + 12);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(split - 2, y - 4, 4, h + 8);
   ctx.textBaseline = "middle";
-  ctx.font = `900 22px ${DISPLAY_FONT}`;
+  ctx.font = `900 22px ${MONO_FONT}`;
   ctx.textAlign = "left";
-  outlinedText(ctx, `${pa}%`, x + 12, y + h / 2 + 1, pa > pb ? GOLD : PAPER, 5);
+  outlinedText(ctx, `${pa}%`, x + 12, y + h / 2 + 1, PAPER, 5);
   ctx.textAlign = "right";
-  outlinedText(ctx, `${pb}%`, x + w - 12, y + h / 2 + 1, pb > pa ? GOLD : PAPER, 5);
+  outlinedText(ctx, `${100 - pa}%`, x + w - 12, y + h / 2 + 1, PAPER, 5);
   ctx.textAlign = "center";
   ctx.font = `800 15px ${DISPLAY_FONT}`;
   outlinedText(ctx, "WIN CHANCE", W / 2, y + h / 2 + 1, PAPER, 4);
