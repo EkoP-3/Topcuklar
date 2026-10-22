@@ -169,24 +169,21 @@ function drawTopPanel(ctx: Ctx, world: World, hpLag: number[], win: number | nul
   if (!a || !b) return;
   drawFighterPanel(ctx, a, hpLag[a.index] ?? 1, 60, "left");
   drawFighterPanel(ctx, b, hpLag[b.index] ?? 1, W - 60, "right");
-  if (win !== null) {
-    // Live win chance under each HP bar (the leader's number in gold).
-    const pa = Math.round(win * 100);
-    const pb = 100 - pa;
-    ctx.textBaseline = "alphabetic";
-    ctx.font = `900 30px ${DISPLAY_FONT}`;
-    ctx.textAlign = "left";
-    outlinedText(ctx, `WIN ${pa}%`, 60, 326, pa > pb ? GOLD : SIDES[a.side].light, 6);
-    ctx.textAlign = "right";
-    outlinedText(ctx, `${pb}% WIN`, W - 60, 326, pb > pa ? GOLD : SIDES[b.side].light, 6);
-  }
-
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `900 56px ${DISPLAY_FONT}`;
   outlinedText(ctx, "VS", W / 2, 282, PAPER, 8);
   ctx.font = `700 30px ${MONO_FONT}`;
-  outlinedText(ctx, formatTime(world.time), W / 2, 324, "rgba(236,220,180,0.6)", 5);
+  // The clock sits above "VS" when the win-chance bar takes its place.
+  outlinedText(
+    ctx,
+    formatTime(world.time),
+    W / 2,
+    win === null ? 324 : 232,
+    "rgba(236,220,180,0.6)",
+    5,
+  );
+  if (win !== null) drawWinBar(ctx, a, b, win);
 }
 
 function drawFighterPanel(
@@ -2361,4 +2358,48 @@ function drawDomainBadge(ctx: Ctx, world: World): void {
   ctx.fillStyle = INK;
   ctx.fillText(name, W / 2 + 8, y + h / 2 + 1);
   ctx.restore();
+}
+
+/** Live win chance as a tug-of-war bar under the HP bars, styled like them. */
+function drawWinBar(ctx: Ctx, a: Fighter, b: Fighter, win: number): void {
+  const x = 60;
+  const w = W - 120;
+  const y = 300;
+  const h = 24;
+  const pa = Math.round(win * 100);
+  const pb = 100 - pa;
+  const split = x + w * clamp(win, 0, 1);
+  roundRect(ctx, x, y, w, h, 6);
+  ctx.fillStyle = "#0f0905";
+  ctx.fill();
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = SIDES[a.side].main;
+  ctx.fillRect(x, y, split - x, h);
+  ctx.fillStyle = SIDES[b.side].main;
+  ctx.fillRect(split, y, x + w - split, h);
+  ctx.fillStyle = "rgba(255,255,255,0.14)";
+  ctx.fillRect(x, y + 3, w, h * 0.3);
+  // Even-odds notch.
+  ctx.fillStyle = "rgba(30,19,11,0.55)";
+  ctx.fillRect(x + w / 2 - 1.5, y, 3, h);
+  ctx.restore();
+  roundRect(ctx, x, y, w, h, 6);
+  ctx.strokeStyle = "#b08a4a";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // Gold marker at the split.
+  ctx.fillStyle = OUTLINE;
+  ctx.fillRect(split - 4, y - 6, 8, h + 12);
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(split - 2, y - 4, 4, h + 8);
+  ctx.textBaseline = "middle";
+  ctx.font = `900 22px ${DISPLAY_FONT}`;
+  ctx.textAlign = "left";
+  outlinedText(ctx, `${pa}%`, x + 12, y + h / 2 + 1, pa > pb ? GOLD : PAPER, 5);
+  ctx.textAlign = "right";
+  outlinedText(ctx, `${pb}%`, x + w - 12, y + h / 2 + 1, pb > pa ? GOLD : PAPER, 5);
+  ctx.textAlign = "center";
+  ctx.font = `800 15px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "WIN CHANCE", W / 2, y + h / 2 + 1, PAPER, 4);
 }
