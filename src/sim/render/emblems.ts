@@ -15,7 +15,7 @@ export function drawEmblem(ctx: Ctx, id: string, r: number): void {
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  const lw = Math.max(1.5, r * 0.09);
+  const lw = Math.max(1.2, r * 0.065);
   switch (id) {
     case "alexander":
       sun(ctx, r, lw);

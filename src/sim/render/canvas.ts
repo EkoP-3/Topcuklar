@@ -573,7 +573,7 @@ function drawWall(ctx: Ctx, w: WallHazard): void {
   // Crenellations along one edge.
   ctx.fillStyle = "#8f8069";
   for (let x = 4; x < len - 10; x += 26) ctx.fillRect(x, -t / 2 - 8 * rise, 13, 8 * rise);
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.strokeStyle = OUTLINE;
   ctx.strokeRect(0, -t / 2, len, t);
   ctx.restore();
@@ -672,7 +672,7 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
       ctx.closePath();
       ctx.fillStyle = "#9b6a3a";
       ctx.fill();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.beginPath();
@@ -716,7 +716,7 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
     ctx.closePath();
     ctx.fillStyle = "#2a4fa8";
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     fleur(ctx, 26, -74, 13, 1.5);
@@ -732,7 +732,7 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
       else ctx.lineTo(Math.cos(a) * d, Math.sin(a) * d);
     }
     ctx.lineCap = "round";
-    ctx.lineWidth = 11;
+    ctx.lineWidth = 9;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.lineWidth = 6;
@@ -742,7 +742,7 @@ function drawZone(ctx: Ctx, z: ZoneHazard, frame: number): void {
     ctx.ellipse(0, -4, 8, 6, 0, 0, TAU);
     ctx.fillStyle = "#4fbf3a";
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
   }
@@ -776,7 +776,7 @@ function hpBadge(ctx: Ctx, hp: string, r: number): void {
   roundRect(ctx, -w / 2, y - h / 2, w, h, h * 0.3);
   ctx.fillStyle = "#f3e5c0";
   ctx.fill();
-  ctx.lineWidth = Math.max(2, r * 0.05);
+  ctx.lineWidth = Math.max(1.5, r * 0.035);
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   ctx.textAlign = "center";
@@ -808,19 +808,19 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
 
   // Soft ink shadow on the paper.
   ctx.beginPath();
-  ctx.arc(5, 8, f.radius, 0, TAU);
-  ctx.fillStyle = "rgba(43,27,15,0.22)";
+  ctx.arc(3, 5, f.radius, 0, TAU);
+  ctx.fillStyle = "rgba(43,27,15,0.14)";
   ctx.fill();
   ctx.beginPath();
   ctx.arc(0, 0, f.radius, 0, TAU);
   ctx.fillStyle = side.main;
   ctx.fill();
-  ctx.lineWidth = 7;
+  ctx.lineWidth = 4;
   ctx.strokeStyle = side.dark;
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(0, 0, f.radius + 3.5, 0, TAU);
-  ctx.lineWidth = 2.5;
+  ctx.arc(0, 0, f.radius + 2, 0, TAU);
+  ctx.lineWidth = 1.5;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   ctx.beginPath();
@@ -897,7 +897,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       ctx.closePath();
       ctx.fillStyle = "#e8ecf2";
       ctx.fill();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.restore();
@@ -940,7 +940,7 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
   const clay = u.style === "terracotta";
   ctx.fillStyle = u.style === "elephant" ? "#5b6170" : clay ? "#b8693f" : side.main;
   ctx.fill();
-  ctx.lineWidth = u.style === "elephant" || clay ? 6 : 4;
+  ctx.lineWidth = u.style === "elephant" || clay ? 4 : 2.5;
   ctx.strokeStyle = u.style === "elephant" || clay ? side.main : side.dark;
   ctx.stroke();
 
@@ -1007,7 +1007,7 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
     ctx.ellipse(0, -u.radius * 1.05, u.radius * 0.55, u.radius * 0.7, 0, 0, TAU);
     ctx.fillStyle = "#14161c";
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.beginPath();
@@ -1020,7 +1020,7 @@ function drawUnit(ctx: Ctx, u: UnitHazard, world: World): void {
     roundRectPath(ctx, -u.radius * 0.45, -u.radius * 0.6, u.radius * 0.9, u.radius * 1.2, 4);
     ctx.fillStyle = "#b8322b";
     ctx.fill();
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 1.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.beginPath();
@@ -1051,7 +1051,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.beginPath();
       ctx.moveTo(-34, 0);
       ctx.lineTo(8, 0);
-      ctx.lineWidth = 7;
+      ctx.lineWidth = 5;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.lineWidth = 3;
@@ -1064,7 +1064,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.closePath();
       ctx.fillStyle = "#dfe4ee";
       ctx.fill();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.beginPath();
@@ -1121,7 +1121,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.beginPath();
       ctx.moveTo(-18, 0);
       ctx.lineTo(16, 0);
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 5;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.lineWidth = 3.5;
@@ -1135,7 +1135,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.closePath();
       ctx.fillStyle = "#c9cdd4";
       ctx.fill();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       break;
@@ -1149,7 +1149,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-      ctx.lineWidth = 11;
+      ctx.lineWidth = 9;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.lineWidth = 6;
@@ -1159,7 +1159,7 @@ function drawProjectile(ctx: Ctx, p: ProjectileHazard, time: number): void {
       ctx.ellipse(4, 0, 11, 8, 0, 0, TAU);
       ctx.fillStyle = "#6ee65a";
       ctx.fill();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       break;
@@ -1200,7 +1200,7 @@ function drawSweep(ctx: Ctx, s: SweepHazard, world: World): void {
       ctx.arc(0, 0, r * 0.62, 0, TAU);
       ctx.fillStyle = "#f3ead6";
       ctx.fill();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       ctx.fillStyle = "#c8202a";
@@ -1267,7 +1267,7 @@ function drawStrike(ctx: Ctx, s: StrikeHazard): void {
     ctx.beginPath();
     ctx.moveTo(-34, 0);
     ctx.lineTo(8, 0);
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     ctx.lineWidth = 3;
@@ -1326,7 +1326,7 @@ function drawPylon(ctx: Ctx, h: PylonHazard): void {
   ctx.arc(h.x, h.y, r, 0, TAU);
   ctx.fillStyle = "#8cc8ff";
   ctx.fill();
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   ctx.restore();
@@ -1387,7 +1387,7 @@ function drawHook(ctx: Ctx, h: HookHazard, world: World): void {
   ctx.arc(h.x, h.y, 14, 0, TAU);
   ctx.fillStyle = h.attached >= 0 ? GOLD : "#e3dcc8";
   ctx.fill();
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
 }
@@ -1510,12 +1510,12 @@ function drawPickSide(ctx: Ctx, world: World, t: number): void {
     ctx.arc(0, 0, r, 0, TAU);
     ctx.fillStyle = side.main;
     ctx.fill();
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 6;
     ctx.strokeStyle = side.dark;
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(0, 0, r + 6, 0, TAU);
-    ctx.lineWidth = 4;
+    ctx.arc(0, 0, r + 3, 0, TAU);
+    ctx.lineWidth = 1.6;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
     // They stare each other down.
@@ -1701,7 +1701,7 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
     ctx.arc(x, by, r, 0, TAU);
     ctx.fillStyle = side.main;
     ctx.fill();
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 6;
     ctx.strokeStyle = side.dark;
     ctx.stroke();
     if (def) {
@@ -1731,7 +1731,7 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
   ctx.closePath();
   ctx.fillStyle = GOLD;
   ctx.fill();
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 4;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
   ctx.restore();
@@ -2087,6 +2087,9 @@ function roundRectPath(ctx: Ctx, x: number, y: number, w: number, h: number, r: 
   ctx.closePath();
 }
 
+/** Ink outline around text, as a share of the width each call asks for: thin, like print. */
+const TEXT_OUTLINE = 0.55;
+
 function outlinedText(
   ctx: Ctx,
   text: string,
@@ -2096,7 +2099,7 @@ function outlinedText(
   lw: number,
 ): void {
   ctx.lineJoin = "round";
-  ctx.lineWidth = lw;
+  ctx.lineWidth = Math.max(2, lw * TEXT_OUTLINE);
   ctx.strokeStyle = OUTLINE;
   ctx.strokeText(text, x, y);
   ctx.fillStyle = fill;
@@ -2239,7 +2242,7 @@ function drawCracks(ctx: Ctx, world: World): void {
     ctx.lineWidth = 6;
     ctx.strokeStyle = "rgba(255,240,210,0.5)";
     ctx.stroke();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = OUTLINE;
     ctx.stroke();
   }

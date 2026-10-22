@@ -34,7 +34,7 @@ export function drawFace(
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  const lw = Math.max(2, r * 0.07);
+  const lw = Math.max(1.5, r * 0.05);
   const len = Math.hypot(lookX, lookY) || 1;
   const lx = (lookX / len) * r * 0.075;
   const ly = (lookY / len) * r * 0.06;

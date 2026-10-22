@@ -15,7 +15,7 @@ const DARK_GOLD = "#a9741a";
 const GLOW = "#79d4ff";
 const RED = "#e5483f";
 
-const LINE = 5;
+const LINE = 3.2;
 
 /**
  * Fills the current path with a flat colour, adds a light top half and a shaded

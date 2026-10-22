@@ -13,7 +13,7 @@ export function drawHeadgear(ctx: Ctx, id: string, r: number): void {
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  const lw = Math.max(2, r * 0.07);
+  const lw = Math.max(1.5, r * 0.05);
   switch (id) {
     case "mehmed":
       turban(ctx, r, lw);
