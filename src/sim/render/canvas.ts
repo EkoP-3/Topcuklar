@@ -16,7 +16,6 @@ import type {
 import {
   ARENA,
   CLOSE_CALLS_FOR_FRENZY,
-  COUNTDOWN_AT,
   DOMAIN_CLASH_TIME,
   nightStrength,
   ULT_CINEMATIC,
@@ -33,7 +32,6 @@ import {
   BODY_FONT,
   DISPLAY_FONT,
   GOLD,
-  GOLD_INK,
   INK,
   MONO_FONT,
   OUTLINE,
@@ -55,9 +53,12 @@ import { drawWeapon } from "./sprites";
 const W = 1080;
 const H = 1920;
 /** Arena square inside the frame, in frame pixels. */
-const AX = 60;
+/** Everything sits this far down the frame: clear of the Shorts top bar, and the
+ * empty space under the arena is left for the title and caption overlay. */
+const LAYOUT_DY = 110;
+const AX = 24;
 const AY = 350;
-const AS = 960;
+const AS = 1032;
 /** Frame pixels per world unit. The world is smaller than the frame so fighters look big. */
 const K = AS / ARENA;
 /** Corner radius of the map sheet. */
@@ -112,14 +113,13 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     }
 
     ctx.save();
-    ctx.translate(fx.shakeX, fx.shakeY);
+    ctx.translate(fx.shakeX, fx.shakeY + LAYOUT_DY);
     ctx.drawImage(background, 0, 0, W, H);
     const live = world.phase === "intro" ? null : liveChance(world);
     if (live === null) winShown = null;
     else winShown = winShown === null ? live : winShown + (live - winShown) * 0.08;
     drawTopPanel(ctx, world, hpLag, winShown);
     drawArena(ctx, world, fx, frame, extras, cam);
-    drawSkillCards(ctx, world);
     drawCloseCalls(ctx, world);
     drawDomainBadge(ctx, world);
     ctx.restore();
@@ -249,133 +249,6 @@ function drawFighterPanel(
     ctx.fillStyle = GOLD;
     ctx.fillRect(tx - 2, y - 6, 4, h + 12);
   }
-}
-
-/** History mode: one card per leader under the arena — the move, what it does, how long until it fires, and the ultimate. */
-function drawSkillCards(ctx: Ctx, world: World): void {
-  const y = AY + AS + 30;
-  const h = 210;
-  const gap = 20;
-  const w = (AS - gap) / 2;
-  world.fighters.slice(0, 2).forEach((f, i) => {
-    const state = f.ability?.skillState?.();
-    if (!state || !f.def.ability) return;
-    const side = SIDES[f.side];
-    const x = AX + i * (w + gap);
-    ctx.save();
-    if (!f.alive) ctx.globalAlpha = 0.45;
-    parchmentCard(ctx, x, y, w, h, side.main);
-
-    // Wax-seal medallion with a ring that fills up until the move fires.
-    const cx = x + 80;
-    const cy = y + 82;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 54, 0, TAU);
-    ctx.fillStyle = side.dark;
-    ctx.fill();
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = "rgba(43,27,15,0.18)";
-    ctx.stroke();
-    const p = clamp(state.progress, 0, 1);
-    if (p > 0) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, 54, -Math.PI / 2, -Math.PI / 2 + TAU * p);
-      ctx.strokeStyle = state.ready ? GOLD : side.main;
-      ctx.stroke();
-    }
-    ctx.beginPath();
-    ctx.arc(cx, cy, 59, 0, TAU);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = INK;
-    ctx.stroke();
-    // Inside the ring: the emblem, with the countdown over it while waiting.
-    ctx.save();
-    ctx.translate(cx, cy);
-    if (!state.ready) ctx.globalAlpha *= 0.35;
-    drawEmblem(ctx, f.def.id, 38);
-    ctx.restore();
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    if (state.ready) {
-      ctx.font = `900 30px ${MONO_FONT}`;
-      outlinedText(ctx, "NOW!", cx, cy + 2, GOLD, 7);
-    } else {
-      ctx.font = `900 36px ${MONO_FONT}`;
-      outlinedText(ctx, state.remaining.toFixed(1), cx, cy + 2, PAPER, 7);
-    }
-
-    const tx = x + 156;
-    const right = x + w - 20;
-    ctx.textAlign = "left";
-    fitFont(ctx, f.def.ability.name, 900, 34, right - tx, DISPLAY_FONT);
-    ctx.fillStyle = side.dark;
-    ctx.fillText(f.def.ability.name, tx, y + 46);
-    // What it does.
-    ctx.fillStyle = INK;
-    const { size, lines } = fitTwoLines(ctx, f.def.ability.text, right - tx);
-    ctx.font = `600 ${size}px ${BODY_FONT}`;
-    lines.forEach((line, k) => ctx.fillText(line, tx, y + 90 + k * (size + 2)));
-    // Level and ultimate: [LV 2] [ULT] NAME
-    if (state.ult) {
-      let px = x + 20;
-      const pill = (text: string, on: boolean) => {
-        ctx.font = `900 22px ${MONO_FONT}`;
-        const pw = ctx.measureText(text).width + 22;
-        roundRect(ctx, px, y + 160, pw, 34, 6);
-        ctx.fillStyle = on ? GOLD : "rgba(43,27,15,0.1)";
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = on ? INK : "rgba(43,27,15,0.35)";
-        ctx.stroke();
-        ctx.textAlign = "center";
-        ctx.fillStyle = on ? INK : "rgba(43,27,15,0.55)";
-        ctx.fillText(text, px + pw / 2, y + 178);
-        px += pw + 10;
-      };
-      pill(`LV ${state.level}`, state.level > 1);
-      pill("ULT", state.ult !== "used");
-      ctx.textAlign = "left";
-      fitFont(ctx, state.ultName, 900, 26, right - px, DISPLAY_FONT);
-      ctx.fillStyle = state.ult === "used" ? "rgba(43,27,15,0.35)" : GOLD_INK;
-      ctx.fillText(state.ultName, px, y + 178);
-    }
-    ctx.restore();
-  });
-}
-
-/** A sheet of parchment with an ink double rule and a coloured ribbon edge. */
-function parchmentCard(ctx: Ctx, x: number, y: number, w: number, h: number, accent: string): void {
-  roundRect(ctx, x, y, w, h, 10);
-  const g = ctx.createLinearGradient(x, y, x, y + h);
-  g.addColorStop(0, "#f1e3bf");
-  g.addColorStop(1, "#dcc391");
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.save();
-  ctx.clip();
-  const burn = ctx.createRadialGradient(
-    x + w / 2,
-    y + h / 2,
-    h * 0.3,
-    x + w / 2,
-    y + h / 2,
-    w * 0.62,
-  );
-  burn.addColorStop(0, "rgba(120,80,30,0)");
-  burn.addColorStop(1, "rgba(120,80,30,0.32)");
-  ctx.fillStyle = burn;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = accent;
-  ctx.fillRect(x, y, w, 8);
-  ctx.restore();
-  roundRect(ctx, x, y, w, h, 10);
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = INK;
-  ctx.stroke();
-  roundRect(ctx, x + 8, y + 14, w - 16, h - 22, 6);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "rgba(43,27,15,0.45)";
-  ctx.stroke();
 }
 
 // --- arena -----------------------------------------------------------------------
@@ -1405,10 +1278,14 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
     return;
   }
   if (world.phase === "fight" && drawDomainTitle(ctx, world)) return;
-  if (leaders && world.phase === "intro") {
-    if (world.phaseTime < INTRO_CARD_TIME) drawLeaderCards(ctx, world, world.phaseTime);
-    else drawPickSide(ctx, world, world.phaseTime - INTRO_CARD_TIME);
-    return;
+  if (
+    leaders &&
+    (world.phase === "intro" || (world.phase === "fight" && world.phaseTime < WHO_WINS_TIME))
+  ) {
+    if (!(world.phase === "fight" && levelBanner(world))) {
+      drawWhoWins(ctx, world.phase === "intro" ? 0 : world.phaseTime);
+      return;
+    }
   }
 
   switch (world.phase) {
@@ -1467,112 +1344,21 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
   ctx.restore();
 }
 
-/** Seconds of the "who wins?" card; the rest of the intro is "pick your side!". */
-const INTRO_CARD_TIME = 1.3;
+/** History mode: "WHO WINS?" sits over the first seconds of the fight instead of an intro card. */
+const WHO_WINS_TIME = 2.4;
 
-/**
- * "PICK YOUR SIDE!": both leaders face to face, the pre-fight win chances and a
- * 3-2-1 countdown, so the viewer has picked someone before the first hit.
- */
-function drawPickSide(ctx: Ctx, world: World, t: number): void {
-  const [a, b] = world.fighters;
-  if (!a || !b) return;
-  const left = world.introTime - INTRO_CARD_TIME - t;
+function drawWhoWins(ctx: Ctx, t: number): void {
+  const s = easeOutBack(clamp(t / 0.2 + 0.3, 0, 1));
   ctx.save();
-  ctx.globalAlpha = clamp(left / 0.15, 0, 1);
-  ctx.fillStyle = "rgba(29,18,10,0.93)";
-  ctx.fillRect(0, 0, AS, AS);
+  ctx.globalAlpha = 1 - clamp((t - (WHO_WINS_TIME - 0.4)) / 0.4, 0, 1);
+  ctx.translate(AS / 2, AS * 0.13);
+  ctx.scale(s, s);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
-  const s = easeOutBack(clamp(t / 0.25, 0, 1));
-  ctx.save();
-  ctx.translate(AS / 2, 120);
-  ctx.scale(s, s);
-  ctx.font = `900 80px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "PICK YOUR SIDE!", 0, 0, GOLD, 13);
-  ctx.font = `600 34px ${BODY_FONT}`;
-  ctx.fillStyle = PAPER;
-  ctx.fillText("Comment your pick below", 0, 62);
-  ctx.restore();
-
-  const r = 118;
-  const y = 410;
-  [a, b].forEach((f, i) => {
-    const side = SIDES[f.side];
-    const dir = i === 0 ? -1 : 1;
-    const x = AS / 2 + dir * 225;
-    const pop = easeOutBack(clamp((t - 0.08 * i) / 0.3, 0, 1));
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(pop, pop);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, TAU);
-    ctx.fillStyle = side.main;
-    ctx.fill();
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = side.dark;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, r + 3, 0, TAU);
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = OUTLINE;
-    ctx.stroke();
-    // They stare each other down.
-    drawFace(ctx, f.def.id, r, "determined", -dir, 0, t, i);
-    drawHeadgear(ctx, f.def.id, r);
-    ctx.restore();
-    fitFont(ctx, f.def.name, 900, 52, 420, DISPLAY_FONT);
-    outlinedText(ctx, f.def.name, x, y + r + 52, side.bright, 9);
-  });
-  ctx.font = `900 76px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", AS / 2, y, PAPER, 12);
-
-  const chance = winChance(a.def.id, b.def.id);
-  if (chance !== null) {
-    const pa = Math.round(chance * 100);
-    const bw = 760;
-    const bh = 58;
-    const bx = (AS - bw) / 2;
-    const by = 700;
-    ctx.font = `700 30px ${DISPLAY_FONT}`;
-    ctx.fillStyle = PAPER;
-    ctx.fillText("WIN CHANCE", AS / 2, by - 30);
-    const grow = clamp((t - 0.2) / 0.4, 0, 1);
-    const split = bx + bw * (0.5 + (pa / 100 - 0.5) * grow);
-    roundRect(ctx, bx, by, bw, bh, 10);
-    ctx.save();
-    ctx.clip();
-    ctx.fillStyle = SIDES[a.side].main;
-    ctx.fillRect(bx, by, split - bx, bh);
-    ctx.fillStyle = SIDES[b.side].main;
-    ctx.fillRect(split, by, bx + bw - split, bh);
-    ctx.restore();
-    roundRect(ctx, bx, by, bw, bh, 10);
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = "#b08a4a";
-    ctx.stroke();
-    ctx.font = `900 40px ${MONO_FONT}`;
-    ctx.textAlign = "left";
-    outlinedText(ctx, `${pa}%`, bx + 20, by + bh / 2 + 2, PAPER, 7);
-    ctx.textAlign = "right";
-    outlinedText(ctx, `${100 - pa}%`, bx + bw - 20, by + bh / 2 + 2, PAPER, 7);
-    ctx.textAlign = "center";
-  }
-
-  // 3, 2, 1 — each number pops in on its drum hit.
-  const it = world.phaseTime;
-  const tick = COUNTDOWN_AT.reduce((n, at) => (it >= at ? n + 1 : n), 0);
-  if (tick > 0) {
-    const since = it - (COUNTDOWN_AT[tick - 1] ?? 0);
-    const k = easeOutBack(clamp(since / 0.15, 0, 1));
-    ctx.save();
-    ctx.translate(AS / 2, 865);
-    ctx.scale(k, k);
-    ctx.font = `900 120px ${DISPLAY_FONT}`;
-    outlinedText(ctx, String(COUNTDOWN_AT.length - tick + 1), 0, 0, GOLD, 14);
-    ctx.restore();
-  }
+  ctx.font = `900 112px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "WHO WINS?", 0, 0, GOLD, 14);
+  ctx.font = `800 40px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "COMMENT YOUR PICK", 0, 78, PAPER, 9);
   ctx.restore();
 }
 
@@ -1590,30 +1376,6 @@ function drawUpset(ctx: Ctx, t: number, chance: number): void {
   outlinedText(ctx, "UPSET!", 0, 0, "#ff6a3c", 16);
   ctx.font = `800 40px ${DISPLAY_FONT}`;
   outlinedText(ctx, `ONLY ${Math.round(chance * 100)}% TO WIN`, 0, 96, PAPER, 9);
-  ctx.restore();
-}
-
-/** History intro: "WHO WINS?" and a card per leader (flag, name, title, lifetime). */
-function drawLeaderCards(ctx: Ctx, world: World, t: number): void {
-  const [a, b] = world.fighters;
-  if (!a || !b) return;
-  const fade = 1 - clamp((t - (INTRO_CARD_TIME - 0.45)) / 0.45, 0, 1);
-  ctx.save();
-  ctx.globalAlpha = fade;
-  ctx.fillStyle = "rgba(29,18,10,0.72)";
-  ctx.fillRect(0, 0, AS, AS);
-  const s = easeOutBack(clamp(t / 0.25, 0, 1));
-  ctx.translate(AS / 2, 0);
-  ctx.scale(s, s);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `800 64px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "WHO WINS?", 0, 90, GOLD, 12);
-  leaderCard(ctx, a, 290);
-  ctx.textAlign = "center";
-  ctx.font = `800 84px ${DISPLAY_FONT}`;
-  outlinedText(ctx, "VS", 0, 500, PAPER, 12);
-  leaderCard(ctx, b, 680);
   ctx.restore();
 }
 
@@ -1663,15 +1425,15 @@ function drawUltimateBanner(ctx: Ctx, world: World): void {
   ctx.scale(s, s);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `800 52px ${DISPLAY_FONT}`;
-  outlinedText(ctx, c.kind === "domain" ? "DOMAIN EXPANSION" : "ULTIMATE", 0, -60, GOLD, 11);
-  fitFont(ctx, c.name, 800, 120, AS - 60, DISPLAY_FONT);
-  outlinedText(ctx, c.name, 0, 30, SIDES[f.side].bright, 16);
+  ctx.font = `800 40px ${DISPLAY_FONT}`;
+  outlinedText(ctx, c.kind === "domain" ? "DOMAIN EXPANSION" : "ULTIMATE", 0, -48, GOLD, 10);
+  fitFont(ctx, c.name, 800, 88, AS - 120, DISPLAY_FONT);
+  outlinedText(ctx, c.name, 0, 20, SIDES[f.side].bright, 14);
   ctx.restore();
 }
 
 /** Seconds the "X WINS" banner shows before the "who's next?" card (history mode). */
-const WINS_TIME = 1.4;
+const WINS_TIME = 1.1;
 
 /** End card: "WHO'S NEXT?" with two mystery balls (or the chosen next leaders). */
 function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDef] | null): void {

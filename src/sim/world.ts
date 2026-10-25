@@ -13,7 +13,7 @@ const INTRO_TIME = 0.8;
  * History mode: longer intro for the "who wins?" card and the "pick your side!"
  * countdown. Nothing random happens during the intro, so fights play out the same.
  */
-export const HISTORY_INTRO_TIME = 2.6;
+export const HISTORY_INTRO_TIME = 0.25;
 /** Domain Expansion timeline (fight seconds) and the clash length. */
 /** Domain Expansion is switched off for now: the shorts read better without it. */
 export const DOMAINS_ON = false;
@@ -76,7 +76,7 @@ const CLASH_COOLDOWN = 0.2;
 /** Seconds between poison damage ticks. */
 const POISON_TICK = 0.25;
 /** Ultimate intro: the world runs at ULT_TIME_SCALE for ULT_CINEMATIC sim-seconds. */
-export const ULT_CINEMATIC = 0.3;
+export const ULT_CINEMATIC = 0.2;
 const ULT_TIME_SCALE = 0.2;
 /** Fraction of max HP at which a leader's ultimate fires. */
 export const ULT_HP = 0.3;

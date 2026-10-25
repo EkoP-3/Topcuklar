@@ -9,7 +9,7 @@ import { World } from "./sim/world";
 
 /** Seconds of the end screen kept at the end of the clip (history mode adds the "who's next?" card). */
 export function tailSeconds(fighters: readonly FighterDef[]): number {
-  return fighters.some((d) => d.growth) ? 3.4 : 1.6;
+  return fighters.some((d) => d.growth) ? 2.6 : 1.6;
 }
 /** Safety net: stop a recording that somehow never finishes. */
 const MAX_SECONDS = 90;
