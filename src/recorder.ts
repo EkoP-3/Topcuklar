@@ -265,6 +265,7 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   const length = Math.ceil((frames / FPS) * SAMPLE_RATE);
   const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE);
   const sfx = new Sfx(ctx);
+  await sfx.clipsReady();
   // Sfx only looks up who hit whom (fixed character data), so the final state is fine.
   for (let i = 0; i < plays.length; i++) {
     const p = plays[i];

@@ -1,5 +1,6 @@
 import type { World } from "../world";
 import type { Sfx } from "./sfx";
+import { clipLoader, clipUrls, type Clips } from "./samples";
 
 /**
  * Narrator clips (recorded once with ElevenLabs, see docs): `src/assets/voice/<leader id>.mp3`
@@ -13,15 +14,6 @@ const voiceUrls = import.meta.glob("../../assets/voice/*.mp3", {
   import: "default",
 }) as Record<string, string>;
 
-const urlById = new Map<string, string>();
-for (const [path, url] of Object.entries(voiceUrls)) {
-  const id = path
-    .split("/")
-    .pop()
-    ?.replace(/\.mp3$/, "");
-  if (id) urlById.set(id, url);
-}
-
 /** Gap between two narrator lines. */
 const LINE_GAP = 0.12;
 /** The intro starts this long after the clip does. */
@@ -29,31 +21,8 @@ const INTRO_AT = 0.1;
 /** "Who should fight next?" starts this long after the match is over (on the end card). */
 export const OUTRO_DELAY = 1.0;
 
-type Clips = Map<string, AudioBuffer>;
-const loaded = new WeakMap<BaseAudioContext, Promise<Clips>>();
-
 /** Decodes every clip for this audio context (once). */
-export function loadVoice(ctx: BaseAudioContext): Promise<Clips> {
-  let p = loaded.get(ctx);
-  if (!p) {
-    p = (async () => {
-      const clips: Clips = new Map();
-      await Promise.all(
-        [...urlById].map(async ([id, url]) => {
-          try {
-            const data = await (await fetch(url)).arrayBuffer();
-            clips.set(id, await ctx.decodeAudioData(data));
-          } catch {
-            // a missing clip is simply not spoken
-          }
-        }),
-      );
-      return clips;
-    })();
-    loaded.set(ctx, p);
-  }
-  return p;
-}
+export const loadVoice = clipLoader(clipUrls(voiceUrls));
 
 /** "A ... versus ... B ... who wins?", from `at`. */
 export function speakIntro(sfx: Sfx, clips: Clips, a: string, b: string, at = INTRO_AT): void {

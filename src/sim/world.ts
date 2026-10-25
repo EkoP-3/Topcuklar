@@ -317,6 +317,7 @@ export class World {
       x,
       y,
       ...(opts.dot ? { dot: true } : {}),
+      ...(opts.weapon ? { weapon: true } : {}),
     });
     target.ability?.onDamaged?.(this, target, attacker, dmg);
     if (opts.dot) return dmg;
@@ -903,7 +904,7 @@ export class World {
         const ab = a.ability;
         const dmg = a.def.damage * (ab?.damageMultiplier?.(a) ?? 1);
         const kb = a.def.knockback * (ab?.knockbackMultiplier?.(a) ?? 1);
-        const dealt = this.dealDamage(a, t, dmg, px, py, kb);
+        const dealt = this.dealDamage(a, t, dmg, px, py, kb, { weapon: true });
         lock[t.index] = a.def.hitInterval;
         if (dealt > 0) ab?.onHitDealt?.(this, a, t, dealt);
       }
@@ -968,6 +969,8 @@ export interface DamageOptions {
   dot?: boolean;
   /** 0..1 of the target's shield reduction to ignore. */
   pierce?: number;
+  /** A weapon hit (sound only). */
+  weapon?: boolean;
 }
 
 /** Where a fighter's weapon points: leaders keep it apart from their heading. */

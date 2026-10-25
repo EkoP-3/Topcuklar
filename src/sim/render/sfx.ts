@@ -1,6 +1,18 @@
 import type { SimEvent } from "../types";
 import { winChance } from "../odds";
 import type { World } from "../world";
+import { clipLoader, clipUrls, type Clips } from "./samples";
+
+/** Recorded effects (`src/assets/sfx/<name>.mp3`), used where they fit; synthesis covers the rest. */
+const loadClips = clipLoader(
+  clipUrls(
+    import.meta.glob("../../assets/sfx/*.mp3", {
+      eager: true,
+      query: "?url",
+      import: "default",
+    }) as Record<string, string>,
+  ),
+);
 
 /** Below this pre-fight win chance a victory counts as an upset. */
 export const UPSET_CHANCE = 0.4;
@@ -44,16 +56,27 @@ export interface NoiseOptions {
   music?: boolean;
 }
 
+/** Level of effects and music while the narrator speaks. */
+const VOICE_DUCK = 0.2;
+/** The "epic moment" track: a burst of damage this big (share of max HP) within EPIC_WINDOW... */
+const EPIC_BURST = 0.28;
+const EPIC_WINDOW = 0.5;
+/** ...or a finish where the winner has less than this share of HP left (or an upset). */
+const EPIC_FINISH_HP = 0.05;
+/** Seconds the epic track plays (the clip fades out by itself). */
+const EPIC_LENGTH = 6.5;
+/** Normal levels of the background music and effects buses. */
+const MUSIC_LEVEL = 0.32;
+const EFFECTS_LEVEL = 0.55;
+
 /**
- * Sound effects synthesized with the Web Audio API (no audio files). Purely
- * cosmetic: it listens to simulation events and never feeds anything back.
+ * Sound effects: mostly synthesized with the Web Audio API, plus a few recorded
+ * clips. Purely cosmetic: it listens to simulation events and never feeds anything back.
  *
  * Sound goes to the context's destination: the speakers for a live `AudioContext`
  * (unless muted), or the rendered buffer for an `OfflineAudioContext` (video export).
  * With `{ tap: true }` it is also sent to a MediaStream a recorder can add to a clip.
  */
-/** Level of effects and music while the narrator speaks. */
-const VOICE_DUCK = 0.35;
 
 export class Sfx {
   readonly ctx: BaseAudioContext;
@@ -70,12 +93,20 @@ export class Sfx {
   private readonly monitor: GainNode;
   /** Effects and music dip under the narrator through this. */
   private readonly duck: GainNode;
+  /** The epic track: its own path, not squeezed by the effects compressor (still under the narrator). */
+  private readonly epicBus: GainNode;
   private readonly voice: GainNode;
   private readonly speaking = new Set<AudioBufferSourceNode>();
   private readonly noiseBuffer: AudioBuffer;
   private readonly lastPlayed = new Map<string, number>();
   /** Plucked-string notes, rendered once per pitch. */
   private readonly plucks = new Map<number, AudioBuffer>();
+  private clips: Clips | null = null;
+  private readonly clipsLoaded: Promise<void>;
+  /** The epic track plays at most once per match. */
+  private epicWorld: World | null = null;
+  private epicPlayed = false;
+  private recentHits: { t: number; target: number; damage: number }[] = [];
 
   constructor(ctx: BaseAudioContext, opts: { tap?: boolean } = {}) {
     this.ctx = ctx;
@@ -86,10 +117,10 @@ export class Sfx {
     compressor.ratio.value = 6;
 
     this.bus = ctx.createGain();
-    this.bus.gain.value = 0.55;
+    this.bus.gain.value = EFFECTS_LEVEL;
     this.bus.connect(compressor);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = 0.32;
+    this.musicBus.gain.value = MUSIC_LEVEL;
     this.musicBus.connect(compressor);
 
     // Shared hall reverb: everything sounds like it is played in one stone room.
@@ -107,20 +138,41 @@ export class Sfx {
 
     this.monitor = ctx.createGain();
     this.duck = ctx.createGain();
-    compressor.connect(this.duck).connect(this.monitor);
+    // Everything ends in a brick-wall limiter so the loudest moments never clip.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -3;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.12;
+    compressor.connect(this.duck).connect(limiter);
+    this.epicBus = ctx.createGain();
+    this.epicBus.connect(this.duck);
+    // The narrator gets its own gentle compression so every word sits above the fight.
+    const voiceComp = ctx.createDynamicsCompressor();
+    voiceComp.threshold.value = -22;
+    voiceComp.ratio.value = 3;
+    voiceComp.attack.value = 0.005;
+    voiceComp.release.value = 0.15;
     this.voice = ctx.createGain();
-    this.voice.gain.value = 1.1;
-    this.voice.connect(this.monitor);
-    this.monitor.connect(ctx.destination);
-    if (this.tap) {
-      this.duck.connect(this.tap);
-      this.voice.connect(this.tap);
-    }
+    this.voice.gain.value = 1.3;
+    this.voice.connect(voiceComp).connect(limiter);
+    limiter.connect(this.monitor).connect(ctx.destination);
+    if (this.tap) limiter.connect(this.tap);
 
     const length = ctx.sampleRate;
     this.noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+
+    this.clipsLoaded = loadClips(ctx).then((c) => {
+      this.clips = c;
+    });
+  }
+
+  /** Resolves once the recorded effects are decoded (await before an offline render). */
+  clipsReady(): Promise<void> {
+    return this.clipsLoaded;
   }
 
   setMuted(muted: boolean): void {
@@ -166,18 +218,33 @@ export class Sfx {
           this.tone(520, 0.06, { type: "sine", gain: 0.06, slideTo: 380 });
           return;
         }
+        // Every hit counts towards the epic burst, even ones too close together to be heard.
+        this.epicOnHit(world, e.target, e.damage);
         if (!this.allow("hit", 0.03)) return;
         const attacker = world.fighters[e.attacker];
         const target = world.fighters[e.target];
         const rel = target ? (e.damage / target.maxHp) * 100 : e.damage;
         const power = clamp(0.3 + rel / 28, 0.3, 1);
-        // Leaders hit with their bodies, units and projectiles: heavy impacts.
-        if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.growth)) this.thud(power);
-        else this.clang(power);
+        if (attacker?.def.growth && e.weapon) {
+          // A leader's cultural weapon: a real blade.
+          if (!this.sample("sword-hit", { gain: 0.25 + 0.5 * power, rate: rand(0.92, 1.08) })) {
+            this.clang(power);
+          }
+        } else if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.growth)) {
+          // Leaders hit with their bodies, units and projectiles: heavy impacts.
+          this.thud(power);
+        } else {
+          this.clang(power);
+        }
+        if (rel >= 9 && this.allow("crack", 0.8)) {
+          this.sample("bone-crack", { gain: 0.5, rate: rand(0.95, 1.05) });
+        }
         break;
       }
       case "clash":
         if (!this.allow("clash", 0.08)) return;
+        if (this.sample("clash", { gain: 0.45, rate: rand(0.95, 1.05) })) break;
+        if (this.sample("sword-hit", { gain: 0.3, rate: 1.3, duration: 0.35 })) break;
         this.bell(1250 * rand(0.95, 1.05), 0.4, 0.2);
         this.noise(0.06, { filter: "highpass", freq: 3000, gain: 0.3 });
         break;
@@ -257,7 +324,13 @@ export class Sfx {
         }
         break;
       case "shoot":
-        if (e.style === "arrow") {
+        if (e.style === "arrow" && this.allow("bow", 0.1) && this.sample("bow", { gain: 0.35 })) {
+          // recorded bow
+        } else if (e.style === "bombard" && this.sample("cannon", { gain: 0.85 })) {
+          // recorded cannon
+        } else if (e.style === "ball" && this.sample("cannon", { gain: 0.5, rate: 1.15 })) {
+          // a field gun: the same blast, lighter
+        } else if (e.style === "arrow") {
           this.noise(0.12, { filter: "bandpass", freq: 2600, slideTo: 900, q: 2, gain: 0.35 });
           this.tone(880, 0.07, { type: "triangle", gain: 0.12, slideTo: 420 });
         } else if (e.style === "musket") {
@@ -311,6 +384,7 @@ export class Sfx {
         this.noise(0.4, { filter: "bandpass", freq: 4200, q: 3, gain: 0.3 });
         break;
       case "ultimate":
+        this.sample("horn", { gain: 0.5 });
         // Rising tension while the name is on screen.
         this.tone(110, 1.8, { type: "sawtooth", gain: 0.16, slideTo: 880, attack: 0.3 });
         this.tone(55, 1.8, { type: "sine", gain: 0.4, slideTo: 110, attack: 0.2 });
@@ -342,6 +416,7 @@ export class Sfx {
         this.tone(55, 0.5, { type: "sine", gain: 0.6, slideTo: 30 });
         break;
       case "nearMiss":
+        if (e.count >= 3) this.sample("gasp", { gain: 0.4, delay: 0.05 });
         // Whoosh past, then a plucked sting that climbs with the count.
         this.noise(0.32, { filter: "bandpass", freq: 500, slideTo: 3200, q: 1.4, gain: 0.5 });
         this.pluck(440 * 2 ** ((e.count * 3) / 12), { gain: 0.5, delay: 0.1 });
@@ -368,6 +443,7 @@ export class Sfx {
         this.noise(0.4, { filter: "lowpass", freq: 1200, slideTo: 100, gain: 0.7 });
         break;
       case "slam":
+        if (this.allow("crack", 0.8)) this.sample("bone-crack", { gain: 0.65 });
         this.tone(70, 0.8, { type: "sine", gain: 0.9, slideTo: 25 });
         this.noise(0.15, { filter: "highpass", freq: 2500, gain: 0.6 });
         this.noise(0.6, { filter: "lowpass", freq: 1500, slideTo: 80, gain: 0.8 });
@@ -389,6 +465,12 @@ export class Sfx {
         this.tone(120, 0.9, { type: "sawtooth", gain: 0.45, slideTo: 30 });
         this.noise(0.8, { filter: "lowpass", freq: 1800, slideTo: 120, gain: 0.7 });
         this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
+        // A funeral bell for the fallen, then the crowd for the winner.
+        this.sample("bell", { gain: 0.75, delay: 0.1 });
+        this.sample("crowd", { gain: 0.3, delay: 0.9 });
+        const close = winner ? winner.hp / winner.maxHp < EPIC_FINISH_HP : false;
+        const upset = chance !== null && chance < UPSET_CHANCE;
+        if (close || upset) this.epic(world, 0.25);
         break;
       }
       case "fight":
@@ -474,6 +556,72 @@ export class Sfx {
   }
 
   /** Metal-on-body impact. */
+  /**
+   * Plays a recorded clip on the effects bus (or the music bus). Returns false when
+   * the clip is missing or not decoded yet, so the caller can fall back to synthesis.
+   */
+  private sample(
+    name: string,
+    o: {
+      gain?: number;
+      rate?: number;
+      delay?: number;
+      duration?: number;
+      music?: boolean;
+      out?: AudioNode;
+    } = {},
+  ): boolean {
+    const clip = this.clips?.get(name);
+    if (!clip) return false;
+    const at = this.now() + (o.delay ?? 0);
+    const src = this.ctx.createBufferSource();
+    src.buffer = clip;
+    src.playbackRate.value = o.rate ?? 1;
+    const g = this.ctx.createGain();
+    g.gain.value = o.gain ?? 1;
+    src.connect(g).connect(o.out ?? (o.music ? this.musicBus : this.bus));
+    if (o.duration) {
+      g.gain.setValueAtTime(o.gain ?? 1, at + o.duration * 0.7);
+      g.gain.linearRampToValueAtTime(0, at + o.duration);
+      src.start(at, 0, o.duration);
+    } else {
+      src.start(at);
+    }
+    return true;
+  }
+
+  /** A huge burst of damage on one fighter triggers the epic track (once per match). */
+  private epicOnHit(world: World, target: number, damage: number): void {
+    this.epicReset(world);
+    const t = this.now();
+    this.recentHits = this.recentHits.filter((h) => t - h.t <= EPIC_WINDOW);
+    this.recentHits.push({ t, target, damage });
+    const maxHp = world.fighters[target]?.maxHp ?? Infinity;
+    const burst = this.recentHits.reduce((s, h) => (h.target === target ? s + h.damage : s), 0);
+    if (burst >= maxHp * EPIC_BURST) this.epic(world, 0);
+  }
+
+  private epicReset(world: World): void {
+    if (world === this.epicWorld) return;
+    this.epicWorld = world;
+    this.epicPlayed = false;
+    this.recentHits = [];
+  }
+
+  /** The epic track over everything; the background music steps aside meanwhile. */
+  private epic(world: World, delay: number): void {
+    this.epicReset(world);
+    if (this.epicPlayed || !world.fighters.some((f) => f.def.growth)) return;
+    if (!this.sample("epic", { gain: 0.8, delay, out: this.epicBus })) return;
+    this.epicPlayed = true;
+    const at = this.now() + delay;
+    const back = at + EPIC_LENGTH - 0.8;
+    this.musicBus.gain.setTargetAtTime(0.03, at, 0.08);
+    this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL, back, 0.4);
+    this.bus.gain.setTargetAtTime(EFFECTS_LEVEL * 0.55, at, 0.08);
+    this.bus.gain.setTargetAtTime(EFFECTS_LEVEL, back, 0.4);
+  }
+
   private clang(power: number): void {
     const f = 520 * rand(0.9, 1.15);
     this.tone(f, 0.16, { type: "triangle", gain: 0.3 * power, slideTo: f * 0.55 });

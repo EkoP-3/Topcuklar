@@ -389,6 +389,8 @@ export type SimEvent =
       y: number;
       /** Damage over time (poison tick): no hit-stop, quieter effects. */
       dot?: boolean;
+      /** Dealt by the attacker's weapon (not body, unit or projectile). */
+      weapon?: boolean;
     }
   | { type: "clash"; x: number; y: number }
   | { type: "wall"; fighter: number; x: number; y: number }
