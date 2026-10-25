@@ -1,4 +1,5 @@
 import { winChance } from "./sim/odds";
+import { DOMAINS_ON } from "./sim/world";
 import type { FighterDef } from "./sim/types";
 
 /** The ultimate's name, read from a fresh ability instance ("" for non-leaders). */
@@ -29,7 +30,7 @@ export function videoDescription(a: FighterDef, b: FighterDef): string {
   const ua = ultimateName(a);
   const ub = ultimateName(b);
   if (ua && ub) lines.push("", `Ultimates: ${ua} vs ${ub}`);
-  if (a.domain && b.domain) {
+  if (DOMAINS_ON && a.domain && b.domain) {
     lines.push("", `Domain Expansion: ${a.domain.name} vs ${b.domain.name}`);
   }
   const odds = winChance(a.id, b.id);

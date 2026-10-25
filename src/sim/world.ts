@@ -15,6 +15,8 @@ const INTRO_TIME = 0.8;
  */
 export const HISTORY_INTRO_TIME = 2.6;
 /** Domain Expansion timeline (fight seconds) and the clash length. */
+/** Domain Expansion is switched off for now: the shorts read better without it. */
+export const DOMAINS_ON = false;
 export const DOMAIN_FIRST_AT = 15;
 export const DOMAIN_SECOND_AT = 16.5;
 export const DOMAIN_CLASH_TIME = 2.5;
@@ -180,7 +182,7 @@ export class World {
     this.rng = createRng(seed);
     this.damageDealt = defs.map(() => 0);
     this.closeCallsEnabled = defs.some((d) => d.growth);
-    this.domainsEnabled = defs.some((d) => d.domain);
+    this.domainsEnabled = DOMAINS_ON && defs.some((d) => d.domain);
     this.introTime = this.closeCallsEnabled ? HISTORY_INTRO_TIME : INTRO_TIME;
 
     const count = defs.length;
