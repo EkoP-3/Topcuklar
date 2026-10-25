@@ -52,6 +52,9 @@ export interface NoiseOptions {
  * (unless muted), or the rendered buffer for an `OfflineAudioContext` (video export).
  * With `{ tap: true }` it is also sent to a MediaStream a recorder can add to a clip.
  */
+/** Level of effects and music while the narrator speaks. */
+const VOICE_DUCK = 0.35;
+
 export class Sfx {
   readonly ctx: BaseAudioContext;
   /** Audio stream for real-time video recording; always carries sound, even when muted. */
@@ -65,6 +68,10 @@ export class Sfx {
   /** Background music goes through here (quieter than the effects). */
   private readonly musicBus: GainNode;
   private readonly monitor: GainNode;
+  /** Effects and music dip under the narrator through this. */
+  private readonly duck: GainNode;
+  private readonly voice: GainNode;
+  private readonly speaking = new Set<AudioBufferSourceNode>();
   private readonly noiseBuffer: AudioBuffer;
   private readonly lastPlayed = new Map<string, number>();
   /** Plucked-string notes, rendered once per pitch. */
@@ -99,9 +106,16 @@ export class Sfx {
     this.musicBus.connect(musicSend).connect(reverb);
 
     this.monitor = ctx.createGain();
-    compressor.connect(this.monitor);
+    this.duck = ctx.createGain();
+    compressor.connect(this.duck).connect(this.monitor);
+    this.voice = ctx.createGain();
+    this.voice.gain.value = 1.1;
+    this.voice.connect(this.monitor);
     this.monitor.connect(ctx.destination);
-    if (this.tap) compressor.connect(this.tap);
+    if (this.tap) {
+      this.duck.connect(this.tap);
+      this.voice.connect(this.tap);
+    }
 
     const length = ctx.sampleRate;
     this.noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -111,6 +125,27 @@ export class Sfx {
 
   setMuted(muted: boolean): void {
     this.monitor.gain.value = muted ? 0 : 1;
+  }
+
+  /** Plays a narrator clip at `at` (seconds, context time); everything else dips meanwhile. */
+  speak(clip: AudioBuffer, at: number): void {
+    const src = this.ctx.createBufferSource();
+    src.buffer = clip;
+    src.connect(this.voice);
+    src.start(at);
+    this.speaking.add(src);
+    src.onended = () => this.speaking.delete(src);
+    const g = this.duck.gain;
+    g.setTargetAtTime(VOICE_DUCK, Math.max(0, at - 0.05), 0.04);
+    g.setTargetAtTime(1, at + clip.duration, 0.25);
+  }
+
+  /** Live preview: cuts the narrator off when a new match starts. */
+  silenceVoice(): void {
+    for (const src of this.speaking) src.stop();
+    this.speaking.clear();
+    this.duck.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.duck.gain.setValueAtTime(1, this.ctx.currentTime);
   }
 
   resume(): void {

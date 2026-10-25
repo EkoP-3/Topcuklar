@@ -5,6 +5,7 @@ import { Fx } from "./sim/render/fx";
 import { SIDES } from "./sim/render/palette";
 import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
+import { Narrator } from "./sim/render/voice";
 import { ROSTERS, ROSTER_LABELS, findIn, isRosterId, type RosterId } from "./sim/rosters";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
@@ -108,6 +109,7 @@ export function ArenaPage() {
   const fxRef = useRef<Fx | null>(null);
   const sfxRef = useRef<Sfx | null>(null);
   const musicRef = useRef<Music | null>(null);
+  const narratorRef = useRef<Narrator | null>(null);
   const [musicOn, setMusicOn] = useState(readMusicOn);
   const [nextA, setNextA] = useState("");
   const [nextB, setNextB] = useState("");
@@ -129,6 +131,7 @@ export function ArenaPage() {
         try {
           sfxRef.current = new Sfx(new AudioContext());
           musicRef.current = new Music(sfxRef.current);
+          narratorRef.current = new Narrator(sfxRef.current);
         } catch {
           return;
         }
@@ -248,6 +251,7 @@ export function ArenaPage() {
           if (extras.musicOn && sfx && sfx.ctx.state === "running") {
             musicRef.current?.update(musicState(world), sfx.ctx.currentTime);
           }
+          narratorRef.current?.update(world);
         }
         renderer.draw(world, fx, { next: extras.next });
 

@@ -4,12 +4,13 @@ import { loadFonts } from "./sim/render/palette";
 import { Fx } from "./sim/render/fx";
 import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
+import { Narrator, OUTRO_DELAY, loadVoice, speakIntro, speakOutro } from "./sim/render/voice";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 
 /** Seconds of the end screen kept at the end of the clip (history mode adds the "who's next?" card). */
 export function tailSeconds(fighters: readonly FighterDef[]): number {
-  return fighters.some((d) => d.growth) ? 2.6 : 1.6;
+  return fighters.some((d) => d.growth) ? 3.6 : 1.6;
 }
 /** Safety net: stop a recording that somehow never finishes. */
 const MAX_SECONDS = 90;
@@ -241,6 +242,7 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   // Frame 0 is the starting position; frame n has been advanced n times.
   let frames = 1;
   let overFrames = 0;
+  let overAt = 0;
   const tail = tailSeconds(opts.fighters);
   const states: ReturnType<typeof musicState>[] = [musicState(probe)];
   while (overFrames < tail * FPS && frames < FPS * MAX_SECONDS) {
@@ -250,7 +252,10 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
       probe.events = [];
     }
     states.push(musicState(probe));
-    if (probe.phase === "over") overFrames++;
+    if (probe.phase === "over") {
+      if (overFrames === 0) overAt = frames * dt;
+      overFrames++;
+    }
     frames++;
     if (frames % 240 === 0) await yieldToPage();
   }
@@ -274,6 +279,11 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
       if (state) music.update(state, i * dt);
       if (i % 600 === 599) await yieldToPage();
     }
+  }
+  if (opts.fighters.some((d) => d.growth)) {
+    const clips = await loadVoice(ctx);
+    speakIntro(sfx, clips, opts.fighters[0].id, opts.fighters[1].id);
+    speakOutro(sfx, clips, overAt + OUTRO_DELAY);
   }
   const buffer = await ctx.startRendering();
   return { buffer, frames };
@@ -403,6 +413,7 @@ function recordStream(opts: RecordOptions): Recording {
     const stream = canvas.captureStream(STREAM_FPS);
     let audioContext: AudioContext | null = null;
     let music: Music | null = null;
+    let narrator: Narrator | null = null;
     try {
       audioContext = new AudioContext();
       const sfx = new Sfx(audioContext, { tap: true });
@@ -410,6 +421,7 @@ function recordStream(opts: RecordOptions): Recording {
       sfx.tap?.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
       fx.sfx = sfx;
       if (opts.music !== false) music = new Music(sfx);
+      narrator = new Narrator(sfx);
     } catch {
       audioContext = null;
     }
@@ -462,6 +474,7 @@ function recordStream(opts: RecordOptions): Recording {
         last = now;
         world.advance(dt);
         if (music && audioContext) music.update(musicState(world), audioContext.currentTime);
+        narrator?.update(world);
         fx.consume(world);
         fx.update(dt, world);
         // Only draw as often as the stream captures.
