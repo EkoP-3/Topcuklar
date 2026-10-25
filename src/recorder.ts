@@ -245,11 +245,13 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   let frames = 1;
   let overFrames = 0;
   let overAt = 0;
+  let koAt: number | null = null;
   const tail = tailSeconds(opts.fighters);
   const states: ReturnType<typeof musicState>[] = [musicState(probe)];
   while (overFrames < tail * FPS && frames < FPS * MAX_SECONDS) {
     probe.advance(dt);
     if (probe.events.length > 0) {
+      if (koAt === null && probe.events.some((e) => e.type === "ko")) koAt = frames * dt;
       plays.push({ t: frames * dt, events: probe.events });
       probe.events = [];
     }
@@ -266,6 +268,8 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE);
   const sfx = new Sfx(ctx);
   await sfx.clipsReady();
+  // Leaders: the finishing track builds up before the K.O. and drops right on it.
+  if (koAt !== null && opts.fighters.some((d) => d.growth)) sfx.scheduleFinale(probe, koAt);
   // Sfx only looks up who hit whom (fixed character data), so the final state is fine.
   for (let i = 0; i < plays.length; i++) {
     const p = plays[i];

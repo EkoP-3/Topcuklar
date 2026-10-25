@@ -58,8 +58,10 @@ export interface NoiseOptions {
 
 /** Level of effects and music while the narrator speaks. */
 const VOICE_DUCK = 0.2;
-/** Seconds of the finishing track; its first beat lands exactly on the K.O. (the clip fades out by itself). */
-const EPIC_LENGTH = 5.25;
+/** The finishing track: the beat drops EPIC_DROP seconds into the clip, right on the K.O. */
+const EPIC_DROP = 1.96;
+/** Seconds of the track after the drop (the clip fades out by itself). */
+const EPIC_TAIL = 5.35;
 /** Normal levels of the background music and effects buses. */
 const MUSIC_LEVEL = 0.32;
 const EFFECTS_LEVEL = 0.55;
@@ -558,13 +560,17 @@ export class Sfx {
       rate?: number;
       delay?: number;
       duration?: number;
+      /** Start this far into the clip. */
+      offset?: number;
+      /** Absolute start time (overrides `delay`). */
+      at?: number;
       music?: boolean;
       out?: AudioNode;
     } = {},
   ): boolean {
     const clip = this.clips?.get(name);
     if (!clip) return false;
-    const at = this.now() + (o.delay ?? 0);
+    const at = o.at ?? this.now() + (o.delay ?? 0);
     const src = this.ctx.createBufferSource();
     src.buffer = clip;
     src.playbackRate.value = o.rate ?? 1;
@@ -576,28 +582,43 @@ export class Sfx {
       g.gain.linearRampToValueAtTime(0, at + o.duration);
       src.start(at, 0, o.duration);
     } else {
-      src.start(at);
+      src.start(at, o.offset ?? 0);
     }
     return true;
   }
 
   /**
-   * Leaders' K.O.: the finishing track over everything (once per match), the background
-   * music stepping aside. False when it cannot play (weapon mode, clip missing).
+   * Video export knows when the K.O. will come: the finishing track starts early so its
+   * build-up plays while the loser goes down and the beat drops exactly on the K.O.
    */
-  private epic(world: World): boolean {
+  scheduleFinale(world: World, koAt: number): void {
+    this.epic(world, koAt);
+  }
+
+  /**
+   * Leaders' K.O.: the finishing track over everything (once per match), the background
+   * music stepping aside. `koAt` given (video export): the drop lands on it, with the
+   * build-up before. Live: the K.O. is now, so the track starts at the drop. True when
+   * the track plays (or was already scheduled) for this match.
+   */
+  private epic(world: World, koAt?: number): boolean {
     if (world !== this.epicWorld) {
       this.epicWorld = world;
       this.epicPlayed = false;
     }
-    if (this.epicPlayed || !world.fighters.some((f) => f.def.growth)) return false;
-    if (!this.sample("epic", { gain: 0.8, out: this.epicBus })) return false;
+    if (this.epicPlayed) return true;
+    if (!world.fighters.some((f) => f.def.growth)) return false;
+    const ko = koAt ?? this.now();
+    const start = Math.max(0, ko - EPIC_DROP);
+    const offset = start - (ko - EPIC_DROP);
+    if (!this.sample("epic", { gain: 0.8, out: this.epicBus, at: start, offset })) return false;
     this.epicPlayed = true;
-    const at = this.now();
-    const back = at + EPIC_LENGTH - 0.8;
+    const at = start;
+    const back = ko + EPIC_TAIL - 0.8;
     this.musicBus.gain.setTargetAtTime(0.03, at, 0.08);
     this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL, back, 0.4);
-    this.bus.gain.setTargetAtTime(EFFECTS_LEVEL * 0.55, at, 0.08);
+    // Effects keep their punch through the build-up and step back on the drop.
+    this.bus.gain.setTargetAtTime(EFFECTS_LEVEL * 0.55, ko, 0.08);
     this.bus.gain.setTargetAtTime(EFFECTS_LEVEL, back, 0.4);
     return true;
   }
