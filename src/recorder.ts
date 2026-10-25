@@ -4,7 +4,7 @@ import { loadFonts } from "./sim/render/palette";
 import { artReady } from "./sim/render/images";
 import { Fx } from "./sim/render/fx";
 import { Music, musicState } from "./sim/render/music";
-import { Sfx } from "./sim/render/sfx";
+import { Sfx, isEpicFinish, type HitRecord } from "./sim/render/sfx";
 import { Narrator, OUTRO_DELAY, loadVoice, speakIntro, speakOutro } from "./sim/render/voice";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
@@ -246,12 +246,21 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   let overFrames = 0;
   let overAt = 0;
   let koAt: number | null = null;
+  let epicFinish = false;
+  const hits: HitRecord[] = [];
   const tail = tailSeconds(opts.fighters);
   const states: ReturnType<typeof musicState>[] = [musicState(probe)];
   while (overFrames < tail * FPS && frames < FPS * MAX_SECONDS) {
     probe.advance(dt);
     if (probe.events.length > 0) {
-      if (koAt === null && probe.events.some((e) => e.type === "ko")) koAt = frames * dt;
+      for (const e of probe.events) {
+        if (e.type === "hit") hits.push({ t: frames * dt, target: e.target, damage: e.damage });
+        if (e.type === "ko" && koAt === null) {
+          koAt = frames * dt;
+          const fallen = probe.fighters[e.fighter];
+          epicFinish = !!fallen && isEpicFinish(hits, e.fighter, fallen.maxHp, koAt);
+        }
+      }
       plays.push({ t: frames * dt, events: probe.events });
       probe.events = [];
     }
@@ -268,8 +277,10 @@ async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; 
   const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE);
   const sfx = new Sfx(ctx);
   await sfx.clipsReady();
-  // Leaders: the finishing track builds up before the K.O. and drops right on it.
-  if (koAt !== null && opts.fighters.some((d) => d.growth)) sfx.scheduleFinale(probe, koAt);
+  // Leaders, epic finish: the finishing track builds up before the K.O. and drops right on it.
+  if (epicFinish && koAt !== null && opts.fighters.some((d) => d.growth)) {
+    sfx.scheduleFinale(probe, koAt);
+  }
   // Sfx only looks up who hit whom (fixed character data), so the final state is fine.
   for (let i = 0; i < plays.length; i++) {
     const p = plays[i];

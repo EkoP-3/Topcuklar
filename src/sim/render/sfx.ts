@@ -58,6 +58,31 @@ export interface NoiseOptions {
 
 /** Level of effects and music while the narrator speaks. */
 const VOICE_DUCK = 0.2;
+/**
+ * Epic finish: the loser lost at least EPIC_SHARE of their max HP in the last EPIC_WINDOW
+ * seconds — wiped out in one burst. Only then does the finishing track play.
+ */
+const EPIC_WINDOW = 2;
+const EPIC_SHARE = 0.25;
+
+export interface HitRecord {
+  t: number;
+  target: number;
+  damage: number;
+}
+
+/** Whether a K.O. at `koAt` was an epic finish, from the hits so far. */
+export function isEpicFinish(
+  hits: readonly HitRecord[],
+  loser: number,
+  maxHp: number,
+  koAt: number,
+): boolean {
+  let burst = 0;
+  for (const h of hits) if (h.target === loser && koAt - h.t <= EPIC_WINDOW) burst += h.damage;
+  return burst >= maxHp * EPIC_SHARE;
+}
+
 /** The finishing track: the beat drops EPIC_DROP seconds into the clip, right on the K.O. */
 const EPIC_DROP = 1.96;
 /** Seconds of the track after the drop (the clip fades out by itself). */
@@ -103,6 +128,8 @@ export class Sfx {
   /** The epic track plays at most once per match. */
   private epicWorld: World | null = null;
   private epicPlayed = false;
+  /** Recent hits this match, to spot an epic finish (live preview). */
+  private hits: HitRecord[] = [];
 
   constructor(ctx: BaseAudioContext, opts: { tap?: boolean } = {}) {
     this.ctx = ctx;
@@ -209,6 +236,9 @@ export class Sfx {
     if (this.clock === null && this.ctx.state !== "running") return;
     switch (e.type) {
       case "hit": {
+        this.track(world);
+        this.hits = this.hits.filter((h) => this.now() - h.t <= EPIC_WINDOW);
+        this.hits.push({ t: this.now(), target: e.target, damage: e.damage });
         if (e.dot) {
           if (!this.allow("dot", 0.25)) return;
           this.tone(520, 0.06, { type: "sine", gain: 0.06, slideTo: 380 });
@@ -447,8 +477,13 @@ export class Sfx {
         this.tone(e.n === 1 ? 392 : 294, 0.18, { type: "triangle", gain: 0.1, lowpass: 1500 });
         break;
       case "ko": {
-        // Leaders: the finishing track starts on this very frame (every match the same).
-        if (this.epic(world)) {
+        // Leaders, epic finish: the finishing track drops on this very frame.
+        this.track(world);
+        const fallen = world.fighters[e.fighter];
+        const epic =
+          this.epicPlayed ||
+          (!!fallen && isEpicFinish(this.hits, e.fighter, fallen.maxHp, this.now()));
+        if (epic && this.epic(world)) {
           this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
           break;
         }
@@ -601,11 +636,16 @@ export class Sfx {
    * build-up before. Live: the K.O. is now, so the track starts at the drop. True when
    * the track plays (or was already scheduled) for this match.
    */
+  /** Per-match state resets when a new match (world) shows up. */
+  private track(world: World): void {
+    if (world === this.epicWorld) return;
+    this.epicWorld = world;
+    this.epicPlayed = false;
+    this.hits = [];
+  }
+
   private epic(world: World, koAt?: number): boolean {
-    if (world !== this.epicWorld) {
-      this.epicWorld = world;
-      this.epicPlayed = false;
-    }
+    this.track(world);
     if (this.epicPlayed) return true;
     if (!world.fighters.some((f) => f.def.growth)) return false;
     const ko = koAt ?? this.now();
