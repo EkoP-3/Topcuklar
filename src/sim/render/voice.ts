@@ -15,7 +15,7 @@ const voiceUrls = import.meta.glob("../../assets/voice/*.mp3", {
 }) as Record<string, string>;
 
 /** Gap between two narrator lines. */
-const LINE_GAP = 0.05;
+const LINE_GAP = 0.02;
 /** The intro starts this long after the clip does. */
 const INTRO_AT = 0.1;
 /** "Who should fight next?" starts this long after the match is over (on the end card). */

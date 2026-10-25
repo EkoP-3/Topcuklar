@@ -58,13 +58,8 @@ export interface NoiseOptions {
 
 /** Level of effects and music while the narrator speaks. */
 const VOICE_DUCK = 0.2;
-/** The "epic moment" track: a burst of damage this big (share of max HP) within EPIC_WINDOW... */
-const EPIC_BURST = 0.28;
-const EPIC_WINDOW = 0.5;
-/** ...or a finish where the winner has less than this share of HP left (or an upset). */
-const EPIC_FINISH_HP = 0.05;
-/** Seconds the epic track plays (the clip fades out by itself). */
-const EPIC_LENGTH = 6.5;
+/** Seconds of the finishing track; its first beat lands exactly on the K.O. (the clip fades out by itself). */
+const EPIC_LENGTH = 5.25;
 /** Normal levels of the background music and effects buses. */
 const MUSIC_LEVEL = 0.32;
 const EFFECTS_LEVEL = 0.55;
@@ -106,7 +101,6 @@ export class Sfx {
   /** The epic track plays at most once per match. */
   private epicWorld: World | null = null;
   private epicPlayed = false;
-  private recentHits: { t: number; target: number; damage: number }[] = [];
 
   constructor(ctx: BaseAudioContext, opts: { tap?: boolean } = {}) {
     this.ctx = ctx;
@@ -218,8 +212,6 @@ export class Sfx {
           this.tone(520, 0.06, { type: "sine", gain: 0.06, slideTo: 380 });
           return;
         }
-        // Every hit counts towards the epic burst, even ones too close together to be heard.
-        this.epicOnHit(world, e.target, e.damage);
         if (!this.allow("hit", 0.03)) return;
         const attacker = world.fighters[e.attacker];
         const target = world.fighters[e.target];
@@ -416,7 +408,7 @@ export class Sfx {
         this.tone(55, 0.5, { type: "sine", gain: 0.6, slideTo: 30 });
         break;
       case "nearMiss":
-        if (e.count >= 3) this.sample("gasp", { gain: 0.4, delay: 0.05 });
+        this.sample("gasp", { gain: 0.35, delay: 0.05 });
         // Whoosh past, then a plucked sting that climbs with the count.
         this.noise(0.32, { filter: "bandpass", freq: 500, slideTo: 3200, q: 1.4, gain: 0.5 });
         this.pluck(440 * 2 ** ((e.count * 3) / 12), { gain: 0.5, delay: 0.1 });
@@ -453,6 +445,11 @@ export class Sfx {
         this.tone(e.n === 1 ? 392 : 294, 0.18, { type: "triangle", gain: 0.1, lowpass: 1500 });
         break;
       case "ko": {
+        // Leaders: the finishing track starts on this very frame (every match the same).
+        if (this.epic(world)) {
+          this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
+          break;
+        }
         // Upset: the underdog won — a triumphant horn sting after the K.O.
         const loser = world.fighters[e.fighter];
         const winner = world.fighters.find((f) => f.alive && f.side !== loser?.side);
@@ -465,12 +462,6 @@ export class Sfx {
         this.tone(120, 0.9, { type: "sawtooth", gain: 0.45, slideTo: 30 });
         this.noise(0.8, { filter: "lowpass", freq: 1800, slideTo: 120, gain: 0.7 });
         this.tone(55, 1.2, { type: "sine", gain: 0.6, slideTo: 28 });
-        // A funeral bell for the fallen, then the crowd for the winner.
-        this.sample("bell", { gain: 0.75, delay: 0.1 });
-        this.sample("crowd", { gain: 0.3, delay: 0.9 });
-        const close = winner ? winner.hp / winner.maxHp < EPIC_FINISH_HP : false;
-        const upset = chance !== null && chance < UPSET_CHANCE;
-        if (close || upset) this.epic(world, 0.25);
         break;
       }
       case "fight":
@@ -590,36 +581,25 @@ export class Sfx {
     return true;
   }
 
-  /** A huge burst of damage on one fighter triggers the epic track (once per match). */
-  private epicOnHit(world: World, target: number, damage: number): void {
-    this.epicReset(world);
-    const t = this.now();
-    this.recentHits = this.recentHits.filter((h) => t - h.t <= EPIC_WINDOW);
-    this.recentHits.push({ t, target, damage });
-    const maxHp = world.fighters[target]?.maxHp ?? Infinity;
-    const burst = this.recentHits.reduce((s, h) => (h.target === target ? s + h.damage : s), 0);
-    if (burst >= maxHp * EPIC_BURST) this.epic(world, 0);
-  }
-
-  private epicReset(world: World): void {
-    if (world === this.epicWorld) return;
-    this.epicWorld = world;
-    this.epicPlayed = false;
-    this.recentHits = [];
-  }
-
-  /** The epic track over everything; the background music steps aside meanwhile. */
-  private epic(world: World, delay: number): void {
-    this.epicReset(world);
-    if (this.epicPlayed || !world.fighters.some((f) => f.def.growth)) return;
-    if (!this.sample("epic", { gain: 0.8, delay, out: this.epicBus })) return;
+  /**
+   * Leaders' K.O.: the finishing track over everything (once per match), the background
+   * music stepping aside. False when it cannot play (weapon mode, clip missing).
+   */
+  private epic(world: World): boolean {
+    if (world !== this.epicWorld) {
+      this.epicWorld = world;
+      this.epicPlayed = false;
+    }
+    if (this.epicPlayed || !world.fighters.some((f) => f.def.growth)) return false;
+    if (!this.sample("epic", { gain: 0.8, out: this.epicBus })) return false;
     this.epicPlayed = true;
-    const at = this.now() + delay;
+    const at = this.now();
     const back = at + EPIC_LENGTH - 0.8;
     this.musicBus.gain.setTargetAtTime(0.03, at, 0.08);
     this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL, back, 0.4);
     this.bus.gain.setTargetAtTime(EFFECTS_LEVEL * 0.55, at, 0.08);
     this.bus.gain.setTargetAtTime(EFFECTS_LEVEL, back, 0.4);
+    return true;
   }
 
   private clang(power: number): void {

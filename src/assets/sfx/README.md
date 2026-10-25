@@ -11,8 +11,6 @@
 | `cannon` | Mehmed'in bombardı, Napolyon'un topu | kullanıcı |
 | `horn` | ultimate başlangıcı | ElevenLabs SFX |
 | `gasp` | 3. kıl payı (frenzy) | ElevenLabs SFX |
-| `bell` | K.O. | kullanıcı |
-| `crowd` | kazanan için tezahürat | ElevenLabs SFX |
-| `epic` | "epik an": maçta en fazla bir kez — çok ağır vuruş (0,5 sn'de canın %28'i) ya da sürpriz/kıl payı galibiyet | kullanıcı (6,5 sn kesit) |
+| `epic` | her maçta K.O. anında; parçanın ilk vuruşu tam K.O. karesine denk gelir | kullanıcı (0,10–5,30 sn kesit) |
 
 Hepsi mono, ses seviyeleri eşitlenmiş (loudnorm). Yeni dosya eklerken aynı adla değiştirmek yeterli.

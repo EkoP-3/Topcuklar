@@ -81,17 +81,21 @@ const ULT_TIME_SCALE = 0.2;
 /** Fraction of max HP at which a leader's ultimate fires. */
 export const ULT_HP = 0.3;
 /** Close calls: two bodies rush past within NEAR_GAP of each other without touching. */
-const NEAR_GAP = 19;
-/** ...while closing in on each other at least this fast (units/second). */
-const NEAR_SPEED = 380;
+const NEAR_GAP = 45;
+/** ...having closed in on each other at least this fast (units/second)... */
+const NEAR_SPEED = 190;
+/** ...and still sliding past each other this fast at the closest point (not bouncing back). */
+const NEAR_PASS_SPEED = 190;
 /** The gap has to open up past this again before the next close call can count. */
-const FAR_GAP = 60;
+const FAR_GAP = 90;
+/** No close call within this long after the leaders touched (bodies or weapons). */
+const NEAR_AFTER_TOUCH = 0.6;
 const CLOSE_CALL_COOLDOWN = 0.8;
 /** A close call slows time briefly so the viewer sees it. */
 const CLOSE_CALL_SLOWMO = 0.09;
 const CLOSE_CALL_TIME_SCALE = 0.35;
 /** Close calls needed to trigger a frenzy. */
-export const CLOSE_CALLS_FOR_FRENZY = 3;
+export const CLOSE_CALLS_FOR_FRENZY = 2;
 /** Frenzy: the arena shrinks to FRENZY_SIZE of its width and everyone speeds up. */
 export const FRENZY_TIME = 4;
 const FRENZY_SIZE = 0.75;
@@ -140,10 +144,14 @@ export class World {
   hi = ARENA;
   private closeCallCooldown = 0;
   private gapTouched = false;
+  /** When the two leaders last touched (bodies or weapons); a bounce right after is no near miss. */
+  private lastTouch = -Infinity;
   private prevGap = Infinity;
-  /** Closest gap during the current approach and how fast they were closing then. */
+  /** Closest gap during the current approach, the fastest closing speed on the way in, and
+   * how fast they slid past each other at the closest point. */
   private approachMin = Infinity;
-  private approachSpeed = 0;
+  private approachClosing = 0;
+  private approachPass = 0;
   private approachX = 0;
   private approachY = 0;
   /** Sim-seconds of close-call slow motion left. */
@@ -292,6 +300,12 @@ export class World {
     opts: DamageOptions = {},
   ): number {
     if (this.phase !== "fight" || !target.alive) return 0;
+    // A blade (or a body blow at point-blank range) between the two leaders: no near miss.
+    if (attacker.index + target.index === 1 && !opts.dot) {
+      const gap =
+        Math.hypot(target.x - attacker.x, target.y - attacker.y) - attacker.radius - target.radius;
+      if (opts.weapon || gap < NEAR_GAP) this.touched();
+    }
     // Shields lower damage; piercing hits ignore part of that reduction.
     const pierce = clamp(opts.pierce ?? 0, 0, 1);
     const taken = target.damageTakenMul + (1 - target.damageTakenMul) * pierce;
@@ -661,10 +675,16 @@ export class World {
   }
 
   /**
-   * A close call: the two leaders rush at each other and miss by a hair. Measured at
-   * the closest point of each approach: tiny gap, high closing speed, no touch, and
-   * neither of them stunned (drifting side by side does not count).
+   * A close call: the two leaders rush at each other and slip past by a hair. Measured at
+   * the closest point of each approach: small gap, fast approach, still sliding past each
+   * other (a bounce-back has no sideways speed), no touch of bodies or weapons on the way
+   * in or just before, and neither of them stunned.
    */
+  private touched(): void {
+    this.gapTouched = true;
+    this.lastTouch = this.time;
+  }
+
   private watchCloseCalls(dt: number): void {
     this.closeCallCooldown = Math.max(0, this.closeCallCooldown - dt);
     const [a, b] = this.fighters;
@@ -673,11 +693,15 @@ export class World {
     const dy = b.y - a.y;
     const d = Math.hypot(dx, dy) || 1;
     const gap = d - a.radius - b.radius;
-    if (gap <= 0) this.gapTouched = true;
+    if (gap <= 0) this.touched();
+    // Relative motion split into "toward each other" and "sliding past each other".
+    const rvx = b.vx - a.vx;
+    const rvy = b.vy - a.vy;
+    const closing = -(rvx * dx + rvy * dy) / d;
+    this.approachClosing = Math.max(this.approachClosing, closing);
     if (gap < this.approachMin) {
       this.approachMin = gap;
-      // Closing speed: how fast they are moving toward each other right now.
-      this.approachSpeed = Math.hypot(b.vx - a.vx, b.vy - a.vy);
+      this.approachPass = Math.abs(rvx * dy - rvy * dx) / d;
       const k = a.radius / (a.radius + b.radius);
       this.approachX = a.x + dx * k;
       this.approachY = a.y + dy * k;
@@ -688,9 +712,11 @@ export class World {
       if (
         free &&
         !this.gapTouched &&
+        this.time - this.lastTouch > NEAR_AFTER_TOUCH &&
         this.approachMin > 0 &&
         this.approachMin < NEAR_GAP &&
-        this.approachSpeed > NEAR_SPEED
+        this.approachClosing > NEAR_SPEED &&
+        this.approachPass > NEAR_PASS_SPEED
       ) {
         this.closeCall(this.approachX, this.approachY);
       }
@@ -698,6 +724,7 @@ export class World {
     if (gap > FAR_GAP) {
       this.gapTouched = false;
       this.approachMin = Infinity;
+      this.approachClosing = 0;
     }
     this.prevGap = gap;
   }
@@ -869,6 +896,8 @@ export class World {
           b.vy += dy * 140;
           this.clashCooldown = CLASH_COOLDOWN;
           this.freeze = Math.max(this.freeze, 0.03);
+          // Weapons met: whatever happens next on this approach is a bounce, not a near miss.
+          this.touched();
           clashA = i;
           clashB = j;
           a.ability?.onClash?.(this, a, b);
