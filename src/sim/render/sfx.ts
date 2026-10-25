@@ -172,7 +172,7 @@ export class Sfx {
         const rel = target ? (e.damage / target.maxHp) * 100 : e.damage;
         const power = clamp(0.3 + rel / 28, 0.3, 1);
         // Leaders hit with their bodies, units and projectiles: heavy impacts.
-        if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.reach <= 0)) this.thud(power);
+        if (attacker && (BLUNT.has(attacker.def.id) || attacker.def.growth)) this.thud(power);
         else this.clang(power);
         break;
       }

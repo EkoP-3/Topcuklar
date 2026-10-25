@@ -15,6 +15,8 @@ const portraitUrls = import.meta.glob("../../assets/leaders/*.{png,webp,jpg,jpeg
   import: "default",
 }) as Record<string, string>;
 
+const pending: Promise<unknown>[] = [];
+
 function imageSet(urls: Record<string, string>): (id: string) => HTMLImageElement | null {
   const byId = new Map<string, string>();
   for (const [path, url] of Object.entries(urls)) {
@@ -25,17 +27,40 @@ function imageSet(urls: Record<string, string>): (id: string) => HTMLImageElemen
     if (id) byId.set(id, url);
   }
   const images = new Map<string, HTMLImageElement>();
-  return (id) => {
-    const url = byId.get(id);
-    if (!url) return null;
+  const load = (id: string, url: string): HTMLImageElement => {
     let img = images.get(id);
     if (!img) {
       img = new Image();
       img.src = url;
       images.set(id, img);
+      pending.push(img.decode().catch(() => undefined));
     }
+    return img;
+  };
+  // Start every download right away so recordings never draw a placeholder.
+  if (typeof Image !== "undefined") for (const [id, url] of byId) load(id, url);
+  return (id) => {
+    const url = byId.get(id);
+    if (!url) return null;
+    const img = load(id, url);
     return img.complete && img.naturalWidth > 0 ? img : null;
   };
+}
+
+/** Resolves once all artwork has loaded (or failed); call before recording. */
+export function artReady(): Promise<void> {
+  return Promise.all(pending).then(() => undefined);
+}
+
+/** Whether there is artwork for this weapon id (loaded or not). */
+export function hasWeaponImage(id: string): boolean {
+  return Object.keys(weaponUrls).some(
+    (p) =>
+      p
+        .split("/")
+        .pop()
+        ?.replace(/\.(png|webp)$/, "") === id,
+  );
 }
 
 /** The loaded image for a weapon, or null while loading / when there is none. */

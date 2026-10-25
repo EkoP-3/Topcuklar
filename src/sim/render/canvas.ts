@@ -21,6 +21,7 @@ import {
   ULT_CINEMATIC,
   ULT_HP,
   type World,
+  weaponAngle,
 } from "../world";
 import { winChance } from "../odds";
 import { liveChance } from "../live";
@@ -46,7 +47,8 @@ import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem, fleur } from "./emblems";
 import { FLAG_RATIO, drawFlag } from "./flags";
 import { drawHeadgear } from "./headgear";
-import { portraitImage } from "./images";
+import { hasWeaponImage, portraitImage } from "./images";
+import { weaponArt } from "../leaders/weapons";
 import { drawWeapon } from "./sprites";
 
 /** The video frame is laid out in a fixed 1080x1920 (9:16) space and scaled to the canvas. */
@@ -661,18 +663,19 @@ function hpBadge(ctx: Ctx, hp: string, r: number): void {
 function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
   const time = world.time;
   const side = SIDES[f.side];
-  const leader = f.def.reach <= 0;
+  const leader = !!f.def.growth;
   ctx.save();
   ctx.translate(f.x, f.y);
 
-  if (!leader) {
+  if (f.def.reach > 0) {
     ctx.save();
-    ctx.rotate(f.angle);
+    ctx.rotate(weaponAngle(f));
     drawWeapon(
       ctx,
-      f.def.id,
-      f.radius * 0.3,
-      f.radius + f.def.reach,
+      leader && !hasWeaponImage(f.def.id) ? weaponArt(f.def.id) : f.def.id,
+      leader ? f.radius * 0.15 : f.radius * 0.3,
+      // Leaders' art is drawn a bit past the hit reach so the weapon reads at phone size.
+      f.radius + f.def.reach * (leader ? 1.3 : 1),
       f.def.thickness,
       f.ability?.visualLevel?.() ?? 0,
     );

@@ -203,9 +203,12 @@ export class World {
         maxHp: def.hp,
         alive: true,
         angle: this.rng.range(0, TAU),
+        // Leaders start with the weapon pointing at the centre.
+        weaponAngle: a + Math.PI,
         spinDir: this.rng.sign(),
         hurt: 0,
         hitLock: defs.map(() => 0),
+        weaponLock: defs.map(() => 0),
         ability: def.createAbility ? def.createAbility() : null,
         speedMul: 1,
         spinMul: 1,
@@ -399,6 +402,7 @@ export class World {
       mix(f.vy);
       mix(f.hp);
       mix(f.angle);
+      mix(f.weaponAngle);
     }
     return (h >>> 0).toString(16).padStart(8, "0");
   }
@@ -413,7 +417,7 @@ export class World {
     this.phaseTime += dt;
 
     if (this.phase === "intro") {
-      for (const f of this.fighters) f.angle += f.def.spin * f.spinDir * dt;
+      for (const f of this.fighters) spinWeapon(f, f.def.spin * f.spinDir * dt);
       if (this.introTime > INTRO_TIME) {
         COUNTDOWN_AT.forEach((at, i) => {
           if (this.phaseTime >= at && this.phaseTime - dt < at) {
@@ -457,6 +461,7 @@ export class World {
       f.hurt = Math.max(0, f.hurt - dt);
       for (let i = 0; i < f.hitLock.length; i++) {
         f.hitLock[i] = Math.max(0, (f.hitLock[i] ?? 0) - dt);
+        f.weaponLock[i] = Math.max(0, (f.weaponLock[i] ?? 0) - dt);
       }
     }
 
@@ -712,7 +717,7 @@ export class World {
     }
     f.x += f.vx * dt;
     f.y += f.vy * dt;
-    f.angle += f.def.spin * f.spinDir * f.spinMul * dt;
+    spinWeapon(f, f.def.spin * f.spinDir * f.spinMul * dt);
   }
 
   private bounceWalls(f: Fighter): void {
@@ -880,7 +885,9 @@ export class World {
     for (const a of fs) {
       if (!a.alive || a.def.reach <= 0) continue;
       for (const t of fs) {
-        if (!t.alive || a.side === t.side || (a.hitLock[t.index] ?? 0) > 0) continue;
+        // Leaders: weapon hits have their own cooldown, apart from body contact.
+        const lock = a.def.growth ? a.weaponLock : a.hitLock;
+        if (!t.alive || a.side === t.side || (lock[t.index] ?? 0) > 0) continue;
         if (Math.min(a.index, t.index) === clashA && Math.max(a.index, t.index) === clashB)
           continue;
         const near = a.radius + a.def.reach + t.radius + a.def.thickness;
@@ -897,7 +904,7 @@ export class World {
         const dmg = a.def.damage * (ab?.damageMultiplier?.(a) ?? 1);
         const kb = a.def.knockback * (ab?.knockbackMultiplier?.(a) ?? 1);
         const dealt = this.dealDamage(a, t, dmg, px, py, kb);
-        a.hitLock[t.index] = a.def.hitInterval;
+        lock[t.index] = a.def.hitInterval;
         if (dealt > 0) ab?.onHitDealt?.(this, a, t, dealt);
       }
     }
@@ -963,9 +970,20 @@ export interface DamageOptions {
   pierce?: number;
 }
 
+/** Where a fighter's weapon points: leaders keep it apart from their heading. */
+export function weaponAngle(f: Fighter): number {
+  return f.def.growth ? f.weaponAngle : f.angle;
+}
+
+function spinWeapon(f: Fighter, by: number): void {
+  if (f.def.growth) f.weaponAngle += by;
+  else f.angle += by;
+}
+
 function weaponSegment(f: Fighter): { x0: number; y0: number; x1: number; y1: number } {
-  const c = Math.cos(f.angle);
-  const s = Math.sin(f.angle);
+  const a = weaponAngle(f);
+  const c = Math.cos(a);
+  const s = Math.sin(a);
   return {
     x0: f.x + c * f.radius,
     y0: f.y + s * f.radius,

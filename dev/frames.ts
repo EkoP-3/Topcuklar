@@ -7,6 +7,7 @@
 import { createRenderer } from "../src/sim/render/canvas";
 import { Fx } from "../src/sim/render/fx";
 import { loadFonts } from "../src/sim/render/palette";
+import { artReady } from "../src/sim/render/images";
 import { findIn } from "../src/sim/rosters";
 import { World } from "../src/sim/world";
 
@@ -23,6 +24,7 @@ function snap(world: World, fx: Fx): void {
 }
 
 await loadFonts();
+await artReady();
 if (a && b) {
   const world = new World(seed, [a, b]);
   const fx = new Fx(seed);

@@ -15,8 +15,9 @@ import { joan } from "./joan";
 import { harald } from "./harald";
 import { nobunaga } from "./nobunaga";
 import { shaka } from "./shaka";
+import { armed } from "./weapons";
 
-/** History mode: weaponless leaders with a signature move on a timer. */
+/** History mode: leaders with a cultural weapon and a signature move on a timer. */
 export const LEADERS: readonly FighterDef[] = [
   alexander,
   genghis,
@@ -34,4 +35,4 @@ export const LEADERS: readonly FighterDef[] = [
   harald,
   nobunaga,
   shaka,
-];
+].map(armed);

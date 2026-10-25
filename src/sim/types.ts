@@ -142,8 +142,12 @@ export interface Fighter {
   hp: number;
   maxHp: number;
   alive: boolean;
-  /** Current weapon angle (radians). */
+  /** Current weapon angle (radians). Leaders: their heading (abilities aim with it). */
   angle: number;
+  /** Leaders: where their cultural weapon points, apart from their heading. */
+  weaponAngle: number;
+  /** Leaders: weapon-hit cooldown per target (body contact uses hitLock). */
+  weaponLock: number[];
   /** Rotation direction of the weapon. A clash flips it. */
   spinDir: 1 | -1;
   /** Seconds left of the "just got hurt" flash. */

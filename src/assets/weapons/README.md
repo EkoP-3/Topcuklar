@@ -1,5 +1,7 @@
 # Silah görselleri
 
+Liderlerin kültürel silahları da buradadır (`<lider-id>.png`, ör. `mehmed.png`); görseli olmayan liderde `src/sim/leaders/weapons.ts` içindeki yedek çizim kullanılır.
+
 Buraya `<silah-id>.png` (veya `.webp`) koyarsanız oyun o silahı çizim yerine bu görselle gösterir.
 Dosya adı karakterin kimliğiyle aynı olmalı: `drill`, `chime`, `pylon`, `grapple`, `lance`, `maul`
 (yeni karakter eklenince onun `id`'si).

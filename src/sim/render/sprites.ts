@@ -83,8 +83,8 @@ export function drawWeapon(
   if (img) {
     ctx.save();
     ctx.translate(from, 0);
-    ctx.imageSmoothingEnabled = false;
-    const h = L * (img.naturalHeight / img.naturalWidth);
+    // Long thin art (spears) gets a little extra height so it still reads on a phone.
+    const h = Math.max(L * (img.naturalHeight / img.naturalWidth), T * 1.8);
     ctx.drawImage(img, 0, -h / 2, L, h);
     ctx.restore();
     return;
