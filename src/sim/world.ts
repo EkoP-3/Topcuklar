@@ -128,6 +128,11 @@ export class World {
   winner = -1;
   /** 1 = normal speed; the KO moment slows time. */
   timeScale = 1;
+  /**
+   * On-screen seconds the steps so far take, slow motion included. Counted per step, so
+   * it is the same at a given step however the frames were cut.
+   */
+  elapsed = 0;
   /** History mode only: close calls count up to a frenzy. */
   readonly closeCallsEnabled: boolean;
   /** Any leader here has a Domain Expansion. */
@@ -387,12 +392,17 @@ export class World {
     }
   }
 
-  /** Advance by real time. Runs as many fixed steps as fit. */
+  /**
+   * Advance by real time. Runs as many fixed steps as fit; in slow motion a step takes
+   * longer on screen. `acc` is real seconds, so a step costs the same however the frames
+   * were cut.
+   */
   advance(dt: number): void {
-    this.acc += dt * this.timeScale;
+    this.acc += dt;
     let guard = 0;
-    while (this.acc >= STEP && guard < MAX_STEPS_PER_ADVANCE) {
-      this.acc -= STEP;
+    while (this.acc >= STEP / this.timeScale && guard < MAX_STEPS_PER_ADVANCE) {
+      this.acc -= STEP / this.timeScale;
+      this.elapsed += STEP / this.timeScale;
       this.step();
       guard++;
     }

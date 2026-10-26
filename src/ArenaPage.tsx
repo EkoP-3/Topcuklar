@@ -9,7 +9,7 @@ import { Narrator } from "./sim/render/voice";
 import { ROSTERS, ROSTER_LABELS, findIn, isRosterId, type RosterId } from "./sim/rosters";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
-import { canRecord, recordMatch, tailSeconds, type Recording } from "./recorder";
+import { canRecord, foreseeEpicFinish, recordMatch, tailSeconds, type Recording } from "./recorder";
 import { ultimateName, videoDescription } from "./describe";
 
 interface ArenaSearch {
@@ -106,6 +106,8 @@ export function ArenaPage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef<World | null>(null);
+  /** When this match's epic K.O. lands (`World.elapsed`), or null: no epic finish. */
+  const epicKoRef = useRef<number | null>(null);
   const fxRef = useRef<Fx | null>(null);
   const sfxRef = useRef<Sfx | null>(null);
   const musicRef = useRef<Music | null>(null);
@@ -209,6 +211,7 @@ export function ArenaPage() {
   useEffect(() => {
     const [defA, defB] = resolveFighters(seed, mode, a, b);
     worldRef.current = new World(seed, [defA, defB]);
+    epicKoRef.current = foreseeEpicFinish(seed, [defA, defB]);
     fxRef.current = new Fx(seed);
     musicRef.current?.reset();
     setMatchup([defA.name, defB.name]);
@@ -252,6 +255,10 @@ export function ArenaPage() {
             musicRef.current?.update(musicState(world), sfx.ctx.currentTime);
           }
           narratorRef.current?.update(world);
+          // The finishing track builds up before an epic K.O. (only at normal speed,
+          // otherwise it drops on the K.O. itself).
+          const epicKo = epicKoRef.current;
+          if (sfx && epicKo !== null && rate === 1) sfx.finaleDue(world, epicKo);
         }
         renderer.draw(world, fx, { next: extras.next });
 

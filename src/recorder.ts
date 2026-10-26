@@ -236,6 +236,31 @@ async function recordOffline(
   return (await saveFile(name, blob)) ? name : null;
 }
 
+/**
+ * Leaders: plays the match ahead headlessly and returns when (in `World.elapsed` seconds)
+ * an epic finish's K.O. lands, or null when the match does not end in one. Lets the live
+ * preview start the finishing track early, as the video export does.
+ */
+export function foreseeEpicFinish(seed: number, fighters: FighterDef[]): number | null {
+  if (!fighters.some((d) => d.growth)) return null;
+  const probe = new World(seed, fighters);
+  const dt = 1 / FPS;
+  const hits: HitRecord[] = [];
+  for (let frames = 1; frames < FPS * MAX_SECONDS; frames++) {
+    probe.advance(dt);
+    for (const e of probe.events) {
+      if (e.type === "hit") hits.push({ t: probe.elapsed, target: e.target, damage: e.damage });
+      if (e.type === "ko") {
+        const fallen = probe.fighters[e.fighter];
+        const epic = !!fallen && isEpicFinish(hits, e.fighter, fallen.maxHp, probe.elapsed);
+        return epic ? probe.elapsed : null;
+      }
+    }
+    probe.events = [];
+  }
+  return null;
+}
+
 /** Plays the match headlessly into an OfflineAudioContext. Also finds the clip length. */
 async function renderSound(opts: RecordOptions): Promise<{ buffer: AudioBuffer; frames: number }> {
   const probe = new World(opts.seed, opts.fighters);

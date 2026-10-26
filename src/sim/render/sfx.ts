@@ -631,9 +631,22 @@ export class Sfx {
   }
 
   /**
+   * Live preview, called every frame: `koAt` is when (in `world.elapsed` seconds) the
+   * foreseen epic K.O. lands. Starts the track once its build-up is due, so the drop
+   * still lands on the K.O. as in the video.
+   */
+  finaleDue(world: World, koAt: number): void {
+    if (this.clock === null && this.ctx.state !== "running") return;
+    this.track(world);
+    if (this.epicPlayed || koAt - world.elapsed > EPIC_DROP) return;
+    if (world.phase === "over") return;
+    this.epic(world, this.now() + koAt - world.elapsed);
+  }
+
+  /**
    * Leaders' K.O.: the finishing track over everything (once per match), the background
    * music stepping aside. `koAt` given (video export): the drop lands on it, with the
-   * build-up before. Live: the K.O. is now, so the track starts at the drop. True when
+   * build-up before. Otherwise the K.O. is now, so the track starts at the drop. True when
    * the track plays (or was already scheduled) for this match.
    */
   /** Per-match state resets when a new match (world) shows up. */
