@@ -84,7 +84,7 @@ export function isEpicFinish(
 }
 
 /** The finishing track: the beat drops EPIC_DROP seconds into the clip, right on the K.O. */
-const EPIC_DROP = 1.96;
+const EPIC_DROP = 4.03;
 /** Seconds of the track after the drop (the clip fades out by itself). */
 const EPIC_TAIL = 5.35;
 /** Normal levels of the background music and effects buses. */

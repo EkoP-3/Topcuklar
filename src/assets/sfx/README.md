@@ -11,6 +11,6 @@
 | `cannon` | Mehmed'in bombardı, Napolyon'un topu | kullanıcı |
 | `horn` | ultimate başlangıcı | ElevenLabs SFX |
 | `gasp` | 3. kıl payı (frenzy) | ElevenLabs SFX |
-| `epic` | sadece epik bitişte (kaybeden son 2 sn'de canının %25'ini kaybettiyse): parça K.O.'dan ~2 sn önce başlar, bas tam K.O. karesinde girer | kullanıcı (2,10–9,40 sn kesit) |
+| `epic` | sadece epik bitişte (kaybeden son 2 sn'de canının %25'ini kaybettiyse): parça K.O.'dan 4,03 sn önce başlar, bas tam K.O. karesinde girer | kullanıcı (0–9,40 sn; şarkının 4,03. saniyesi K.O. karesine denk gelir) |
 
 Hepsi mono, ses seviyeleri eşitlenmiş (loudnorm). Yeni dosya eklerken aynı adla değiştirmek yeterli.
