@@ -6,12 +6,16 @@ import { Fx } from "./sim/render/fx";
 import { Music, musicState } from "./sim/render/music";
 import { Sfx, isEpicFinish, type HitRecord } from "./sim/render/sfx";
 import { Narrator, OUTRO_DELAY, loadVoice, speakIntro, speakOutro } from "./sim/render/voice";
+import type { SeasonView } from "./sim/season";
 import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 
-/** Seconds of the end screen kept at the end of the clip (history mode adds the "who's next?" card). */
+/**
+ * Seconds of the end screen kept at the end of the clip (history mode adds the
+ * season standings / "who's next?" card, which needs a moment to be read).
+ */
 export function tailSeconds(fighters: readonly FighterDef[]): number {
-  return fighters.some((d) => d.growth) ? 3.6 : 1.6;
+  return fighters.some((d) => d.growth) ? 4.2 : 1.6;
 }
 /** Safety net: stop a recording that somehow never finishes. */
 const MAX_SECONDS = 90;
@@ -32,6 +36,8 @@ export interface RecordOptions {
   music?: boolean;
   /** Shown on the "who's next?" end card instead of question marks. */
   next?: readonly [FighterDef, FighterDef] | null;
+  /** Season records and the standings end card (null: not a season match). */
+  season?: SeasonView | null;
 }
 
 export interface Recording {
@@ -211,7 +217,7 @@ async function recordOffline(
         fx.consume(world);
         fx.update(dt, world);
       }
-      renderer.draw(world, fx, { next: opts.next ?? null });
+      renderer.draw(world, fx, { next: opts.next ?? null, season: opts.season ?? null });
       const frame = new VideoFrame(canvas, {
         timestamp: Math.round((i * 1e6) / FPS),
         duration: Math.round(1e6 / FPS),
@@ -450,7 +456,7 @@ function recordStream(opts: RecordOptions): Recording {
     const fx = new Fx(opts.seed);
     const canvas = document.createElement("canvas");
     const renderer = createRenderer(canvas, 1);
-    const extras = { next: opts.next ?? null };
+    const extras = { next: opts.next ?? null, season: opts.season ?? null };
     renderer.draw(world, fx, extras);
 
     const stream = canvas.captureStream(STREAM_FPS);

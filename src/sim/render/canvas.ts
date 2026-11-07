@@ -24,6 +24,7 @@ import {
   weaponAngle,
 } from "../world";
 import { winChance } from "../odds";
+import { formatRecord, type SeasonRecord, type SeasonView } from "../season";
 import { liveChance } from "../live";
 import { drawFace, type Mood } from "./faces";
 import { domainLayer } from "./domains";
@@ -73,6 +74,8 @@ type Ctx = CanvasRenderingContext2D;
 export interface DrawExtras {
   /** Leaders to show on the "who's next?" end card (question marks when null). */
   next?: readonly [FighterDef, FighterDef] | null;
+  /** Season records and table for this match (built once per match by the caller). */
+  season?: SeasonView | null;
 }
 
 export interface Renderer {
@@ -120,7 +123,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     const live = world.phase === "intro" ? null : liveChance(world);
     if (live === null) winShown = null;
     else winShown = winShown === null ? live : winShown + (live - winShown) * 0.08;
-    drawTopPanel(ctx, world, hpLag, winShown);
+    drawTopPanel(ctx, world, hpLag, winShown, extras.season ?? null);
     drawArena(ctx, world, fx, frame, extras, cam);
     drawCloseCalls(ctx, world);
     drawDomainBadge(ctx, world);
@@ -170,11 +173,17 @@ function followCamera(cam: Camera, world: World): void {
 // --- layout pieces -------------------------------------------------------------
 
 /** Top of the frame: flag + name and the HP bar for each side, "VS" and the clock. */
-function drawTopPanel(ctx: Ctx, world: World, hpLag: number[], win: number | null): void {
+function drawTopPanel(
+  ctx: Ctx,
+  world: World,
+  hpLag: number[],
+  win: number | null,
+  season: SeasonView | null,
+): void {
   const [a, b] = world.fighters;
   if (!a || !b) return;
-  drawFighterPanel(ctx, a, hpLag[a.index] ?? 1, 60, "left");
-  drawFighterPanel(ctx, b, hpLag[b.index] ?? 1, W - 60, "right");
+  drawFighterPanel(ctx, a, hpLag[a.index] ?? 1, 60, "left", season?.before[0] ?? null);
+  drawFighterPanel(ctx, b, hpLag[b.index] ?? 1, W - 60, "right", season?.before[1] ?? null);
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `900 56px ${DISPLAY_FONT}`;
@@ -198,11 +207,14 @@ function drawFighterPanel(
   lag: number,
   edgeX: number,
   align: "left" | "right",
+  record: SeasonRecord | null,
 ): void {
   const side = SIDES[f.side];
   const w = 400;
   const x0 = align === "left" ? edgeX : edgeX - w;
   const ratio = clamp(f.hp / f.maxHp, 0, 1);
+  // A season record moves the name up to make room for it under the name.
+  const lift = record ? 34 : 0;
 
   ctx.textAlign = align;
   ctx.textBaseline = "alphabetic";
@@ -211,7 +223,7 @@ function drawFighterPanel(
     const fh = 46;
     const fw = fh * FLAG_RATIO;
     ctx.save();
-    ctx.translate(align === "left" ? edgeX : edgeX - fw, 182);
+    ctx.translate(align === "left" ? edgeX : edgeX - fw, 182 - lift);
     drawFlag(ctx, f.def.flag, fh);
     ctx.restore();
     nameX = align === "left" ? edgeX + fw + 14 : edgeX - fw - 14;
@@ -219,7 +231,8 @@ function drawFighterPanel(
     ctx.textBaseline = "alphabetic";
   }
   fitFont(ctx, f.def.name, 900, 58, w - Math.abs(nameX - edgeX), DISPLAY_FONT);
-  outlinedText(ctx, f.def.name, nameX, 224, side.light, 9);
+  outlinedText(ctx, f.def.name, nameX, 224 - lift, side.light, 9);
+  if (record) drawRecordLine(ctx, record, edgeX, align);
 
   const y = 250;
   const h = 44;
@@ -251,6 +264,76 @@ function drawFighterPanel(
     ctx.fillStyle = GOLD;
     ctx.fillRect(tx - 2, y - 6, 4, h + 12);
   }
+}
+
+/** Wins in a row from which the record line gets a streak badge. */
+const STREAK_BADGE = 3;
+
+/** Season record under a leader's name ("3W–1L"), plus a streak badge when on fire. */
+function drawRecordLine(
+  ctx: Ctx,
+  record: SeasonRecord,
+  edgeX: number,
+  align: "left" | "right",
+): void {
+  const y = 238;
+  const dir = align === "left" ? 1 : -1;
+  const text = formatRecord(record);
+  ctx.textAlign = align;
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `800 32px ${MONO_FONT}`;
+  outlinedText(ctx, text, edgeX, y, PAPER, 6);
+  if (record.streak < STREAK_BADGE) return;
+
+  const start = edgeX + dir * (ctx.measureText(text).width + 14);
+  const label = `${record.streak} WIN STREAK`;
+  ctx.font = `800 26px ${MONO_FONT}`;
+  const h = 36;
+  const w = ctx.measureText(label).width + 56;
+  const x0 = dir === 1 ? start : start - w;
+  roundRect(ctx, x0, y - h + 4, w, h, h / 2);
+  ctx.fillStyle = GOLD;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  drawFlame(ctx, x0 + 22, y - h / 2 + 4, 13);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = INK;
+  ctx.fillText(label, x0 + 40, y - h / 2 + 5);
+}
+
+/** A little flame (drawn, so it looks the same on every device; no emoji font needed). */
+function drawFlame(ctx: Ctx, x: number, y: number, r: number): void {
+  ctx.save();
+  ctx.translate(x, y);
+  const flame = (k: number) => {
+    ctx.beginPath();
+    ctx.moveTo(0, r * k);
+    ctx.bezierCurveTo(-r * 0.95 * k, r * k, -r * 0.9 * k, -r * 0.1 * k, -r * 0.2 * k, -r * k);
+    ctx.bezierCurveTo(
+      -r * 0.1 * k,
+      -r * 0.4 * k,
+      r * 0.35 * k,
+      -r * 0.5 * k,
+      r * 0.3 * k,
+      -r * k * 0.95,
+    );
+    ctx.bezierCurveTo(r * 0.95 * k, -r * 0.2 * k, r * 0.95 * k, r * k, 0, r * k);
+    ctx.closePath();
+  };
+  flame(1);
+  ctx.fillStyle = "#e0482a";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.translate(0, r * 0.3);
+  flame(0.55);
+  ctx.fillStyle = "#ffd75a";
+  ctx.fill();
+  ctx.restore();
 }
 
 // --- arena -----------------------------------------------------------------------
@@ -1406,7 +1489,11 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
       const winner = world.fighters[world.winner];
       if (!winner) return;
       if (leaders && world.phaseTime >= WINS_TIME) {
-        drawNextCard(ctx, world.phaseTime - WINS_TIME, extras.next ?? null);
+        if (extras.season) {
+          drawStandingsCard(ctx, world.phaseTime - WINS_TIME, extras.season, extras.next ?? null);
+        } else {
+          drawNextCard(ctx, world.phaseTime - WINS_TIME, extras.next ?? null);
+        }
         return;
       }
       text = `${winner.def.name} WINS`;
@@ -1584,6 +1671,182 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
   ctx.lineWidth = 4;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
+  ctx.restore();
+}
+
+/** Seconds between two rows of the standings card coming in. */
+const ROW_STAGGER = 0.05;
+
+/**
+ * End card (history mode, season matches): the season table with this match counted,
+ * its two leaders highlighted, then the call to comment.
+ */
+function drawStandingsCard(
+  ctx: Ctx,
+  t: number,
+  season: SeasonView,
+  next: readonly [FighterDef, FighterDef] | null,
+): void {
+  const a = clamp(t / 0.25, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = THEME.curtain;
+  ctx.fillRect(0, 0, AS, AS);
+  ctx.globalAlpha = 1;
+
+  // Title.
+  const s = easeOutBack(a);
+  ctx.save();
+  ctx.translate(AS / 2, 92);
+  ctx.scale(s, s);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  fitFont(ctx, `SEASON ${season.season} STANDINGS`, 900, 78, AS - 80, DISPLAY_FONT);
+  outlinedText(ctx, `SEASON ${season.season} STANDINGS`, 0, 0, GOLD, 13);
+  ctx.restore();
+
+  const left = 40;
+  const right = AS - 40;
+  const top = 160;
+  const rowH = 86;
+  const rows = season.table;
+  rows.forEach((row, i) => {
+    const k = clamp((t - 0.2 - i * ROW_STAGGER) / 0.22, 0, 1);
+    if (k <= 0) return;
+    const e = 1 - (1 - k) ** 3;
+    const y = top + i * rowH;
+    const mid = y + rowH / 2 - 4;
+    ctx.save();
+    ctx.globalAlpha = e;
+    ctx.translate((1 - e) * 120, 0);
+
+    // Row plate: the two leaders of this match in their colours, the winner framed in gold.
+    const played = row.result !== 0;
+    const side = played ? sideOf(season, row) : null;
+    roundRect(ctx, left, y + 4, right - left, rowH - 12, 14);
+    ctx.fillStyle = side
+      ? side.main
+      : i % 2 === 0
+        ? "rgba(255,255,255,0.08)"
+        : "rgba(255,255,255,0.03)";
+    if (side) ctx.globalAlpha = e * (row.result === 1 ? 0.55 : 0.32);
+    ctx.fill();
+    ctx.globalAlpha = e;
+    if (row.result === 1) {
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = GOLD;
+      ctx.stroke();
+    }
+
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.font = `900 50px ${MONO_FONT}`;
+    outlinedText(ctx, String(row.rank), left + 50, mid, row.rank === 1 ? GOLD : PAPER, 8);
+
+    let nameX = left + 104;
+    if (row.def.flag) {
+      const fh = 44;
+      ctx.save();
+      ctx.translate(nameX, mid - fh / 2);
+      drawFlag(ctx, row.def.flag, fh);
+      ctx.restore();
+      ctx.strokeStyle = OUTLINE;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(nameX, mid - fh / 2, fh * FLAG_RATIO, fh);
+      nameX += fh * FLAG_RATIO + 20;
+    }
+    ctx.textAlign = "left";
+    fitFont(ctx, row.def.name, 800, 50, 600 - nameX, DISPLAY_FONT);
+    outlinedText(ctx, row.def.name, nameX, mid + 2, side ? side.light : PAPER, 8);
+
+    ctx.textAlign = "right";
+    ctx.font = `800 48px ${MONO_FONT}`;
+    outlinedText(ctx, formatRecord(row), right - 130, mid + 2, PAPER, 8);
+
+    // The winner's gold "+1" pops in once the rows are in; other rows show how far
+    // this match moved them.
+    if (row.result === 1) {
+      const pop = easeOutBack(clamp((t - 0.25 - rows.length * ROW_STAGGER) / 0.25, 0, 1));
+      if (pop > 0) {
+        ctx.save();
+        ctx.translate(right - 62, mid);
+        ctx.scale(pop, pop);
+        roundRect(ctx, -46, -27, 92, 54, 27);
+        ctx.fillStyle = GOLD;
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = OUTLINE;
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillStyle = INK;
+        ctx.font = `900 36px ${MONO_FONT}`;
+        ctx.fillText("+1", 0, 2);
+        ctx.restore();
+      }
+    } else if (row.moved !== 0) {
+      drawRankMove(ctx, right - 62, mid, row.moved);
+    }
+    ctx.restore();
+  });
+
+  // Call to comment.
+  const c = clamp((t - 0.3 - rows.length * ROW_STAGGER) / 0.25, 0, 1);
+  ctx.globalAlpha = c;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const yLine = top + rows.length * rowH + 52;
+  const line = next ? `NEXT: ${next[0].name} VS ${next[1].name}?` : "WHO'S NEXT?";
+  fitFont(ctx, line, 800, 54, AS - 300, DISPLAY_FONT);
+  outlinedText(ctx, line, AS / 2 - 90, yLine, GOLD, 10);
+  ctx.font = `800 40px ${DISPLAY_FONT}`;
+  outlinedText(ctx, "COMMENT BELOW", AS / 2 - 90, yLine + 56, PAPER, 8);
+  // Bouncing arrow pointing down at the comments.
+  const ax = AS / 2 + 250;
+  const ay = yLine - 6 + Math.abs(Math.sin(t * 5)) * 14;
+  ctx.beginPath();
+  ctx.moveTo(ax - 30, ay);
+  ctx.lineTo(ax + 30, ay);
+  ctx.lineTo(ax, ay + 40);
+  ctx.closePath();
+  ctx.fillStyle = GOLD;
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The colours a leader of this match plays in (the table's rows follow the ball colours). */
+function sideOf(season: SeasonView, row: SeasonView["table"][number]): SideColors | null {
+  const i = season.sides.indexOf(row.def.id);
+  return i === 0 || i === 1 ? SIDES[i] : null;
+}
+
+/** Places gained (green ▲) or lost (red ▼) in the table by this match. */
+function drawRankMove(ctx: Ctx, x: number, y: number, moved: number): void {
+  const up = moved > 0;
+  ctx.save();
+  ctx.translate(x - 20, y);
+  ctx.beginPath();
+  if (up) {
+    ctx.moveTo(-14, 10);
+    ctx.lineTo(14, 10);
+    ctx.lineTo(0, -14);
+  } else {
+    ctx.moveTo(-14, -10);
+    ctx.lineTo(14, -10);
+    ctx.lineTo(0, 14);
+  }
+  ctx.closePath();
+  ctx.fillStyle = up ? "#5fd36a" : "#ff5a5a";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = OUTLINE;
+  ctx.stroke();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 34px ${MONO_FONT}`;
+  outlinedText(ctx, String(Math.abs(moved)), 22, 2, PAPER, 6);
   ctx.restore();
 }
 
