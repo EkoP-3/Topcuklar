@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRng } from "./sim/rng";
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
@@ -11,6 +11,27 @@ import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 import { canRecord, foreseeEpicFinish, recordMatch, tailSeconds, type Recording } from "./recorder";
 import { ultimateName, videoDescription } from "./describe";
+import {
+  CURRENT_SEASON,
+  formatRecord,
+  inCurrentSeason,
+  matchKey,
+  playWinner,
+  seasonOf,
+  seasonView,
+  standings,
+  type SeasonMatch,
+  type SeasonView,
+} from "./sim/season";
+import {
+  addMatch,
+  exportLedger,
+  importMatches,
+  parseLedger,
+  removeMatch,
+  subscribeLedger,
+  type LedgerBackend,
+} from "./ledger";
 
 /** The frame's looks, in the order the picker shows them. */
 const LOOKS: readonly [StyleId, string][] = [
@@ -69,18 +90,56 @@ function randomSeed(): number {
   return Math.floor(Math.random() * 1_000_000);
 }
 
-/** "random" picks from the roster using the seed, so a match is still fully repeatable. */
+/**
+ * "random" picks from the roster using the seed, so a match is still fully repeatable.
+ * History mode only draws leaders of the current season (picking by hand stays free).
+ */
 function resolveFighters(
   seed: number,
   mode: RosterId,
   a: string,
   b: string,
 ): [FighterDef, FighterDef] {
-  const roster = ROSTERS[mode];
+  const roster =
+    mode === "leaders" ? ROSTERS[mode].filter((d) => inCurrentSeason(d.id)) : ROSTERS[mode];
   const rng = createRng(seed ^ 0x2545f491);
   const defA = findIn(mode, a) ?? rng.pick(roster);
   const defB = findIn(mode, b) ?? rng.pick(roster.filter((d) => d.id !== defA.id));
   return [defA, defB];
+}
+
+/** Selector order: current-season leaders first, the others after them. */
+function pickerRoster(mode: RosterId): readonly FighterDef[] {
+  const roster = ROSTERS[mode];
+  if (mode !== "leaders") return roster;
+  return [
+    ...roster.filter((d) => inCurrentSeason(d.id)),
+    ...roster.filter((d) => !inCurrentSeason(d.id)),
+  ];
+}
+
+/** "Harald III (2. sezon)" for leaders outside the current season. */
+function pickerLabel(mode: RosterId, d: FighterDef): string {
+  return mode === "leaders" && !inCurrentSeason(d.id)
+    ? `${d.name} (${seasonOf(d.id)}. sezon)`
+    : d.name;
+}
+
+/** The match on screen: who plays and, for season pairings, who wins (played ahead headlessly). */
+interface MatchInfo {
+  a: FighterDef;
+  b: FighterDef;
+  seed: number;
+  winner: string | null;
+}
+
+function matchFor(m: MatchInfo): { a: string; b: string; seed: number } {
+  return { a: m.a.id, b: m.b.id, seed: m.seed };
+}
+
+/** Leader name for the season panel. */
+function leaderName(id: string): string {
+  return findIn("leaders", id)?.name ?? id;
 }
 
 export function ArenaPage() {
@@ -94,6 +153,7 @@ export function ArenaPage() {
   const [a, setA] = useState(knownOrRandom(mode, search.a));
   const [b, setB] = useState(knownOrRandom(mode, search.b));
   const roster = ROSTERS[mode];
+  const picker = pickerRoster(mode);
   const setMode = (next: RosterId) => {
     if (next === mode) return;
     setModeState(next);
@@ -127,7 +187,13 @@ export function ArenaPage() {
   const extrasRef = useRef<{
     musicOn: boolean;
     next: readonly [FighterDef, FighterDef] | null;
-  }>({ musicOn, next: null });
+    season: SeasonView | null;
+  }>({ musicOn, next: null, season: null });
+  const [ledger, setLedger] = useState<readonly SeasonMatch[]>([]);
+  const [ledgerBackend, setLedgerBackend] = useState<LedgerBackend>("local");
+  const [matchInfo, setMatchInfo] = useState<MatchInfo | null>(null);
+  const [seasonMessage, setSeasonMessage] = useState<string | null>(null);
+  const [ledgerText, setLedgerText] = useState<string | null>(null);
   const [muted, setMuted] = useState(readMuted);
   const [audioReady, setAudioReady] = useState(false);
   const mutedRef = useRef(muted);
@@ -178,16 +244,35 @@ export function ArenaPage() {
     const db = findIn(mode, nextB);
     return da && db ? [da, db] : null;
   })();
+  // The season ledger: the artifact database when there is one, this browser otherwise.
+  useEffect(
+    () =>
+      subscribeLedger((matches, backend) => {
+        setLedger(matches);
+        setLedgerBackend(backend);
+      }),
+    [],
+  );
+
+  // Records and table for this match, worked out once per match (and per ledger change).
+  const season = useMemo(
+    () => (mode === "leaders" && matchInfo ? seasonView(ledger, matchInfo) : null),
+    [mode, ledger, matchInfo],
+  );
+  const table = useMemo(() => standings(ledger), [ledger]);
+  const seasonal = !!matchInfo && seasonOf(matchInfo.a.id) === 1 && seasonOf(matchInfo.b.id) === 1;
+  const inLedger = !!matchInfo && ledger.some((m) => matchKey(m) === matchKey(matchFor(matchInfo)));
+
   useEffect(() => {
     const da = findIn(mode, nextA);
     const db = findIn(mode, nextB);
-    extrasRef.current = { musicOn, next: da && db ? [da, db] : null };
+    extrasRef.current = { musicOn, next: da && db ? [da, db] : null, season };
     try {
       localStorage.setItem("arena-music", musicOn ? "1" : "0");
     } catch {
       // storage unavailable: the choice just is not remembered
     }
-  }, [musicOn, mode, nextA, nextB]);
+  }, [musicOn, mode, nextA, nextB, season]);
 
   const startRecording = () => {
     if (recording.current) return;
@@ -200,6 +285,7 @@ export function ArenaPage() {
       onProgress: setRecProgress,
       music: musicOn,
       next: nextDefs,
+      season,
     });
     recording.current = job;
     job.done
@@ -215,6 +301,41 @@ export function ArenaPage() {
 
   useEffect(() => () => recording.current?.cancel(), []);
 
+  const addToSeason = () => {
+    if (!matchInfo || !seasonal) return;
+    const winner = matchInfo.winner ?? playWinner(matchInfo.seed, [matchInfo.a, matchInfo.b]);
+    if (!winner) {
+      setSeasonMessage("Kazanan bulunamadı.");
+      return;
+    }
+    addMatch({ ...matchFor(matchInfo), winner, at: new Date().toISOString() }).then(
+      (added) =>
+        setSeasonMessage(
+          added
+            ? `Eklendi: ${leaderName(winner)} kazandı.`
+            : "Bu maç (aynı liderler ve seed) zaten sezonda.",
+        ),
+      () => setSeasonMessage("Kaydedilemedi (bu sayfada yazma izniniz olmayabilir)."),
+    );
+  };
+
+  const importLedger = () => {
+    let list: SeasonMatch[];
+    try {
+      list = parseLedger(JSON.parse(ledgerText ?? "") as unknown);
+    } catch {
+      setSeasonMessage("JSON okunamadı.");
+      return;
+    }
+    importMatches(list).then(
+      (n) => {
+        setSeasonMessage(`${n} maç içe aktarıldı (${list.length - n} zaten vardı).`);
+        setLedgerText(null);
+      },
+      () => setSeasonMessage("İçe aktarılamadı (bu sayfada yazma izniniz olmayabilir)."),
+    );
+  };
+
   // Start a fresh match whenever the setup changes.
   useEffect(() => {
     const [defA, defB] = resolveFighters(seed, mode, a, b);
@@ -223,6 +344,13 @@ export function ArenaPage() {
     fxRef.current = new Fx(seed);
     musicRef.current?.reset();
     setMatchup([defA.name, defB.name]);
+    const inSeason = mode === "leaders" && seasonOf(defA.id) === 1 && seasonOf(defB.id) === 1;
+    setMatchInfo({
+      a: defA,
+      b: defB,
+      seed,
+      winner: inSeason ? playWinner(seed, [defA, defB]) : null,
+    });
   }, [mode, a, b, seed, restarts]);
 
   // Animation loop: step the simulation, then draw it.
@@ -274,7 +402,7 @@ export function ArenaPage() {
           const epicKo = epicKoRef.current;
           if (sfx && epicKo !== null && rate === 1) sfx.finaleDue(world, epicKo);
         }
-        renderer.draw(world, fx, { next: extras.next });
+        renderer.draw(world, fx, { next: extras.next, season: extras.season });
 
         if (world.phase === "over" && isAuto && !isPaused) {
           overFor += dt;
@@ -355,9 +483,9 @@ export function ArenaPage() {
                 <option className="bg-[#0d1224]" value={RANDOM}>
                   🎲 Rastgele
                 </option>
-                {roster.map((d) => (
+                {picker.map((d) => (
                   <option className="bg-[#0d1224]" key={d.id} value={d.id}>
-                    {d.name}
+                    {pickerLabel(mode, d)}
                   </option>
                 ))}
               </select>
@@ -372,9 +500,9 @@ export function ArenaPage() {
                 <option className="bg-[#0d1224]" value={RANDOM}>
                   🎲 Rastgele
                 </option>
-                {roster.map((d) => (
+                {picker.map((d) => (
                   <option className="bg-[#0d1224]" key={d.id} value={d.id}>
-                    {d.name}
+                    {pickerLabel(mode, d)}
                   </option>
                 ))}
               </select>
@@ -531,9 +659,9 @@ export function ArenaPage() {
                     <option className="bg-[#0d1224]" value="">
                       ?
                     </option>
-                    {roster.map((d) => (
+                    {picker.map((d) => (
                       <option className="bg-[#0d1224]" key={d.id} value={d.id}>
-                        {d.name}
+                        {pickerLabel(mode, d)}
                       </option>
                     ))}
                   </select>
@@ -552,7 +680,7 @@ export function ArenaPage() {
                   className={buttonClass}
                   onClick={() => {
                     const [da, db] = resolveFighters(seed, mode, a, b);
-                    void navigator.clipboard?.writeText(videoDescription(da, db)).then(
+                    void navigator.clipboard?.writeText(videoDescription(da, db, season)).then(
                       () => {
                         setCopied(true);
                         setTimeout(() => setCopied(false), 1500);
@@ -569,10 +697,132 @@ export function ArenaPage() {
                 className={`${controlClass} h-48 w-full font-mono text-xs`}
                 value={(() => {
                   const [da, db] = resolveFighters(seed, mode, a, b);
-                  return videoDescription(da, db);
+                  return videoDescription(da, db, season);
                 })()}
                 onFocus={(e) => e.currentTarget.select()}
               />
+            </div>
+          )}
+
+          {mode === "leaders" && (
+            <div className="space-y-3">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">
+                  Sezon {CURRENT_SEASON}
+                </h2>
+                <span className="text-xs text-neutral-500">
+                  {ledgerBackend === "db" ? "Paylaşılan veritabanı" : "Bu tarayıcıda saklanıyor"}
+                </span>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Yayınlanan maçları buraya ekleyin. Videoda liderlerin önceki maç sonuçları (ör.
+                3W–1L) ve sonda bu maç dahil puan tablosu görünür.
+              </p>
+              <table className="w-full font-mono text-sm">
+                <tbody>
+                  {table.map((row) => {
+                    const playing =
+                      matchInfo && (row.id === matchInfo.a.id || row.id === matchInfo.b.id);
+                    return (
+                      <tr key={row.id} className={playing ? "text-white" : "text-neutral-300"}>
+                        <td className="w-8 py-0.5 text-neutral-500">{row.rank}.</td>
+                        <td className={playing ? "font-bold" : ""}>{leaderName(row.id)}</td>
+                        <td className="text-right">
+                          {row.wins}–{row.losses}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <button
+                className={`${buttonClass} w-full disabled:opacity-40`}
+                onClick={addToSeason}
+                disabled={!seasonal || inLedger}
+              >
+                {inLedger ? "✓ Bu maç sezonda" : "➕ Bu maçı sezona ekle"}
+              </button>
+              {!seasonal && matchInfo && (
+                <p className="text-xs text-neutral-500">
+                  Sezona yalnızca iki {CURRENT_SEASON}. sezon lideri arasındaki maçlar eklenebilir.
+                </p>
+              )}
+              {seasonal && season && (
+                <p className="text-xs text-neutral-400">
+                  Maç öncesi: {matchInfo?.a.name} {formatRecord(season.before[0])} ·{" "}
+                  {matchInfo?.b.name} {formatRecord(season.before[1])}
+                </p>
+              )}
+              {seasonMessage && <p className="text-xs text-neutral-400">{seasonMessage}</p>}
+              {ledger.length > 0 && (
+                <ul className="space-y-1">
+                  {[...ledger].reverse().map((m) => (
+                    <li
+                      key={matchKey(m)}
+                      className="flex items-center justify-between gap-2 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-xs"
+                    >
+                      <span>
+                        <span className="font-bold text-neutral-100">{leaderName(m.winner)}</span>
+                        <span className="text-neutral-500"> yendi </span>
+                        {leaderName(m.winner === m.a ? m.b : m.a)}
+                        <span className="text-neutral-500">
+                          {" "}
+                          · seed {m.seed} · {m.at.slice(0, 10)}
+                        </span>
+                      </span>
+                      <button
+                        className="px-1 text-neutral-500 hover:text-red-400"
+                        title="Sezondan sil"
+                        onClick={() => {
+                          if (!window.confirm("Bu maç sezondan silinsin mi?")) return;
+                          removeMatch(m).catch(() =>
+                            setSeasonMessage("Silinemedi (bu sayfada yazma izniniz olmayabilir)."),
+                          );
+                        }}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className={buttonClass}
+                  onClick={() => {
+                    const json = exportLedger(ledger);
+                    setLedgerText(json);
+                    void navigator.clipboard?.writeText(json).then(
+                      () => setSeasonMessage("JSON panoya kopyalandı."),
+                      () => setSeasonMessage(null),
+                    );
+                  }}
+                >
+                  📤 Dışa aktar (JSON)
+                </button>
+                <button className={buttonClass} onClick={() => setLedgerText("")}>
+                  📥 İçe aktar
+                </button>
+              </div>
+              {ledgerText !== null && (
+                <div className="space-y-2">
+                  <textarea
+                    className={`${controlClass} h-32 w-full font-mono text-xs`}
+                    value={ledgerText}
+                    placeholder="Dışa aktarılan JSON'u buraya yapıştırın"
+                    onChange={(e) => setLedgerText(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <div className="flex gap-3">
+                    <button className={buttonClass} onClick={importLedger}>
+                      İçe aktar
+                    </button>
+                    <button className={buttonClass} onClick={() => setLedgerText(null)}>
+                      Kapat
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

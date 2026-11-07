@@ -2,14 +2,18 @@
  * Dev-only frame checker (not part of the build): plays a match headlessly and draws
  * chosen moments side by side. Open /dev/frames.html?a=mehmed&b=caesar&seed=3
  * Optional &t=1,5,15.2 (fight seconds); by default it shows the intro and each
- * ultimate (name on screen, then the effect).
+ * ultimate (name on screen, then the effect). Looks: &style=arcade|night.
+ * Season record and standings card come from this browser's season ledger
+ * (localStorage "topcuklar.season1"; seed one to check them).
  */
-import { createRenderer } from "../src/sim/render/canvas";
+import { createRenderer, type DrawExtras } from "../src/sim/render/canvas";
 import { Fx } from "../src/sim/render/fx";
 import { loadFonts } from "../src/sim/render/palette";
 import { artReady } from "../src/sim/render/images";
 import { findIn } from "../src/sim/rosters";
 import { World } from "../src/sim/world";
+import { playWinner, seasonView } from "../src/sim/season";
+import { subscribeLedger } from "../src/ledger";
 
 const q = new URLSearchParams(location.search);
 const a = findIn("leaders", q.get("a") ?? "mehmed");
@@ -17,15 +21,20 @@ const b = findIn("leaders", q.get("b") ?? "caesar");
 const seed = Number(q.get("seed") ?? 1);
 const times = (q.get("t") ?? "").split(",").filter(Boolean).map(Number);
 
+let extras: DrawExtras = {};
+
 function snap(world: World, fx: Fx): void {
   const c = document.createElement("canvas");
-  createRenderer(c, 0.5).draw(world, fx);
+  createRenderer(c, 0.5).draw(world, fx, extras);
   document.body.append(c);
 }
 
 await loadFonts();
 await artReady();
 if (a && b) {
+  let ledger: Parameters<typeof seasonView>[0] = [];
+  subscribeLedger((m) => (ledger = m))();
+  extras = { season: seasonView(ledger, { a, b, seed, winner: playWinner(seed, [a, b]) }) };
   const world = new World(seed, [a, b]);
   const fx = new Fx(seed);
   const shots: { at: number; frame: number }[] = [];
@@ -67,11 +76,11 @@ if (a && b) {
     }
   }
   // End screen: "X WINS", then the "who's next?" card.
-  for (let i = 0; i < 60 * 3.2; i++) {
+  for (let i = 0; i < 60 * 4.2; i++) {
     world.advance(1 / 60);
     fx.consume(world);
     fx.update(1 / 60, world);
-    if (i === 30 || i === 150) snap(world, fx);
+    if (i === 30 || i === 100 || i === 240) snap(world, fx);
   }
 }
 (window as unknown as { done: boolean }).done = true;

@@ -1,5 +1,6 @@
 import { winChance } from "./sim/odds";
 import { DOMAINS_ON } from "./sim/world";
+import { formatRecord, type SeasonView } from "./sim/season";
 import type { FighterDef } from "./sim/types";
 
 /** The ultimate's name, read from a fresh ability instance ("" for non-leaders). */
@@ -14,14 +15,25 @@ function tag(def: FighterDef): string {
 /**
  * English upload text for a match: title, the two leaders with a fact each, the
  * ultimates, a call to comment, sources and hashtags. Pasted into YouTube/Instagram.
+ * Season matches add the season and both leaders' records before this match.
  */
-export function videoDescription(a: FighterDef, b: FighterDef): string {
+export function videoDescription(
+  a: FighterDef,
+  b: FighterDef,
+  season: SeasonView | null = null,
+): string {
   const name = (d: FighterDef) => d.fullName ?? d.name;
   const who = (d: FighterDef) =>
     [name(d), [d.title, d.era].filter(Boolean).join(", ")].filter(Boolean).join(" — ");
   const lines = [
     `${name(a)} vs ${name(b)}: Who Would Win? #shorts`,
     "",
+    ...(season
+      ? [
+          `🏆 Season ${season.season} • ${name(a)} ${formatRecord(season.before[0])} vs ${name(b)} ${formatRecord(season.before[1])}`,
+          "",
+        ]
+      : []),
     `⚔️ ${who(a)}`,
     `⚔️ ${who(b)}`,
     "",
@@ -42,6 +54,7 @@ export function videoDescription(a: FighterDef, b: FighterDef): string {
     );
   }
   lines.push("", "Who should fight next? Comment below! 👇");
+  if (season) lines.push(`Full Season ${season.season} standings at the end of the video.`);
   const sources = [a, b].flatMap((d) => d.sources ?? []);
   if (sources.length > 0) lines.push("", "Sources:", ...sources.map((s) => `- ${s}`));
   lines.push("", ["#history", "#whowouldwin", "#simulation", tag(a), tag(b), "#shorts"].join(" "));
