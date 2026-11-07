@@ -718,6 +718,52 @@ function drawBall(ctx: Ctx, r: number, side: SideColors): void {
   ctx.stroke();
 }
 
+/** Cracks that come in as a leader loses HP: one under two thirds, three under one third. */
+const WEAR = [
+  { below: 0.66, from: 0.35, len: 0.6 },
+  { below: 0.33, from: 2.6, len: 0.55 },
+  { below: 0.33, from: 4.4, len: 0.5 },
+] as const;
+
+function drawWear(ctx: Ctx, r: number, ratio: number, seed: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  ctx.clip();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const [i, w] of WEAR.entries()) {
+    if (ratio >= w.below) continue;
+    const a = w.from + seed * 1.3;
+    // A jagged line from the rim towards the centre, with one side branch.
+    const pts: [number, number][] = [];
+    for (let k = 0; k <= 4; k++) {
+      const d = r * (1 - (k / 4) * w.len);
+      const jag = (k % 2 === 0 ? 1 : -1) * 0.12 * (k > 0 ? 1 : 0);
+      pts.push([Math.cos(a + jag) * d, Math.sin(a + jag) * d]);
+    }
+    const mid = pts[2];
+    const branch: [number, number] | null = mid
+      ? [mid[0] + Math.cos(a + 1.4 + i) * r * 0.18, mid[1] + Math.sin(a + 1.4 + i) * r * 0.18]
+      : null;
+    for (const [width, color] of [
+      [5, "rgba(20,12,6,0.85)"],
+      [1.6, "rgba(255,255,255,0.35)"],
+    ] as const) {
+      ctx.beginPath();
+      pts.forEach(([x, y], k) => (k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      if (mid && branch) {
+        ctx.moveTo(mid[0], mid[1]);
+        ctx.lineTo(branch[0], branch[1]);
+      }
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
   const time = world.time;
   const side = SIDES[f.side];
@@ -757,6 +803,8 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       ctx.restore();
     }
   }
+
+  if (leader) drawWear(ctx, f.radius, f.hp / f.maxHp, f.index);
 
   if (f.poison > 0) {
     ctx.beginPath();

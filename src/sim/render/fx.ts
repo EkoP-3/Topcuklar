@@ -221,6 +221,15 @@ export class Fx {
           0.5,
           big ? 12 : 9,
         );
+        // A quick white burst right where it landed (gold on a heavy hit).
+        this.rings.push({
+          x: e.x,
+          y: e.y,
+          radius: big ? 120 : 70,
+          life: 0.2,
+          max: 0.2,
+          color: big ? "#ffd45e" : "#ffffff",
+        });
         if (target) {
           this.text(
             target.x,

@@ -1,4 +1,4 @@
-import { OUTLINE } from "./palette";
+import { OUTLINE, THEME } from "./palette";
 import { weaponImage } from "./images";
 
 type Ctx = CanvasRenderingContext2D;
@@ -83,8 +83,14 @@ export function drawWeapon(
   if (img) {
     ctx.save();
     ctx.translate(from, 0);
-    // Long thin art (spears) gets a little extra height so it still reads on a phone.
-    const h = Math.max(L * (img.naturalHeight / img.naturalWidth), T * 1.8);
+    // A little thicker than the art's own proportions, and thin art (spears) more so, so
+    // every weapon reads on a phone.
+    const h = Math.max(L * (img.naturalHeight / img.naturalWidth) * 1.15, T * 2.1);
+    if (THEME.ballGlow > 0) {
+      // A light rim keeps the dark-outlined art visible on a dark floor.
+      ctx.shadowColor = "rgba(255,255,255,0.55)";
+      ctx.shadowBlur = 9;
+    }
     ctx.drawImage(img, 0, -h / 2, L, h);
     ctx.restore();
     return;

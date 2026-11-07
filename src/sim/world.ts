@@ -951,6 +951,14 @@ export class World {
   }
 
   private checkEnd(): void {
+    // Both falling on the same step would leave an empty arena under "X WINS": the one
+    // who took less of a beating (the winner `pickWinner` would name) clings on at 1 HP.
+    const standing = this.fighters.filter((f) => f.alive && f.hp > 0);
+    const falling = this.fighters.filter((f) => f.alive && f.hp <= 0);
+    if (standing.length === 0 && falling.length > 1) {
+      const last = this.fighters[this.pickWinner()];
+      if (last) last.hp = 1;
+    }
     for (const f of this.fighters) {
       if (f.alive && f.hp <= 0) {
         f.alive = false;
