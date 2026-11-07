@@ -2,7 +2,7 @@ import { TAU } from "../geom";
 import { createRng, type Rng } from "../rng";
 import type { SimEvent } from "../types";
 import type { World } from "../world";
-import { SIDES } from "./palette";
+import { SIDES, THEME } from "./palette";
 import type { Sfx } from "./sfx";
 
 interface Particle {
@@ -59,6 +59,8 @@ const MAX_PARTICLES = 1600;
 const POISON_GREEN = "#4fbf3a";
 /** Dark flecks of ink mixed into sparks so they read on parchment. */
 const INK_SPECK = "#3a2616";
+/** Specks of ink on the paper; on dark floors they are sparks of light instead. */
+const speck = (): string => (THEME.id === "map" ? INK_SPECK : "#ffffff");
 const DUST = ["#b89a6a", "#8d7148", "#d8c08f"] as const;
 /** Shown in turn for each close call. */
 const NEAR_MISS_WORDS = ["SO CLOSE!", "NEAR MISS!", "ALMOST!", "INCHES AWAY!", "WHEW!"];
@@ -214,7 +216,7 @@ export class Fx {
           e.x,
           e.y,
           8 + Math.min(big ? 30 : 16, rel * (big ? 2 : 1)),
-          big ? [INK_SPECK, "#ffd45e", side.light] : [INK_SPECK, side.light, side.main],
+          big ? [speck(), "#ffd45e", side.light] : [speck(), side.light, side.main],
           260 + Math.min(rel, 30) * 9,
           0.5,
           big ? 12 : 9,
@@ -233,7 +235,7 @@ export class Fx {
         break;
       }
       case "clash":
-        this.burst(e.x, e.y, 12, ["#fff3a0", "#ffd45e", INK_SPECK], 380, 0.35, 8);
+        this.burst(e.x, e.y, 12, ["#fff3a0", "#ffd45e", speck()], 380, 0.35, 8);
         this.addShake(7);
         break;
       case "wall": {
@@ -242,32 +244,32 @@ export class Fx {
         break;
       }
       case "bump":
-        this.burst(e.x, e.y, 5, [INK_SPECK], 160, 0.25, 6);
+        this.burst(e.x, e.y, 5, [speck()], 160, 0.25, 6);
         break;
       case "levelUp": {
         const f = world.fighters[e.fighter];
         if (!f) break;
-        this.burst(f.x, f.y, 22, ["#ffd45e", INK_SPECK, "#ffe9a6"], 420, 0.6, 9);
+        this.burst(f.x, f.y, 22, ["#ffd45e", speck(), "#ffe9a6"], 420, 0.6, 9);
         this.text(f.x, f.y - f.radius - 30, `LV ${e.level}`, "#ffd45e", 52, 1);
         this.addShake(6);
         break;
       }
       case "ring": {
         const side = SIDES[world.fighters[e.fighter]?.side ?? 0];
-        this.burst(e.x, e.y, 30, [side.light, side.main, INK_SPECK], 600, 0.7, 10);
+        this.burst(e.x, e.y, 30, [side.light, side.main, speck()], 600, 0.7, 10);
         this.flash = Math.max(this.flash, 0.35);
         this.addShake(24);
         break;
       }
       case "pylon":
-        this.burst(e.x, e.y, 12, ["#8cc0ff", INK_SPECK], 260, 0.4, 7);
+        this.burst(e.x, e.y, 12, ["#8cc0ff", speck()], 260, 0.4, 7);
         break;
       case "arc":
         this.flash = Math.max(this.flash, 0.3);
         this.addShake(12);
         break;
       case "hookAttach":
-        this.burst(e.x, e.y, 12, ["#d8d0bd", INK_SPECK], 300, 0.4, 8);
+        this.burst(e.x, e.y, 12, ["#d8d0bd", speck()], 300, 0.4, 8);
         this.addShake(7);
         break;
       case "dash": {
@@ -278,7 +280,7 @@ export class Fx {
       }
       case "summon": {
         const side = SIDES[world.fighters[e.fighter]?.side ?? 0];
-        this.burst(e.x, e.y, 14, [side.light, INK_SPECK], 300, 0.4, 8);
+        this.burst(e.x, e.y, 14, [side.light, speck()], 300, 0.4, 8);
         break;
       }
       case "shoot": {
@@ -298,7 +300,7 @@ export class Fx {
         break;
       }
       case "blast":
-        this.burst(e.x, e.y, 46, ["#ffb15c", "#ffd45e", "#ff6a3c", INK_SPECK], 640, 0.7, 13);
+        this.burst(e.x, e.y, 46, ["#ffb15c", "#ffd45e", "#ff6a3c", speck()], 640, 0.7, 13);
         this.rings.push({
           x: e.x,
           y: e.y,
@@ -319,12 +321,12 @@ export class Fx {
           this.addShake(12);
           break;
         }
-        this.burst(e.x, e.y, 18, [side.main, side.light, INK_SPECK], 320, 0.5, 9);
+        this.burst(e.x, e.y, 18, [side.main, side.light, speck()], 320, 0.5, 9);
         break;
       }
       case "reflect": {
         this.text(e.x, e.y - 40, "PARRY!", "#f2c14e", 58, 0.9);
-        this.burst(e.x, e.y, 18, ["#f2c14e", "#fff3a0", INK_SPECK], 380, 0.4, 9);
+        this.burst(e.x, e.y, 18, ["#f2c14e", "#fff3a0", speck()], 380, 0.4, 9);
         this.rings.push({ x: e.x, y: e.y, radius: 70, life: 0.25, max: 0.25, color: "#f2c14e" });
         this.addShake(10);
         break;
@@ -333,7 +335,7 @@ export class Fx {
         const f = world.fighters[e.fighter];
         if (!f) break;
         const side = SIDES[f.side];
-        this.burst(f.x, f.y, 50, [side.bright, "#f2c14e", INK_SPECK], 700, 0.9, 12);
+        this.burst(f.x, f.y, 50, [side.bright, "#f2c14e", speck()], 700, 0.9, 12);
         this.rings.push({ x: f.x, y: f.y, radius: 300, life: 0.5, max: 0.5, color: side.bright });
         this.flash = Math.max(this.flash, 0.35);
         this.addShake(14);
@@ -376,14 +378,14 @@ export class Fx {
           const edge = Math.floor(i / 6);
           const x = edge === 1 ? 715 : edge === 3 ? 5 : along;
           const y = edge === 2 ? 715 : edge === 0 ? 5 : along;
-          this.burst(x, y, 10, ["#7a6a58", "#4a3a2a", "#b89a6a", INK_SPECK], 520, 1, 14);
+          this.burst(x, y, 10, ["#7a6a58", "#4a3a2a", "#b89a6a", speck()], 520, 1, 14);
         }
         this.flash = Math.max(this.flash, 0.6);
         this.addShake(46);
         break;
       case "domainHit": {
         this.text(e.x, e.y - 50, "SURE HIT!", "#f2c14e", 64, 1.1);
-        this.burst(e.x, e.y, 36, ["#f2c14e", "#fff3a0", INK_SPECK], 600, 0.7, 12);
+        this.burst(e.x, e.y, 36, ["#f2c14e", "#fff3a0", speck()], 600, 0.7, 12);
         this.rings.push({ x: e.x, y: e.y, radius: 160, life: 0.4, max: 0.4, color: "#f2c14e" });
         this.addShake(22);
         break;
@@ -397,7 +399,7 @@ export class Fx {
       }
       case "slash":
         this.slashes.push({ x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, life: 0.4, max: 0.4 });
-        this.burst(e.x2, e.y2, 14, ["#fff8e8", INK_SPECK], 420, 0.35, 7);
+        this.burst(e.x2, e.y2, 14, ["#fff8e8", speck()], 420, 0.35, 7);
         this.addShake(12);
         break;
       case "rampart": {
@@ -411,7 +413,7 @@ export class Fx {
       }
       case "zone":
         if (e.style === "stakes") {
-          this.burst(e.x, e.y, 8, ["#9b6a3a", INK_SPECK], 180, 0.35, 7);
+          this.burst(e.x, e.y, 8, ["#9b6a3a", speck()], 180, 0.35, 7);
         } else if (e.style === "banner") {
           this.burst(e.x, e.y, 18, ["#f2c14e", "#2a4fa8", "#fff3a0"], 300, 0.6, 9);
           this.rings.push({
@@ -423,7 +425,7 @@ export class Fx {
             color: "#f2c14e",
           });
         } else if (e.style === "fire") {
-          this.burst(e.x, e.y, 24, ["#ff8a2a", "#ffd45e", "#c23a1b", INK_SPECK], 300, 0.7, 12);
+          this.burst(e.x, e.y, 24, ["#ff8a2a", "#ffd45e", "#c23a1b", speck()], 300, 0.7, 12);
         } else {
           this.burst(e.x, e.y, 10, [POISON_GREEN, "#2e6b22"], 160, 0.4, 7);
         }
@@ -431,7 +433,7 @@ export class Fx {
       case "shield": {
         const f = world.fighters[e.fighter];
         if (!f) break;
-        this.burst(f.x, f.y, 18, ["#ffd45e", "#fff3a0", INK_SPECK], 340, 0.45, 8);
+        this.burst(f.x, f.y, 18, ["#ffd45e", "#fff3a0", speck()], 340, 0.45, 8);
         break;
       }
       case "ultimate": {
@@ -454,7 +456,7 @@ export class Fx {
       }
       case "strike":
         if (e.style === "shell") {
-          this.burst(e.x, e.y, 40, ["#ffb15c", "#ffd45e", "#ff6a3c", INK_SPECK], 600, 0.7, 13);
+          this.burst(e.x, e.y, 40, ["#ffb15c", "#ffd45e", "#ff6a3c", speck()], 600, 0.7, 13);
           this.rings.push({
             x: e.x,
             y: e.y,
@@ -493,7 +495,7 @@ export class Fx {
           color: "#ffd45e",
           size: 54,
         });
-        this.burst(e.x, e.y, 10, ["#ffd45e", INK_SPECK], 260, 0.35, 7);
+        this.burst(e.x, e.y, 10, ["#ffd45e", speck()], 260, 0.35, 7);
         break;
       }
       case "frenzy":
@@ -537,12 +539,12 @@ export class Fx {
         this.addShake(20);
         break;
       case "sweepHit":
-        this.burst(e.x, e.y, 36, [INK_SPECK, "#ffd45e", "#ffb15c"], 700, 0.7, 13);
+        this.burst(e.x, e.y, 36, [speck(), "#ffd45e", "#ffb15c"], 700, 0.7, 13);
         this.addShake(30);
         this.flash = Math.max(this.flash, 0.4);
         break;
       case "slam": {
-        this.burst(e.x, e.y, 50, [INK_SPECK, "#ffd45e", "#c8202a"], 800, 0.8, 14);
+        this.burst(e.x, e.y, 50, [speck(), "#ffd45e", "#c8202a"], 800, 0.8, 14);
         this.rings.push({ x: e.x, y: e.y, radius: 200, life: 0.4, max: 0.4, color: "#ffd45e" });
         this.text(e.x, e.y, "SLAM!", "#ffd45e", 64, 1);
         this.flash = Math.max(this.flash, 0.6);

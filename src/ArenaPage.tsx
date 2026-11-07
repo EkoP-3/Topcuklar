@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRng } from "./sim/rng";
 import { createRenderer } from "./sim/render/canvas";
 import { Fx } from "./sim/render/fx";
-import { SIDES } from "./sim/render/palette";
+import { SIDES, THEME, setStyle, type StyleId } from "./sim/render/palette";
 import { Music, musicState } from "./sim/render/music";
 import { Sfx } from "./sim/render/sfx";
 import { Narrator } from "./sim/render/voice";
@@ -11,6 +11,13 @@ import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 import { canRecord, foreseeEpicFinish, recordMatch, tailSeconds, type Recording } from "./recorder";
 import { ultimateName, videoDescription } from "./describe";
+
+/** The frame's looks, in the order the picker shows them. */
+const LOOKS: readonly [StyleId, string][] = [
+  ["map", "Harita"],
+  ["arcade", "Arcade"],
+  ["night", "Gece"],
+];
 
 interface ArenaSearch {
   mode: RosterId | undefined;
@@ -98,6 +105,7 @@ export function ArenaPage() {
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [auto, setAuto] = useState(true);
+  const [look, setLook] = useState<StyleId>(THEME.id);
   const [matchup, setMatchup] = useState<[string, string] | null>(null);
   const [recProgress, setRecProgress] = useState<number | null>(null);
   const [recMessage, setRecMessage] = useState<string | null>(null);
@@ -226,6 +234,8 @@ export function ArenaPage() {
       Math.min(1, Math.max(0.5, (canvas.clientWidth * (window.devicePixelRatio || 1)) / 1080));
     let shownWidth = canvas.clientWidth;
     let renderer = createRenderer(canvas, pickQuality());
+    // The look is baked into the renderer's static layers: rebuild when it changes.
+    let builtFor = THEME;
     const onResize = () => {
       if (Math.abs(canvas.clientWidth - shownWidth) < 8) return;
       shownWidth = canvas.clientWidth;
@@ -243,6 +253,10 @@ export function ArenaPage() {
       const fx = fxRef.current;
       const { paused: isPaused, speed: rate, auto: isAuto, busy } = live.current;
 
+      if (THEME !== builtFor) {
+        builtFor = THEME;
+        renderer = createRenderer(canvas, pickQuality());
+      }
       if (world && fx && !busy) {
         const extras = extrasRef.current;
         if (!isPaused) {
@@ -443,6 +457,26 @@ export function ArenaPage() {
                   }`}
                 >
                   {s}×
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-neutral-400">Görünüm</span>
+            <div className="flex overflow-hidden rounded-lg border border-white/15">
+              {LOOKS.map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setStyle(id);
+                    setLook(id);
+                  }}
+                  className={`px-3 py-2 text-sm font-medium transition-colors ${
+                    look === id ? "bg-white/25 text-white" : "bg-white/5 text-neutral-300"
+                  }`}
+                >
+                  {label}
                 </button>
               ))}
             </div>

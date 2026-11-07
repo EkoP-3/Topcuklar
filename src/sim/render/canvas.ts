@@ -39,9 +39,11 @@ import {
   PAPER,
   PAPER_DARK,
   SIDES,
+  THEME,
   fontsVersion,
   matchColors,
   setMatchColors,
+  type SideColors,
 } from "./palette";
 import { LEVEL_TIMES } from "../leaders/kit";
 import { drawEmblem, fleur } from "./emblems";
@@ -65,8 +67,6 @@ const AS = 1032;
 const K = AS / ARENA;
 /** Corner radius of the map sheet. */
 const AR = 14;
-/** Dark leather around the map. */
-const LEATHER = "#1d120a";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -103,7 +103,7 @@ export function createRenderer(canvas: HTMLCanvasElement, quality = 2 / 3): Rend
     const [fa, fb] = world.fighters;
     if (fa && fb) setMatchColors(fa.def.id, fb.def.id);
     ctx.setTransform(quality, 0, 0, quality, 0, 0);
-    ctx.fillStyle = LEATHER;
+    ctx.fillStyle = THEME.page[1];
     ctx.fillRect(0, 0, W, H);
     followCamera(cam, world);
 
@@ -224,7 +224,7 @@ function drawFighterPanel(
   const y = 250;
   const h = 44;
   roundRect(ctx, x0, y, w, h, 6);
-  ctx.fillStyle = "#0f0905";
+  ctx.fillStyle = THEME.barBg;
   ctx.fill();
   ctx.save();
   ctx.clip();
@@ -240,7 +240,7 @@ function drawFighterPanel(
   ctx.fillRect(x0, y + 4, w, h * 0.3);
   ctx.restore();
   roundRect(ctx, x0, y, w, h, 6);
-  ctx.strokeStyle = "#b08a4a";
+  ctx.strokeStyle = THEME.barFrame;
   ctx.lineWidth = 4;
   ctx.stroke();
   if (f.def.growth) {
@@ -283,15 +283,17 @@ function drawArena(
   drawDangerZone(ctx, world, frame);
   for (const h of world.hazards) if (h.kind === "zone") drawZone(ctx, h, frame);
 
+  if (THEME.additive) ctx.globalCompositeOperation = "lighter";
   for (const d of fx.trail) {
     const k = d.life / d.max;
-    ctx.globalAlpha = 0.32 * k;
-    ctx.fillStyle = SIDES[d.side].main;
+    ctx.globalAlpha = (THEME.additive ? 0.22 : 0.32) * k;
+    ctx.fillStyle = THEME.additive ? SIDES[d.side].bright : SIDES[d.side].main;
     ctx.beginPath();
     ctx.arc(d.x, d.y, d.radius * (0.55 + 0.45 * k), 0, TAU);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
 
   for (const h of world.hazards) {
     switch (h.kind) {
@@ -384,18 +386,25 @@ function drawArena(
   }
 }
 
-/** Ink double rule around the map with small diamonds at the corners. */
+/** Double rule around the map with small diamonds at the corners (glowing on dark looks). */
 function drawMapBorder(ctx: Ctx): void {
   roundRect(ctx, AX, AY, AS, AS, AR);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 9;
-  ctx.stroke();
+  ctx.strokeStyle = THEME.border;
+  ctx.lineWidth = THEME.borderGlow ? 6 : 9;
+  if (THEME.borderGlow) {
+    ctx.save();
+    ctx.shadowColor = THEME.borderGlow;
+    ctx.shadowBlur = 26;
+    ctx.stroke();
+    ctx.restore();
+  } else ctx.stroke();
   roundRect(ctx, AX - 9, AY - 9, AS + 18, AS + 18, AR + 6);
-  ctx.strokeStyle = "#b08a4a";
+  ctx.strokeStyle = THEME.borderOuter;
   ctx.lineWidth = 3;
   ctx.stroke();
+  if (THEME.id === "arcade") return;
   const inset = 16;
-  ctx.strokeStyle = "rgba(43,27,15,0.6)";
+  ctx.strokeStyle = THEME.id === "map" ? "rgba(43,27,15,0.6)" : THEME.borderOuter;
   ctx.lineWidth = 2;
   ctx.strokeRect(AX + inset, AY + inset, AS - inset * 2, AS - inset * 2);
   for (const [cx, cy] of [
@@ -410,11 +419,11 @@ function drawMapBorder(ctx: Ctx): void {
     ctx.lineTo(cx, cy + 11);
     ctx.lineTo(cx - 11, cy);
     ctx.closePath();
-    ctx.fillStyle = INK;
+    ctx.fillStyle = THEME.id === "map" ? INK : THEME.border;
     ctx.fill();
     ctx.beginPath();
     ctx.arc(cx, cy, 3, 0, TAU);
-    ctx.fillStyle = "#b08a4a";
+    ctx.fillStyle = THEME.id === "map" ? "#b08a4a" : THEME.tabBg;
     ctx.fill();
   }
 }
@@ -641,23 +650,72 @@ function moodFor(world: World, f: Fighter): Mood {
   return "determined";
 }
 
-/** Leader's HP on a small parchment tag across the bottom of the ball. */
-function hpBadge(ctx: Ctx, hp: string, r: number): void {
-  const size = Math.round(r * 0.36);
+/** Leader's HP across the bottom of the ball: a parchment tag, or a dark pill on dark looks. */
+function hpBadge(ctx: Ctx, hp: string, r: number, side: SideColors): void {
+  const pill = THEME.hpTag === "pill";
+  const size = Math.round(r * (pill ? 0.42 : 0.36));
   ctx.font = `900 ${size}px ${MONO_FONT}`;
   const w = ctx.measureText(hp).width + size * 0.8;
   const h = size * 1.15;
   const y = r * 0.95;
-  roundRect(ctx, -w / 2, y - h / 2, w, h, h * 0.3);
-  ctx.fillStyle = "#f3e5c0";
+  roundRect(ctx, -w / 2, y - h / 2, w, h, h * (pill ? 0.5 : 0.3));
+  ctx.fillStyle = pill ? side.dark : "#f3e5c0";
   ctx.fill();
-  ctx.lineWidth = Math.max(1.5, r * 0.035);
-  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = Math.max(1.5, r * (pill ? 0.05 : 0.035));
+  ctx.strokeStyle = pill ? "#ffffff" : OUTLINE;
   ctx.stroke();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = INK;
+  ctx.fillStyle = pill ? "#ffffff" : INK;
   ctx.fillText(hp, 0, y + size * 0.06);
+}
+
+/**
+ * The ball itself. Map look: flat paint with an ink rim and a soft shadow on the paper.
+ * Dark looks: a glow in the team colour, a lit sphere and a heavy rim.
+ */
+function drawBall(ctx: Ctx, r: number, side: SideColors): void {
+  if (THEME.ballGlow > 0) {
+    ctx.save();
+    ctx.shadowColor = side.bright;
+    ctx.shadowBlur = THEME.ballGlow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.fillStyle = side.main;
+    ctx.fill();
+    ctx.restore();
+  } else {
+    ctx.beginPath();
+    ctx.arc(3, 5, r, 0, TAU);
+    ctx.fillStyle = "rgba(43,27,15,0.14)";
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  if (THEME.ballShade) {
+    // Lit from the top left and kept bright, so dull team colours still pop on a dark floor.
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+    g.addColorStop(0, side.light);
+    g.addColorStop(0.5, side.bright);
+    g.addColorStop(1, side.main);
+    ctx.fillStyle = g;
+  } else ctx.fillStyle = side.main;
+  ctx.fill();
+  ctx.lineWidth = THEME.ballOutline;
+  ctx.strokeStyle = THEME.ballShade ? OUTLINE : side.dark;
+  ctx.stroke();
+  if (!THEME.ballShade) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 2, 0, TAU);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = OUTLINE;
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 9, 0, TAU);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = THEME.ballShade ? "rgba(255,255,255,0.22)" : "rgba(255,240,210,0.35)";
+  ctx.stroke();
 }
 
 function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
@@ -682,28 +740,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
     ctx.restore();
   }
 
-  // Soft ink shadow on the paper.
-  ctx.beginPath();
-  ctx.arc(3, 5, f.radius, 0, TAU);
-  ctx.fillStyle = "rgba(43,27,15,0.14)";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(0, 0, f.radius, 0, TAU);
-  ctx.fillStyle = side.main;
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = side.dark;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, f.radius + 2, 0, TAU);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, f.radius - 9, 0, TAU);
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(255,240,210,0.35)";
-  ctx.stroke();
+  drawBall(ctx, f.radius, side);
 
   if (leader) {
     const portrait = portraitImage(f.def.id);
@@ -750,7 +787,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       world.time + world.phaseTime * (world.phase === "fight" ? 0 : 1),
       f.index,
     );
-    hpBadge(ctx, hp, f.radius);
+    hpBadge(ctx, hp, f.radius, side);
   } else {
     ctx.font = `900 ${Math.round(f.radius * 0.48)}px ${MONO_FONT}`;
     outlinedText(ctx, hp, 0, 2, "#fff8e8", 4);
@@ -1444,7 +1481,7 @@ function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDe
   const s = easeOutBack(a);
   ctx.save();
   ctx.globalAlpha = a;
-  ctx.fillStyle = "rgba(29,18,10,0.86)";
+  ctx.fillStyle = THEME.curtain;
   ctx.fillRect(0, 0, AS, AS);
   ctx.translate(AS / 2, 0);
   ctx.scale(s, s);
@@ -1546,10 +1583,10 @@ function drawCloseCalls(ctx: Ctx, world: World): void {
   const y = AY - h / 2;
   const frenzy = world.frenzy > 0;
   roundRect(ctx, x, y, w, h, 8);
-  ctx.fillStyle = frenzy ? "#8e1a14" : "#efe0bb";
+  ctx.fillStyle = frenzy ? "#8e1a14" : THEME.tabBg;
   ctx.fill();
   ctx.lineWidth = 4;
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = THEME.id === "map" ? INK : THEME.barFrame;
   ctx.stroke();
   ctx.textBaseline = "middle";
   if (frenzy) {
@@ -1561,16 +1598,21 @@ function drawCloseCalls(ctx: Ctx, world: World): void {
   }
   ctx.textAlign = "left";
   ctx.font = `900 24px ${DISPLAY_FONT}`;
-  ctx.fillStyle = INK;
+  ctx.fillStyle = THEME.tabInk;
   ctx.fillText("CLOSE CALLS", x + 26, y + h / 2 + 1);
   for (let i = 0; i < CLOSE_CALLS_FOR_FRENZY; i++) {
     const cx = x + 252 + i * 30;
     ctx.beginPath();
     ctx.arc(cx, y + h / 2, 10, 0, TAU);
-    ctx.fillStyle = i < world.closeCalls ? "#a3221a" : "rgba(43,27,15,0.12)";
+    ctx.fillStyle =
+      i < world.closeCalls
+        ? "#e0322a"
+        : THEME.id === "map"
+          ? "rgba(43,27,15,0.12)"
+          : "rgba(255,255,255,0.12)";
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = INK;
+    ctx.strokeStyle = THEME.tabInk;
     ctx.stroke();
   }
 }
@@ -1642,17 +1684,18 @@ function layer(quality: number): { canvas: HTMLCanvasElement; g: Ctx | null } {
 }
 
 /**
- * Leather around the page and the arena as an old sea chart: parchment with stains and
- * burnt edges, a lat/long grid, rhumb lines and a faded compass rose. Drawn once.
+ * The page around the arena and the arena floor, drawn once. Map look: leather around an
+ * old sea chart (parchment, stains, burnt edges, grid, rhumb lines, a faded compass rose).
+ * Dark looks: the same layout on a dark floor with faint lines.
  */
 function buildBackground(quality: number): HTMLCanvasElement {
   const { canvas, g: ctx } = layer(quality);
   if (!ctx) return canvas;
+  const T = THEME;
 
-  // Leather.
   const lg = ctx.createRadialGradient(W / 2, H * 0.45, H * 0.1, W / 2, H * 0.45, H * 0.75);
-  lg.addColorStop(0, "#4a2e1a");
-  lg.addColorStop(1, "#160d07");
+  lg.addColorStop(0, T.page[0]);
+  lg.addColorStop(1, T.page[1]);
   ctx.fillStyle = lg;
   ctx.fillRect(0, 0, W, H);
   for (let i = 0; i < 5000; i++) {
@@ -1661,50 +1704,53 @@ function buildBackground(quality: number): HTMLCanvasElement {
     ctx.fillStyle = noise(i, 3) < 0.5 ? "rgba(0,0,0,0.12)" : "rgba(255,220,170,0.04)";
     ctx.fillRect(x, y, 2, 2);
   }
-  // Gilt rule like a book cover.
-  ctx.strokeStyle = "rgba(176,138,74,0.55)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(22, 22, W - 44, H - 44);
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(32, 32, W - 64, H - 64);
+  if (T.pageRule) {
+    // Gilt rule like a book cover.
+    ctx.strokeStyle = T.pageRule;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(22, 22, W - 44, H - 44);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(32, 32, W - 64, H - 64);
+  }
 
-  // The map sheet.
+  // The floor.
   ctx.save();
   ctx.translate(AX, AY);
   roundRect(ctx, 0, 0, AS, AS, AR);
   ctx.clip();
   const pg = ctx.createLinearGradient(0, 0, AS, AS);
-  pg.addColorStop(0, "#f0e1bb");
-  pg.addColorStop(1, PAPER);
+  pg.addColorStop(0, T.floor[0]);
+  pg.addColorStop(1, T.floor[1]);
   ctx.fillStyle = pg;
   ctx.fillRect(0, 0, AS, AS);
-  // Stains.
-  for (let i = 0; i < 18; i++) {
-    const x = noise(i, 11) * AS;
-    const y = noise(i, 12) * AS;
-    const r = 40 + noise(i, 13) * 150;
-    const st = ctx.createRadialGradient(x, y, 0, x, y, r);
-    st.addColorStop(0, `rgba(150,105,45,${0.05 + noise(i, 14) * 0.09})`);
-    st.addColorStop(0.8, "rgba(150,105,45,0.03)");
-    st.addColorStop(1, "rgba(150,105,45,0)");
-    ctx.fillStyle = st;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  if (T.stains) {
+    for (let i = 0; i < 18; i++) {
+      const x = noise(i, 11) * AS;
+      const y = noise(i, 12) * AS;
+      const r = 40 + noise(i, 13) * 150;
+      const st = ctx.createRadialGradient(x, y, 0, x, y, r);
+      st.addColorStop(0, `rgba(150,105,45,${0.05 + noise(i, 14) * 0.09})`);
+      st.addColorStop(0.8, "rgba(150,105,45,0.03)");
+      st.addColorStop(1, "rgba(150,105,45,0)");
+      ctx.fillStyle = st;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    // Fibres.
+    ctx.strokeStyle = "rgba(110,75,35,0.08)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 700; i++) {
+      const x = noise(i, 21) * AS;
+      const y = noise(i, 22) * AS;
+      const a = noise(i, 23) * TAU;
+      const l = 4 + noise(i, 24) * 10;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+      ctx.stroke();
+    }
   }
-  // Fibres.
-  ctx.strokeStyle = "rgba(110,75,35,0.08)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 700; i++) {
-    const x = noise(i, 21) * AS;
-    const y = noise(i, 22) * AS;
-    const a = noise(i, 23) * TAU;
-    const l = 4 + noise(i, 24) * 10;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
-    ctx.stroke();
-  }
-  // Lat/long grid.
-  ctx.strokeStyle = "rgba(90,60,25,0.16)";
+  // Grid.
+  ctx.strokeStyle = T.grid;
   ctx.lineWidth = 1.5;
   for (let p = 120; p < AS; p += 120) {
     ctx.beginPath();
@@ -1714,23 +1760,24 @@ function buildBackground(quality: number): HTMLCanvasElement {
     ctx.lineTo(AS, p);
     ctx.stroke();
   }
-  // Rhumb lines and the compass rose.
   const cx = AS / 2;
   const cy = AS / 2;
-  ctx.strokeStyle = "rgba(90,60,25,0.1)";
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * TAU;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(a) * AS, cy + Math.sin(a) * AS);
-    ctx.stroke();
+  if (T.rhumb) {
+    ctx.strokeStyle = T.rhumb;
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a) * AS, cy + Math.sin(a) * AS);
+      ctx.stroke();
+    }
   }
-  drawCompass(ctx, cx, cy, 190);
-  // Burnt, darker edges.
+  if (T.compass) drawCompass(ctx, cx, cy, 190, T.compass);
+  // Darker edges.
   const burn = ctx.createRadialGradient(cx, cy, AS * 0.35, cx, cy, AS * 0.75);
-  burn.addColorStop(0, "rgba(110,70,25,0)");
-  burn.addColorStop(1, "rgba(110,70,25,0.42)");
+  burn.addColorStop(0, "rgba(0,0,0,0)");
+  burn.addColorStop(1, T.edge);
   ctx.fillStyle = burn;
   ctx.fillRect(0, 0, AS, AS);
   ctx.restore();
@@ -1739,12 +1786,18 @@ function buildBackground(quality: number): HTMLCanvasElement {
 }
 
 /** Faded eight-point compass rose. */
-function drawCompass(ctx: Ctx, x: number, y: number, r: number): void {
+function drawCompass(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  r: number,
+  look: { ink: string; light: string; alpha: number },
+): void {
   ctx.save();
   ctx.translate(x, y);
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = look.alpha;
   ctx.lineWidth = 2;
-  ctx.strokeStyle = INK;
+  ctx.strokeStyle = look.ink;
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.62, 0, TAU);
   ctx.stroke();
@@ -1761,7 +1814,7 @@ function drawCompass(ctx: Ctx, x: number, y: number, r: number): void {
       ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
       ctx.lineTo(Math.cos(a + (half * Math.PI) / 2) * w, Math.sin(a + (half * Math.PI) / 2) * w);
       ctx.closePath();
-      ctx.fillStyle = half < 0 ? INK : PAPER_DARK;
+      ctx.fillStyle = half < 0 ? look.ink : look.light;
       ctx.fill();
       ctx.stroke();
     }
@@ -1769,20 +1822,24 @@ function drawCompass(ctx: Ctx, x: number, y: number, r: number): void {
   ctx.font = `900 ${Math.round(r * 0.22)}px ${DISPLAY_FONT}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = INK;
+  ctx.fillStyle = look.ink;
   ctx.fillText("N", 0, -r - r * 0.16);
   ctx.restore();
 }
 
-/** Warm vignette on top of everything (no TV scanlines: this is a printed page). */
+/** Vignette on top of everything, plus faint TV scanlines on the arcade look. */
 function buildOverlay(quality: number): HTMLCanvasElement {
   const { canvas, g: ctx } = layer(quality);
   if (!ctx) return canvas;
   const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.8);
-  vignette.addColorStop(0, "rgba(20,10,4,0)");
-  vignette.addColorStop(1, "rgba(20,10,4,0.5)");
+  vignette.addColorStop(0, "rgba(0,0,0,0)");
+  vignette.addColorStop(1, THEME.vignette);
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, W, H);
+  if (THEME.scanlines > 0) {
+    ctx.fillStyle = `rgba(0,0,0,${THEME.scanlines})`;
+    for (let y = 0; y < H; y += 6) ctx.fillRect(0, y, W, 2);
+  }
   return canvas;
 }
 
@@ -2151,7 +2208,7 @@ function drawWinBar(ctx: Ctx, a: Fighter, b: Fighter, win: number): void {
   ctx.restore();
   roundRect(ctx, x, y, w, h, 8);
   ctx.lineWidth = 4;
-  ctx.strokeStyle = "#b08a4a";
+  ctx.strokeStyle = THEME.barFrame;
   ctx.stroke();
   ctx.textBaseline = "middle";
   ctx.font = `900 22px ${MONO_FONT}`;
