@@ -193,6 +193,8 @@ export function ArenaPage() {
   const [ledgerBackend, setLedgerBackend] = useState<LedgerBackend>("local");
   const [matchInfo, setMatchInfo] = useState<MatchInfo | null>(null);
   const [seasonMessage, setSeasonMessage] = useState<string | null>(null);
+  /** The ledger entry whose ✕ was tapped once (a second tap deletes it). */
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [ledgerText, setLedgerText] = useState<string | null>(null);
   const [muted, setMuted] = useState(readMuted);
   const [audioReady, setAudioReady] = useState(false);
@@ -807,36 +809,60 @@ export function ArenaPage() {
               )}
               {seasonMessage && <p className="text-xs text-neutral-400">{seasonMessage}</p>}
               {ledger.length > 0 && (
-                <ul className="space-y-1">
-                  {[...ledger].reverse().map((m) => (
-                    <li
-                      key={matchKey(m)}
-                      className="flex items-center justify-between gap-2 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-xs"
-                    >
-                      <span>
-                        <span className="font-bold text-neutral-100">{leaderName(m.winner)}</span>
-                        <span className="text-neutral-500"> yendi </span>
-                        {leaderName(m.winner === m.a ? m.b : m.a)}
-                        <span className="text-neutral-500">
-                          {" "}
-                          · seed {m.seed} · {m.at.slice(0, 10)}
-                        </span>
-                      </span>
-                      <button
-                        className="px-1 text-neutral-500 hover:text-red-400"
-                        title="Sezondan sil"
-                        onClick={() => {
-                          if (!window.confirm("Bu maç sezondan silinsin mi?")) return;
-                          removeMatch(m).catch(() =>
-                            setSeasonMessage("Silinemedi (bu sayfada yazma izniniz olmayabilir)."),
-                          );
-                        }}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+                    Oynanan maçlar ({ledger.length})
+                  </h3>
+                  <ul className="space-y-1">
+                    {[...ledger].reverse().map((m) => {
+                      const key = matchKey(m);
+                      const asking = confirmDelete === key;
+                      return (
+                        <li
+                          key={key}
+                          className="flex items-center justify-between gap-2 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-xs"
+                        >
+                          <span>
+                            <span className="font-bold text-neutral-100">
+                              {leaderName(m.winner)}
+                            </span>
+                            <span className="text-neutral-500"> yendi </span>
+                            {leaderName(m.winner === m.a ? m.b : m.a)}
+                            <span className="text-neutral-500">
+                              {" "}
+                              · seed {m.seed} · {m.at.slice(0, 10)}
+                            </span>
+                          </span>
+                          {/* Two taps instead of a confirm() dialog, which embedded pages may block. */}
+                          <button
+                            className={`shrink-0 rounded-md border px-2 py-1 font-sans text-xs font-semibold transition-colors ${
+                              asking
+                                ? "border-red-400 bg-red-500/80 text-white"
+                                : "border-red-400/40 text-red-300 hover:bg-red-500/20"
+                            }`}
+                            title="Sezondan sil"
+                            onClick={() => {
+                              if (!asking) {
+                                setConfirmDelete(key);
+                                return;
+                              }
+                              setConfirmDelete(null);
+                              removeMatch(m).then(
+                                () => setSeasonMessage("Maç sezondan silindi."),
+                                () =>
+                                  setSeasonMessage(
+                                    "Silinemedi (bu sayfada yazma izniniz olmayabilir).",
+                                  ),
+                              );
+                            }}
+                          >
+                            {asking ? "Sil?" : "✕"}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
               <div className="flex flex-wrap gap-3">
                 <button

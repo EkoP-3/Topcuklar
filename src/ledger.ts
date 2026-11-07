@@ -78,7 +78,15 @@ export function parseLedger(raw: unknown): SeasonMatch[] {
 }
 
 function publish(next: SeasonMatch[]): void {
-  matches = sortLedger(next);
+  // One entry per pairing and seed, however the page and the database raced to add it.
+  const seen = new Set<string>();
+  const unique = next.filter((m) => {
+    const key = matchKey(m);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  matches = sortLedger(unique);
   writeLocal(matches);
   for (const l of listeners) l(matches, backend);
 }
