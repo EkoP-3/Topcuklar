@@ -41,7 +41,7 @@ export const qin: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "SOLDIER DMG", base: 39 },
-  hp: 1000,
+  hp: 1080,
   radius: 58,
   mass: 1.2,
   baseSpeed: 430,

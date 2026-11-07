@@ -37,7 +37,7 @@ export const saladin: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "WHIRL DMG", base: 42 },
-  hp: 1000,
+  hp: 1120,
   radius: 56,
   mass: 1.05,
   baseSpeed: 480,

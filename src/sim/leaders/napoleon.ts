@@ -1,10 +1,20 @@
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle, spawnUnit, unitsOf } from "../units";
-import { fan, skill, ticks } from "./kit";
+import { fireProjectile, leadAngle, marksOf, spawnMark, spawnUnit, unitsOf } from "../units";
+import { fan, perFighter, signature, skill, ticks } from "./kit";
 import { every, shellAtEnemy } from "./domains";
 
 const BALL_SPEED = 900;
-const ABILITY = { name: "GRAND BATTERY", text: "Cannonballs that bounce twice" };
+const ABILITY = {
+  name: "GRAND BATTERY",
+  text: "Cannonballs that bounce twice; wall bounces build a grand battery",
+};
+
+/**
+ * The grand battery: every BATTERY.every-th time Napoleon bounces off a wall he leaves a
+ * cannon there; once BATTERY.guns stand, they all fire at the enemy at once.
+ */
+const BATTERY = { every: 2, guns: 3, damage: 40, knockback: 360 };
+const bounces = perFighter(() => ({ n: 0, last: -1 }));
 
 const AUSTERLITZ = { radius: 90, delay: 0.8, damage: 34, knockback: 320 };
 
@@ -12,7 +22,7 @@ export const napoleon: FighterDef = {
   id: "napoleon",
   name: "NAPOLEON",
   description:
-    "Napolyon. Küçük ve çevik; belli aralıklarla ağır top güllesi atar, gülle iki kez duvardan seker. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
+    "Napolyon. Küçük ve çevik; belli aralıklarla ağır top güllesi atar, gülle iki kez duvardan seker. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle. Büyük batarya: duvardan her iki sekişinde oraya bir top kurar; üç top olunca hepsi birden rakibe ateş eder.",
   era: "1769–1821",
   fact: "An artillery officer who crowned himself Emperor of the French in 1804.",
   fullName: "Napoleon Bonaparte",
@@ -44,6 +54,45 @@ export const napoleon: FighterDef = {
   createAbility: skill({
     label: ABILITY.name,
     quiet: true,
+    onWallHit(world, self, hit) {
+      const s = bounces(self);
+      // Only real bounces count, not grinding along a wall.
+      if (world.phase !== "fight" || world.time - s.last < 0.3) return;
+      s.last = world.time;
+      if (++s.n % BATTERY.every !== 0) return;
+      spawnMark(world, self, { style: "cannon", ...hit, ttl: Infinity });
+      world.emit({ type: "summon", fighter: self.index, style: "guard", x: hit.x, y: hit.y });
+      // Guns that already fired are on their way out.
+      const guns = marksOf(world, self, "cannon").filter((g) => g.ttl === Infinity);
+      if (guns.length < BATTERY.guns) return;
+      const enemy = world.nearestEnemy(self);
+      if (!enemy) return;
+      for (const g of guns) {
+        const from = { x: g.x + g.nx * 20, y: g.y + g.ny * 20 };
+        fireProjectile(
+          world,
+          self,
+          Math.atan2(enemy.y - from.y, enemy.x - from.x),
+          {
+            style: "ball",
+            speed: BALL_SPEED,
+            radius: 16,
+            damage: BATTERY.damage,
+            knockback: BATTERY.knockback,
+            blast: 0,
+            poison: 0,
+            poisonDps: 0,
+            bounces: 0,
+            ttl: 2,
+          },
+          from,
+        );
+        signature(world, self, from.x, from.y, "#ffb15c");
+        g.ttl = 0.35;
+      }
+      signature(world, self, self.x, self.y, "#ffb15c", "FIRE!");
+      world.emit({ type: "shoot", fighter: self.index, style: "ball" });
+    },
     firstAt: 1.4,
     cooldown: 2.4,
     cast(world, self, level) {

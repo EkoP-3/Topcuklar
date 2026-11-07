@@ -1,18 +1,27 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
-import { skill, steerToward } from "./kit";
+import { spawnMark } from "../units";
+import { perFighter, signature, skill, steerToward } from "./kit";
 
 const SHIELD_TIME = [2.2, 3, 4];
+/**
+ * Last stand (the 300 at the pass): the first blow that would kill Leonidas leaves him
+ * standing instead; he rallies some HP and for a few seconds shrugs off most damage and
+ * hits harder.
+ */
+const LAST_STAND = { time: 2.5, heal: 0.05, guard: 0.6, damage: 1.3 };
+const lastStand = perFighter(() => ({ used: false, until: 0 }));
+
 const ABILITY = {
   name: "HOLD THE LINE",
-  text: "Shield up: -60% damage, parries shots back",
+  text: "Shield up: -60% damage, parries shots back; survives one killing blow",
 };
 
 export const leonidas: FighterDef = {
   id: "leonidas",
   name: "LEONIDAS",
   description:
-    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırıp rakibe yürür: aldığı hasar %60 azalır, kalkanla sert vurur; kalkanı kaldırdığı ilk saniyede gelen mermileri sahibine geri sektirir. Kalkan önce 2,2 sn, 15. saniyede 3 sn, 30. saniyede 4 sn sürer.",
+    "Leonidas. Dayanıklıdır; belli aralıklarla kalkanını kaldırıp rakibe yürür: aldığı hasar %60 azalır, kalkanla sert vurur; kalkanı kaldırdığı ilk saniyede gelen mermileri sahibine geri sektirir. Kalkan önce 2,2 sn, 15. saniyede 3 sn, 30. saniyede 4 sn sürer. Son direniş: onu öldürecek ilk darbede ayakta kalır, biraz can toplar ve 3 sn boyunca çok az hasar alıp daha sert vurur.",
   era: "c. 540–480 BC",
   fact: "Led the 300 Spartans at Thermopylae in 480 BC.",
   fullName: "Leonidas I of Sparta",
@@ -60,6 +69,33 @@ export const leonidas: FighterDef = {
       self.shielded = false;
       self.reflectUntil = 0;
       self.speedMul = 1;
+    },
+    onDamaged(world, self) {
+      const s = lastStand(self);
+      if (s.used || self.hp > 0 || world.phase !== "fight") return;
+      s.used = true;
+      s.until = world.time + LAST_STAND.time;
+      self.hp = 0;
+      world.heal(self, self.maxHp * LAST_STAND.heal);
+      self.boost.guard *= LAST_STAND.guard;
+      self.boost.damage *= LAST_STAND.damage;
+      spawnMark(world, self, {
+        style: "laststand",
+        x: self.x,
+        y: self.y,
+        nx: 0,
+        ny: 0,
+        fighter: self.index,
+        ttl: LAST_STAND.time,
+      });
+      signature(world, self, self.x, self.y, "#c8202a", "MOLON LABE!");
+    },
+    passive(world, self) {
+      const s = lastStand(self);
+      if (s.until <= 0 || world.time < s.until) return;
+      s.until = 0;
+      self.boost.guard /= LAST_STAND.guard;
+      self.boost.damage /= LAST_STAND.damage;
     },
     damageMultiplier: (p) => (p === "active" ? 2.2 : 1),
     knockbackMultiplier: (p) => (p === "active" ? 2.5 : 1),

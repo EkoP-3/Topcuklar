@@ -1,11 +1,21 @@
 import { DEFAULT_RELAX } from "../world";
 import type { FighterDef } from "../types";
-import { fireProjectile, leadAngle, spawnStrike } from "../units";
-import { aim, fan, skill, ticks } from "./kit";
+import { fireProjectile, leadAngle, marksOf, spawnMark, spawnStrike } from "../units";
+import { aim, fan, perFighter, signature, skill, ticks } from "./kit";
 import { every, shellAtEnemy } from "./domains";
 
 const BALL_SPEED = 760;
-const ABILITY = { name: "GREAT BOMBARD", text: "Giant shell that leaves a burning crater" };
+const ABILITY = {
+  name: "GREAT BOMBARD",
+  text: "Giant shell that leaves a burning crater; breaches the walls it hits",
+};
+
+/**
+ * Siege (the walls of Constantinople): a bombard blast that reaches a wall breaches it.
+ * An enemy who bounces off the wall at a breach is hit by the rubble and stunned.
+ */
+const BREACH = { reach: 1, max: 3, half: 100, damage: 26, stun: 0.45, lock: 1.5 };
+const breachLock = perFighter(() => ({ ready: 0 }));
 
 const CONSTANTINOPLE = { radius: 120, delay: 1, damage: 74, knockback: 600 };
 
@@ -13,7 +23,7 @@ export const mehmed: FighterDef = {
   id: "mehmed",
   name: "MEHMED II",
   description:
-    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar ve 2 sn yanan bir krater bırakır. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle.",
+    "Fatih Sultan Mehmed. Belli aralıklarla durup Şahi topunu doldurur ve dev gülle atar; gülle çarptığı yerde patlar ve 2 sn yanan bir krater bırakır. Önce 1, 15. saniyede 2, 30. saniyede 3 gülle. Kuşatma: duvara çarpan gülle orada gedik açar; gedikten seken rakip moloz altında kalır, hasar alır ve sersemler.",
   era: "1432–1481",
   fact: "Took Constantinople in 1453 with the help of giant bombards.",
   fullName: "Mehmed II (the Conqueror)",
@@ -44,6 +54,59 @@ export const mehmed: FighterDef = {
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
+    onBlast(world, self, shot) {
+      if (shot.style !== "bombard" || world.phase !== "fight") return;
+      // The blast reaches the nearest wall?
+      const walls = [
+        { d: shot.x - world.lo, nx: 1, ny: 0 },
+        { d: world.hi - shot.x, nx: -1, ny: 0 },
+        { d: shot.y - world.lo, nx: 0, ny: 1 },
+        { d: world.hi - shot.y, nx: 0, ny: -1 },
+      ].sort((a, b) => a.d - b.d);
+      const w = walls[0];
+      if (!w || w.d > shot.blast * BREACH.reach) return;
+      const hit = {
+        x: w.nx > 0 ? world.lo : w.nx < 0 ? world.hi : shot.x,
+        y: w.ny > 0 ? world.lo : w.ny < 0 ? world.hi : shot.y,
+        nx: w.nx,
+        ny: w.ny,
+      };
+      const old = marksOf(world, self, "breach");
+      for (let i = 0; i <= old.length - BREACH.max; i++) {
+        const o = old[i];
+        if (o) o.ttl = Math.min(o.ttl, 0.3);
+      }
+      spawnMark(world, self, { style: "breach", ...hit, ttl: Infinity });
+    },
+    passive(world, self, dt) {
+      const lock = breachLock(self);
+      lock.ready = Math.max(0, lock.ready - dt);
+      if (lock.ready > 0) return;
+      for (const b of marksOf(world, self, "breach")) {
+        if (b.ttl < 0.3) continue;
+        for (const f of world.fighters) {
+          if (!f.alive || f.side === self.side) continue;
+          // Touching the breached wall (which may have slid in during a frenzy)?
+          const wall = b.nx > 0 || b.ny > 0 ? world.lo : world.hi;
+          const edge = b.nx !== 0 ? f.x - b.nx * f.radius : f.y - b.ny * f.radius;
+          if (Math.abs(edge - wall) > 3) continue;
+          const along = b.nx !== 0 ? f.y - b.y : f.x - b.x;
+          if (Math.abs(along) > BREACH.half) continue;
+          lock.ready = BREACH.lock;
+          const x = b.nx !== 0 ? wall : f.x;
+          const y = b.nx !== 0 ? f.y : wall;
+          world.dealDamage(self, f, BREACH.damage, x, y, 240, {
+            fromX: x - b.nx * 10,
+            fromY: y - b.ny * 10,
+          });
+          f.stun = Math.max(f.stun, BREACH.stun);
+          world.emit({ type: "stun", fighter: f.index });
+          world.emit({ type: "blast", x, y, radius: 70 });
+          signature(world, self, x, y, "#c9a27a", "BREACH!");
+          return;
+        }
+      }
+    },
     firstAt: 2.2,
     cooldown: 3.4,
     windup: 0.65,

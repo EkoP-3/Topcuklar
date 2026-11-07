@@ -54,6 +54,7 @@ import { hasWeaponImage, portraitImage } from "./images";
 import { weaponArt } from "../leaders/weapons";
 import { drawWeapon } from "./sprites";
 import { drawTierPips, drawTierRim, tierLook, tierOf } from "./tiers";
+import { drawMarksOver, drawMarksUnder } from "./marks";
 
 /** The video frame is laid out in a fixed 1080x1920 (9:16) space and scaled to the canvas. */
 const W = 1080;
@@ -365,6 +366,7 @@ function drawArena(
   }
   drawDomain(ctx, world, frame);
   drawDangerZone(ctx, world, frame);
+  drawMarksUnder(ctx, world, frame);
   for (const h of world.hazards) if (h.kind === "zone") drawZone(ctx, h, frame);
 
   if (THEME.additive) ctx.globalCompositeOperation = "lighter";
@@ -405,6 +407,7 @@ function drawArena(
   }
 
   for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world, fx);
+  drawMarksOver(ctx, world, frame);
   // Armies and projectiles go over bodies.
   for (const h of world.hazards) if (h.kind === "strike") drawStrike(ctx, h);
   for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world);

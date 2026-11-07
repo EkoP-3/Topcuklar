@@ -2,7 +2,7 @@ import type { SimEvent } from "../types";
 import { winChance } from "../odds";
 import type { World } from "../world";
 import { clipLoader, clipUrls, type Clips } from "./samples";
-import { loadQuotes } from "./quotes";
+import { QUOTES, loadQuotes } from "./quotes";
 
 /** Recorded effects (`src/assets/sfx/<name>.mp3`), used where they fit; synthesis covers the rest. */
 const loadClips = clipLoader(
@@ -412,22 +412,14 @@ export class Sfx {
       case "poison":
         this.noise(0.4, { filter: "bandpass", freq: 4200, q: 3, gain: 0.3 });
         break;
-      case "ultimate": {
-        // The leader's own line, once per match, right over the horn.
-        this.track(world);
-        const id = world.fighters[e.fighter]?.def.id;
-        const line = id ? this.quotes.get(id) : undefined;
-        if (line && !this.quoted.has(e.fighter)) {
-          this.quoted.add(e.fighter);
-          this.speak(line, this.now() + 0.05);
-        }
+      case "ultimate":
+        this.shout(world, e.fighter);
         this.sample("horn", { gain: 0.5 });
         // Rising tension while the name is on screen.
         this.tone(110, 1.8, { type: "sawtooth", gain: 0.16, slideTo: 880, attack: 0.3 });
         this.tone(55, 1.8, { type: "sine", gain: 0.4, slideTo: 110, attack: 0.2 });
         this.noise(1.7, { filter: "bandpass", freq: 300, slideTo: 4000, q: 0.8, gain: 0.35 });
         break;
-      }
       case "ultimateCast":
         this.tone(48, 1.4, { type: "sine", gain: 0.9, slideTo: 22 });
         this.noise(1.2, { filter: "lowpass", freq: 2600, slideTo: 90, gain: 0.9 });
@@ -475,6 +467,19 @@ export class Sfx {
         this.horn(98, 0.6, { gain: 0.15 });
         this.horn(147, 0.6, { gain: 0.1 });
         this.drum(1);
+        break;
+      case "signature":
+        // A signature move that shouts the leader's own words (Leonidas' last stand,
+        // "MOLON LABE!") speaks the line there instead of on the ultimate.
+        if (
+          QUOTES[world.fighters[e.fighter]?.def.id ?? ""]?.text.startsWith(e.text.replace(/!$/, ""))
+        ) {
+          this.shout(world, e.fighter);
+        }
+        if (!this.allow("signature", 0.15)) return;
+        this.horn(147, 0.45, { gain: 0.12 });
+        this.horn(220, 0.4, { gain: 0.08, delay: 0.06 });
+        this.drum(0.7);
         break;
       case "sweepHit":
         this.thud(1);
@@ -663,6 +668,16 @@ export class Sfx {
    * build-up before. Otherwise the K.O. is now, so the track starts at the drop. True when
    * the track plays (or was already scheduled) for this match.
    */
+  /** The leader's recorded line, once per match. */
+  private shout(world: World, fighter: number): void {
+    this.track(world);
+    const id = world.fighters[fighter]?.def.id;
+    const line = id ? this.quotes.get(id) : undefined;
+    if (!line || this.quoted.has(fighter)) return;
+    this.quoted.add(fighter);
+    this.speak(line, this.now() + 0.05);
+  }
+
   /** Per-match state resets when a new match (world) shows up. */
   private track(world: World): void {
     if (world === this.epicWorld) return;

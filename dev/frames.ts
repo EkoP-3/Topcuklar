@@ -2,7 +2,8 @@
  * Dev-only frame checker (not part of the build): plays a match headlessly and draws
  * chosen moments side by side. Open /dev/frames.html?a=mehmed&b=caesar&seed=3
  * Optional &t=1,5,15.2 (fight seconds); by default it shows the intro and each
- * ultimate (name on screen, then the effect). Looks: &style=arcade|night.
+ * ultimate (name on screen, then the effect). &sig=1 also snaps each signature mechanic
+ * that shouts (MOLON LABE!, BREACH!...), up to 8. Looks: &style=arcade|night.
  * Season record and standings card come from this browser's season ledger
  * (localStorage "topcuklar.season1"; seed one to check them).
  */
@@ -20,6 +21,7 @@ const a = findIn("leaders", q.get("a") ?? "mehmed");
 const b = findIn("leaders", q.get("b") ?? "caesar");
 const seed = Number(q.get("seed") ?? 1);
 const times = (q.get("t") ?? "").split(",").filter(Boolean).map(Number);
+const sigShots = q.has("sig");
 
 let extras: DrawExtras = {};
 
@@ -42,6 +44,7 @@ if (a && b) {
   let introShot = false;
   let nearShots = 0;
   const castFrames: number[] = [];
+  let sigs = 0;
   while (world.phase !== "over" && frame < 60 * 90) {
     world.advance(1 / 60);
     const ult = world.events.some((e) => e.type === "ultimate");
@@ -51,6 +54,7 @@ if (a && b) {
     const domainCast = world.events.some((e) => e.type === "domainCast");
     const clash = world.events.some((e) => e.type === "domainClash");
     const shatter = world.events.some((e) => e.type === "wallsShatter");
+    const sig = world.events.some((e) => e.type === "signature" && e.text);
     fx.consume(world);
     fx.update(1 / 60, world);
     frame++;
@@ -59,6 +63,10 @@ if (a && b) {
       snap(world, fx);
     }
     if (frame === 140) snap(world, fx);
+    if (sigShots && sig && sigs < 8) {
+      sigs++;
+      castFrames.push(frame + 6);
+    }
     if (times.length > 0) {
       if (times.some((t) => Math.abs(world.time - t) < 1 / 120)) snap(world, fx);
     } else {

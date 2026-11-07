@@ -27,7 +27,7 @@ export const nobunaga: FighterDef = {
     buff: { skillRate: 2 },
   },
   growth: { perSecond: 0.015, stat: "SLASH DMG", base: 117 },
-  hp: 960,
+  hp: 1080,
   radius: 54,
   mass: 1,
   baseSpeed: 500,

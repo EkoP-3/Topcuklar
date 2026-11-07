@@ -609,6 +609,13 @@ export class Fx {
         this.flash = Math.max(this.flash, 0.5);
         this.addShake(20);
         break;
+      case "signature":
+        // A leader's signature mechanic: a burst in its colour and a short shout.
+        this.burst(e.x, e.y, 30, [e.color, "#ffffff", speck()], 520, 0.6, 11);
+        this.rings.push({ x: e.x, y: e.y, radius: 140, life: 0.4, max: 0.4, color: e.color });
+        if (e.text) this.text(e.x, e.y - 70, e.text, e.color, 58, 1.1);
+        this.addShake(16);
+        break;
       case "sweepHit":
         this.burst(e.x, e.y, 36, [speck(), "#ffd45e", "#ffb15c"], 700, 0.7, 13);
         this.addShake(30);

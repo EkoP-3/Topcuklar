@@ -1,9 +1,20 @@
 import type { FighterDef } from "../types";
-import { spawnUnit, countUnits } from "../units";
-import { aim, fan, skill, ticks } from "./kit";
+import { spawnMark, spawnUnit, countUnits } from "../units";
+import { aim, fan, perFighter, signature, skill, ticks } from "./kit";
 import { hurtOnWalls } from "./domains";
 
-const ABILITY = { name: "LEGIONS", text: "Legionaries chase and lock shields" };
+const ABILITY = {
+  name: "LEGIONS",
+  text: "Legionaries chase and lock shields; crossing the Rubicon makes him faster",
+};
+
+/**
+ * Crossing the Rubicon: a river runs across the arena between Caesar and the enemy.
+ * Once he crosses it there is no way back: faster and harder-hitting for the rest of
+ * the fight. `at` = how far from Caesar toward the enemy the river runs (0..1).
+ */
+const RUBICON = { at: 0.6, speed: 1.15, damage: 1.08 };
+const rubicon = perFighter(() => ({ placed: false, crossed: false }));
 
 const ALESIA = { damage: 18, knockback: 260 };
 
@@ -11,7 +22,7 @@ export const caesar: FighterDef = {
   id: "caesar",
   name: "CAESAR",
   description:
-    "Jül Sezar. Belli aralıklarla lejyoner çağırır; lejyonerler rakibi kovalar ve temas ettikçe hasar verir; rakibe yaklaşınca kalkan duvarı (testudo) kurup daha az hasar alırlar. Önce 2, 15. saniyede 3, 30. saniyede 4 lejyoner.",
+    "Jül Sezar. Belli aralıklarla lejyoner çağırır; lejyonerler rakibi kovalar ve temas ettikçe hasar verir; rakibe yaklaşınca kalkan duvarı (testudo) kurup daha az hasar alırlar. Önce 2, 15. saniyede 3, 30. saniyede 4 lejyoner. Rubikon: arenadaki nehri bir kez geçince maç boyunca daha hızlı olur ve daha sert vurur.",
   era: "100–44 BC",
   fact: "Crossed the Rubicon in 49 BC and started a civil war.",
   fullName: "Julius Caesar",
@@ -28,7 +39,7 @@ export const caesar: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "LEGION DMG", base: 31 },
-  hp: 970,
+  hp: 950,
   radius: 58,
   mass: 1,
   baseSpeed: 430,
@@ -42,6 +53,38 @@ export const caesar: FighterDef = {
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
+    passive(world, self) {
+      const s = rubicon(self);
+      if (s.crossed) return;
+      if (!s.placed) {
+        const enemy = world.nearestEnemy(self);
+        if (!enemy) return;
+        s.placed = true;
+        const dx = enemy.x - self.x;
+        const dy = enemy.y - self.y;
+        const d = Math.hypot(dx, dy) || 1;
+        spawnMark(world, self, {
+          style: "rubicon",
+          x: self.x + dx * RUBICON.at,
+          y: self.y + dy * RUBICON.at,
+          nx: dx / d,
+          ny: dy / d,
+          ttl: Infinity,
+        });
+        return;
+      }
+      const river = world.hazards.find(
+        (h) => h.kind === "mark" && h.style === "rubicon" && h.owner === self.index,
+      );
+      if (river?.kind !== "mark") return;
+      if ((self.x - river.x) * river.nx + (self.y - river.y) * river.ny < 0) return;
+      // Alea iacta est.
+      s.crossed = true;
+      river.ttl = 0.6;
+      self.boost.speed *= RUBICON.speed;
+      self.boost.damage *= RUBICON.damage;
+      signature(world, self, self.x, self.y, "#4a8fd6", "ALEA IACTA EST!");
+    },
     firstAt: 1.5,
     cooldown: 4.5,
     cast(world, self, level) {

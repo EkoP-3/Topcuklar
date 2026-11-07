@@ -1,19 +1,28 @@
 import { DEFAULT_RELAX, NIGHT_TIME } from "../world";
-import type { FighterDef } from "../types";
+import type { FighterDef, ZoneHazard } from "../types";
 import { spawnZone } from "../units";
-import { skill, steerToward, ticks } from "./kit";
+import { signature, skill, steerToward, ticks } from "./kit";
 import { every, zoneAtEnemy } from "./domains";
 
 const DASH_SPEED = 1450;
-const ABILITY = { name: "STAKES", text: "Plants stakes that hurt and stun on touch" };
+const ABILITY = {
+  name: "STAKES",
+  text: "Plants stakes that hurt and stun on touch; bloodied stakes stay for good",
+};
 
 const FOREST = { damage: 46 };
+
+/**
+ * The forest of the impaled (Târgoviște, 1462): a stake that draws blood stays in the
+ * ground for good, so the arena slowly fills up with stakes. At most `max` stand.
+ */
+const IMPALED = { max: 4, ttl: 1e6, damage: 0.6 };
 
 export const vlad: FighterDef = {
   id: "vlad",
   name: "VLAD III",
   description:
-    "Kazıklı Voyvoda. Belli aralıklarla rakibin gideceği yola kazıklar diker; kazığa çarpan geri seker, hasar alır ve kısa süre sersemler. Önce 2, 15. saniyede 3, 30. saniyede 4 kazık. Ultimate'ta arena kararır ve Vlad karanlıkta üç kez saldırır.",
+    "Kazıklı Voyvoda. Belli aralıklarla rakibin gideceği yola kazıklar diker; kazığa çarpan geri seker, hasar alır ve kısa süre sersemler. Önce 2, 15. saniyede 3, 30. saniyede 4 kazık. Kazıklı orman: kan döken kazık kalıcı olur, arena yavaş yavaş kazıkla dolar (en çok 4). Ultimate'ta arena kararır ve Vlad karanlıkta üç kez saldırır.",
   era: "1431–1476",
   fact: "Fought the Ottomans; his 1462 Night Attack nearly reached Mehmed II's tent.",
   fullName: "Vlad III Dracula (the Impaler)",
@@ -31,7 +40,7 @@ export const vlad: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "STAKE DMG", base: 55 },
-  hp: 1000,
+  hp: 970,
   radius: 56,
   mass: 1.1,
   baseSpeed: 470,
@@ -45,6 +54,29 @@ export const vlad: FighterDef = {
   contactInterval: 0.5,
   createAbility: skill({
     label: ABILITY.name,
+    passive(world, self) {
+      // A stake that just hit (its lock was reset this step) takes root.
+      const forest: ZoneHazard[] = [];
+      for (const h of world.hazards) {
+        if (h.kind !== "zone" || h.style !== "stakes" || h.owner !== self.index) continue;
+        if (h.ttl > IMPALED.ttl / 2) {
+          forest.push(h);
+          continue;
+        }
+        if (h.lock < 0.6 - 1e-9 || h.ttl <= 0.4) continue;
+        h.maxTtl = IMPALED.ttl + (h.maxTtl - h.ttl);
+        h.ttl = IMPALED.ttl;
+        h.damage *= IMPALED.damage;
+        forest.push(h);
+        // The shout only while the forest is still growing.
+        signature(world, self, h.x, h.y, "#a3221a", forest.length <= IMPALED.max ? "IMPALED!" : "");
+      }
+      // The oldest stakes rot away once the forest is full.
+      for (let i = 0; i < forest.length - IMPALED.max; i++) {
+        const z = forest[i];
+        if (z) z.ttl = 0.4;
+      }
+    },
     firstAt: 1.5,
     cooldown: 3.5,
     cast(world, self, level) {
