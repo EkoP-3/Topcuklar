@@ -481,7 +481,7 @@ function drawMapBorder(ctx: Ctx): void {
   if (THEME.borderGlow) {
     ctx.save();
     ctx.shadowColor = THEME.borderGlow;
-    ctx.shadowBlur = 26;
+    ctx.shadowBlur = THEME.borderBlur;
     ctx.stroke();
     ctx.restore();
   } else ctx.stroke();
@@ -2002,7 +2002,8 @@ function cardName(ctx: Ctx, f: Fighter, y: number): void {
 
 function drawOverlay(ctx: Ctx, fx: Fx, overlay: HTMLCanvasElement): void {
   if (fx.flash > 0) {
-    ctx.fillStyle = `rgba(255,246,222,${clamp(fx.flash * 0.4, 0, 0.4)})`;
+    const peak = 0.4 * THEME.flash;
+    ctx.fillStyle = `rgba(255,246,222,${clamp(fx.flash * peak, 0, peak)})`;
     ctx.fillRect(0, 0, W, H);
   }
   ctx.drawImage(overlay, 0, 0, W, H);

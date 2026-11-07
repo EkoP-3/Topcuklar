@@ -48,7 +48,7 @@ export function drawTierRim(ctx: Ctx, r: number, tier: number, time: number): vo
     ctx.beginPath();
     ctx.arc(0, 0, rr + w * 0.9, 0, TAU);
     ctx.lineWidth = w * 1.6;
-    ctx.strokeStyle = `rgba(255,201,58,${(THEME.ballGlow > 0 ? 0.3 : 0.22) + 0.1 * Math.sin(time * 4)})`;
+    ctx.strokeStyle = `rgba(255,201,58,${(THEME.additive ? 0.3 : 0.22) + 0.1 * Math.sin(time * 4)})`;
     ctx.stroke();
   }
   ctx.beginPath();

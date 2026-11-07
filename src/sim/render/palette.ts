@@ -127,6 +127,7 @@ export interface Theme {
   border: string;
   borderOuter: string;
   borderGlow: string | null;
+  borderBlur: number;
   /** Whole-frame vignette colour and TV scanline strength (0 = none). */
   vignette: string;
   scanlines: number;
@@ -137,6 +138,9 @@ export interface Theme {
   hpTag: "paper" | "pill";
   /** Trails and sparks add light on dark floors. */
   additive: boolean;
+  /** Light rim around weapon art (blur, 0 = none) and how strong hit flashes are. */
+  weaponRim: number;
+  flash: number;
   /** HP and win bars, small tabs and the end-card curtain. */
   barBg: string;
   barFrame: string;
@@ -160,6 +164,7 @@ const THEMES: Record<StyleId, Theme> = {
     border: "#2b1b0f",
     borderOuter: "#b08a4a",
     borderGlow: null,
+    borderBlur: 0,
     vignette: "rgba(20,10,4,0.5)",
     scanlines: 0,
     ballGlow: 0,
@@ -167,6 +172,8 @@ const THEMES: Record<StyleId, Theme> = {
     ballOutline: 4,
     hpTag: "paper",
     additive: false,
+    weaponRim: 0,
+    flash: 1,
     barBg: "#0f0905",
     barFrame: "#b08a4a",
     tabBg: "#efe0bb",
@@ -187,6 +194,7 @@ const THEMES: Record<StyleId, Theme> = {
     border: "#ffffff",
     borderOuter: "rgba(255,255,255,0.25)",
     borderGlow: "rgba(255,255,255,0.7)",
+    borderBlur: 26,
     vignette: "rgba(0,0,0,0.55)",
     scanlines: 0.07,
     ballGlow: 34,
@@ -194,6 +202,8 @@ const THEMES: Record<StyleId, Theme> = {
     ballOutline: 5,
     hpTag: "pill",
     additive: true,
+    weaponRim: 9,
+    flash: 1,
     barBg: "#030304",
     barFrame: "#ffffff",
     tabBg: "#101015",
@@ -213,14 +223,17 @@ const THEMES: Record<StyleId, Theme> = {
     edge: "rgba(3,6,14,0.55)",
     border: "#f2c14e",
     borderOuter: "rgba(242,193,78,0.45)",
-    borderGlow: "rgba(242,193,78,0.6)",
+    borderGlow: "rgba(242,193,78,0.25)",
+    borderBlur: 10,
     vignette: "rgba(2,4,10,0.55)",
     scanlines: 0,
-    ballGlow: 28,
+    ballGlow: 10,
     ballShade: true,
     ballOutline: 5,
     hpTag: "pill",
-    additive: true,
+    additive: false,
+    weaponRim: 0,
+    flash: 0.55,
     barBg: "#070a14",
     barFrame: "#f2c14e",
     tabBg: "#101a33",
