@@ -28,7 +28,7 @@ export const shaka: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "WARRIOR DMG", base: 38 },
-  hp: 1000,
+  hp: 1060,
   radius: 56,
   mass: 1.05,
   baseSpeed: 490,

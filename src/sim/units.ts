@@ -1,6 +1,7 @@
 import type {
   Fighter,
   Hazard,
+  MarkHazard,
   ProjectileHazard,
   StrikeHazard,
   SweepHazard,
@@ -17,6 +18,8 @@ const UNIT_STEER = 3;
 const PROJECTILE_NEAR_GAP = 8;
 /** Shots hitting a fighter who stands by their own holy banner deal this much. */
 const BANNER_WARD = 0.6;
+/** Extra seconds Leonidas' raised shield can still parry the slow Şahi shell. */
+const BOMBARD_PARRY = 0.4;
 /** Units hit by a fighter take this much of the fighter's contact damage. */
 const VS_UNIT_DAMAGE = 1.5;
 
@@ -208,6 +211,7 @@ export function updateUnits(world: World, dt: number): void {
     else if (h.kind === "strike") updateStrike(world, h, dt);
     else if (h.kind === "zone") updateZone(world, h, dt);
     else if (h.kind === "wall") updateWall(world, h, dt);
+    else if (h.kind === "mark") h.ttl -= dt;
     else continue;
     if (h.ttl <= 0) removed = true;
   }
@@ -221,7 +225,8 @@ function isGone(h: Hazard): boolean {
       h.kind === "sweep" ||
       h.kind === "strike" ||
       h.kind === "zone" ||
-      h.kind === "wall") &&
+      h.kind === "wall" ||
+      h.kind === "mark") &&
     h.ttl <= 0
   );
 }
@@ -452,9 +457,11 @@ function updateProjectile(world: World, p: ProjectileHazard, dt: number): void {
       watchNearMiss(world, p, gap);
       continue;
     }
-    if (world.time < f.reflectUntil || (p.style === "bombard" && f.reflectUntil > 0)) {
-      // Leonidas' shield: the shot flies back at whoever fired it (the slow Şahi shell
-      // for as long as the shield is up, everything else only in the first second).
+    const parry =
+      f.reflectUntil > 0 ? f.reflectUntil + (p.style === "bombard" ? BOMBARD_PARRY : 0) : 0;
+    if (world.time < parry) {
+      // Leonidas' shield: the shot flies back at whoever fired it in the first second
+      // the shield is up (the slow Şahi shell a little longer).
       const a = Math.atan2(owner.y - p.y, owner.x - p.x);
       const speed = Math.hypot(p.vx, p.vy);
       p.vx = Math.cos(a) * speed;
@@ -707,6 +714,32 @@ export function damageUnitsAlong(
   }
 }
 
+/** Puts a signature marker in the arena (see MarkHazard). */
+export function spawnMark(
+  world: World,
+  owner: Fighter,
+  spec: Omit<MarkHazard, "kind" | "owner" | "maxTtl" | "fighter"> & { fighter?: number },
+): MarkHazard {
+  const mark: MarkHazard = {
+    kind: "mark",
+    owner: owner.index,
+    fighter: -1,
+    ...spec,
+    maxTtl: spec.ttl,
+  };
+  world.hazards.push(mark);
+  return mark;
+}
+
+/** This owner's markers of one style that are still around, oldest first. */
+export function marksOf(world: World, owner: Fighter, style: MarkHazard["style"]): MarkHazard[] {
+  const out: MarkHazard[] = [];
+  for (const h of world.hazards) {
+    if (h.kind === "mark" && h.owner === owner.index && h.style === style && h.ttl > 0) out.push(h);
+  }
+  return out;
+}
+
 /** Raises a stretch of wall from (x1,y1) to (x2,y2). */
 export function spawnWall(
   world: World,
@@ -832,6 +865,7 @@ function updateWall(world: World, w: WallHazard, dt: number): void {
 function explode(world: World, owner: Fighter, p: ProjectileHazard, direct: Fighter | null): void {
   if (p.blast <= 0) return;
   world.emit({ type: "blast", x: p.x, y: p.y, radius: p.blast });
+  owner.ability?.onBlast?.(world, owner, p);
   for (const f of world.fighters) {
     if (f === direct || !f.alive || f.side === owner.side) continue;
     const d = Math.hypot(f.x - p.x, f.y - p.y) - f.radius;

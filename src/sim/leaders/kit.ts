@@ -40,6 +40,8 @@ export interface SkillSpec {
   /** Contact hit landed (outside the ultimate). */
   onHit?(world: World, self: Fighter, target: Fighter, phase: SkillPhase): void;
   onDamaged?: Ability["onDamaged"];
+  onWallHit?: Ability["onWallHit"];
+  onBlast?: Ability["onBlast"];
   /** Runs every fight step, whatever the move is doing, even while stunned (always-on traits). */
   passive?(world: World, self: Fighter, dt: number): void;
   /** Once-per-match super move, fired when HP drops to ULT_HP of max. */
@@ -145,6 +147,9 @@ export function skill(spec: SkillSpec): () => Ability {
     }
     if (spec.onDamaged) ability.onDamaged = spec.onDamaged;
     if (spec.passive) ability.passive = spec.passive;
+    if (spec.onWallHit) ability.onWallHit = spec.onWallHit;
+    if (spec.onBlast) ability.onBlast = spec.onBlast;
+    ability.ultActive = () => ultActive > 0;
 
     function startWindup(world: World, self: Fighter, seconds: number): void {
       if (seconds <= 0) {
@@ -181,6 +186,34 @@ export function skill(spec: SkillSpec): () => Ability {
 
     return ability;
   };
+}
+
+/**
+ * Per-match state for a signature mechanic: one fresh `init()` per fighter (fighters
+ * are created anew for every match, so nothing leaks between matches).
+ */
+export function perFighter<T>(init: () => T): (f: Fighter) => T {
+  const store = new WeakMap<Fighter, T>();
+  return (f) => {
+    let s = store.get(f);
+    if (s === undefined) {
+      s = init();
+      store.set(f, s);
+    }
+    return s;
+  };
+}
+
+/** A signature mechanic went off: a burst (and an optional shout) at (x, y). */
+export function signature(
+  world: World,
+  self: Fighter,
+  x: number,
+  y: number,
+  color: string,
+  text = "",
+): void {
+  world.emit({ type: "signature", fighter: self.index, text, x, y, color });
 }
 
 /** How many multiples of `interval` (after `start`) were passed in the step that ended at `t`. */

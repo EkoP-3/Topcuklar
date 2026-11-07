@@ -462,6 +462,12 @@ export class Sfx {
         this.horn(147, 0.6, { gain: 0.1 });
         this.drum(1);
         break;
+      case "signature":
+        if (!this.allow("signature", 0.15)) return;
+        this.horn(147, 0.45, { gain: 0.12 });
+        this.horn(220, 0.4, { gain: 0.08, delay: 0.06 });
+        this.drum(0.7);
+        break;
       case "sweepHit":
         this.thud(1);
         this.noise(0.4, { filter: "lowpass", freq: 1200, slideTo: 100, gain: 0.7 });

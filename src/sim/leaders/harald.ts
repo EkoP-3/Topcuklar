@@ -24,7 +24,7 @@ export const harald: FighterDef = {
     buff: { speed: 1.1, skillRate: 1.25 },
   },
   growth: { perSecond: 0.015, stat: "AXE DMG", base: 69 },
-  hp: 1020,
+  hp: 1110,
   radius: 57,
   mass: 1.15,
   baseSpeed: 460,

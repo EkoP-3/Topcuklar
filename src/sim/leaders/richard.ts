@@ -29,7 +29,7 @@ export const richard: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "WAR CRY DMG", base: 65 },
-  hp: 1000,
+  hp: 1120,
   radius: 58,
   mass: 1.2,
   baseSpeed: 450,

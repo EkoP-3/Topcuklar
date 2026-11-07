@@ -62,7 +62,7 @@ export const joan: FighterDef = {
     },
   },
   growth: { perSecond: 0.015, stat: "BANNER HEAL/S", base: 67 },
-  hp: 980,
+  hp: 1080,
   radius: 54,
   mass: 1,
   baseSpeed: 480,

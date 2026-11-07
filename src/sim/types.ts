@@ -107,6 +107,8 @@ export interface Ability {
   onHitDealt?(world: World, self: Fighter, target: Fighter, damage: number): void;
   /** Called after this fighter took damage (after reductions). */
   onDamaged?(world: World, self: Fighter, attacker: Fighter, damage: number): void;
+  /** Called when one of this fighter's explosive shots goes off (at shot.x, shot.y). */
+  onBlast?(world: World, self: Fighter, shot: ProjectileHazard): void;
   /** Called when this fighter's weapon crosses an enemy weapon. */
   onClash?(world: World, self: Fighter, other: Fighter): void;
   damageMultiplier?(self: Fighter): number;
@@ -127,6 +129,8 @@ export interface Ability {
   };
   /** 0..n, lets the renderer tint the weapon as it levels up. */
   visualLevel?(): number;
+  /** True while the once-per-match ultimate is playing out. */
+  ultActive?(): boolean;
 }
 
 export interface Fighter {
@@ -212,7 +216,28 @@ export type Hazard =
   | SweepHazard
   | StrikeHazard
   | ZoneHazard
-  | WallHazard;
+  | WallHazard
+  | MarkHazard;
+
+/**
+ * A signature-mechanic marker, drawn by render/marks.ts; the owner's ability gives it
+ * meaning. Rubicon: a river line through (x, y) with normal (nx, ny). Cannon / breach:
+ * a spot on the arena wall at (x, y), (nx, ny) pointing into the arena. Last stand /
+ * charm: an aura around fighter `fighter`. Anvil: a brief shield wall at (x, y).
+ */
+export interface MarkHazard {
+  kind: "mark";
+  owner: number;
+  style: "rubicon" | "cannon" | "breach" | "laststand" | "charm" | "anvil";
+  x: number;
+  y: number;
+  nx: number;
+  ny: number;
+  /** Fighter an aura follows (-1 = none). */
+  fighter: number;
+  ttl: number;
+  maxTtl: number;
+}
 
 /** A stretch of wall (the Great Wall): enemies bounce off it, enemy shots stop on it. */
 export interface WallHazard {
@@ -418,6 +443,8 @@ export type SimEvent =
   | { type: "strike"; style: StrikeHazard["style"]; x: number; y: number; radius: number }
   | { type: "stomp"; fighter: number; x: number; y: number; radius: number }
   | { type: "callout"; fighter: number; text: string }
+  /** A signature mechanic went off at (x, y): a burst in `color` and an optional short shout. */
+  | { type: "signature"; fighter: number; text: string; x: number; y: number; color: string }
   | { type: "nearMiss"; x: number; y: number; count: number }
   | { type: "frenzy"; on: boolean }
   | { type: "stun"; fighter: number }
