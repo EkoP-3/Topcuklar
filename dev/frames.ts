@@ -5,7 +5,7 @@
  * ultimate (name on screen, then the effect). &sig=1 also snaps each signature mechanic
  * that shouts (MOLON LABE!, BREACH!...), up to 8. Looks: &style=arcade|night.
  * Season record and standings card come from this browser's season ledger
- * (localStorage "topcuklar.season1"; seed one to check them).
+ * (localStorage "topcuklar.season1-2"; seed one to check them).
  */
 import { createRenderer, type DrawExtras } from "../src/sim/render/canvas";
 import { Fx } from "../src/sim/render/fx";

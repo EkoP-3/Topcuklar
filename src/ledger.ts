@@ -9,7 +9,8 @@ import { matchKey, parseMatch, sortLedger, type SeasonMatch } from "./sim/season
  * backup copy of whatever the database holds.
  */
 
-const STORAGE_KEY = "topcuklar.season1";
+/** "-2": the Season 1 table was reset once; older copies in browsers are ignored. */
+const STORAGE_KEY = "topcuklar.season1-2";
 const COLLECTION = "seasons/s1/matches";
 
 export type LedgerBackend = "db" | "local";
@@ -82,6 +83,25 @@ function publish(next: SeasonMatch[]): void {
   for (const l of listeners) l(matches, backend);
 }
 
+const SYNCED_KEY = `${STORAGE_KEY}.synced`;
+
+/** Whether this browser has already handed its local matches to the database once. */
+function synced(): boolean {
+  try {
+    return localStorage.getItem(SYNCED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markSynced(): void {
+  try {
+    localStorage.setItem(SYNCED_KEY, "1");
+  } catch {
+    // private window: the hand-over may simply happen again, which only re-adds matches
+  }
+}
+
 /** Connects to the artifact database when the page has one; never blocks the first paint. */
 async function connect(): Promise<void> {
   let db: Db | null = null;
@@ -110,9 +130,12 @@ async function connect(): Promise<void> {
         }
         collection = ref;
         backend = "db";
-        if (first) {
+        if (first && !synced()) {
           first = false;
-          // Matches only this browser had (added before the database answered) move up once.
+          markSynced();
+          // Matches only this browser had (added before the database ever answered) move up
+          // once. After that the database is the source: a match deleted there stays deleted
+          // instead of coming back from this browser's copy.
           const known = new Set(remote.map(matchKey));
           const missing = matches.filter((m) => !known.has(matchKey(m)));
           void (async () => {
@@ -127,6 +150,7 @@ async function connect(): Promise<void> {
           publish([...remote, ...missing]);
           return;
         }
+        first = false;
         publish(remote);
       },
       () => {
