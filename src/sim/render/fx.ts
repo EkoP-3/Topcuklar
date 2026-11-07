@@ -3,6 +3,7 @@ import { createRng, type Rng } from "../rng";
 import type { SimEvent } from "../types";
 import type { World } from "../world";
 import { SIDES, THEME } from "./palette";
+import { QUOTES } from "./quotes";
 import type { Sfx } from "./sfx";
 import { tierLook } from "./tiers";
 
@@ -498,6 +499,18 @@ export class Fx {
         const f = world.fighters[e.fighter];
         if (!f) break;
         this.burst(f.x, f.y, 40, ["#ffd45e", "#fff3a0", SIDES[f.side].light], 520, 0.9, 11);
+        const quote = QUOTES[f.def.id];
+        // Caesar's move already carries his words: no need to say them twice.
+        const letters = (t: string) => t.replace(/[^A-Z]/gi, "").toUpperCase();
+        if (quote && letters(quote.text) !== letters(e.name))
+          this.text(
+            f.x,
+            f.y - f.radius - 70,
+            `“${quote.text}”`,
+            SIDES[f.side].bright,
+            quote.text.length > 28 ? 30 : 40,
+            2.2,
+          );
         this.rings.push({ x: f.x, y: f.y, radius: 220, life: 0.5, max: 0.5, color: "#ffd45e" });
         this.flash = Math.max(this.flash, 0.4);
         this.addShake(14);
