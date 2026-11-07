@@ -1631,7 +1631,7 @@ function drawUltimateBanner(ctx: Ctx, world: World): void {
 }
 
 /** Seconds the "X WINS" banner shows before the "who's next?" card (history mode). */
-const WINS_TIME = 1.1;
+export const WINS_TIME = 1.1;
 
 /** End card: "WHO'S NEXT?" with two mystery balls (or the chosen next leaders). */
 function drawNextCard(ctx: Ctx, t: number, next: readonly [FighterDef, FighterDef] | null): void {

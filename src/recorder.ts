@@ -1,5 +1,5 @@
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
-import { createRenderer } from "./sim/render/canvas";
+import { WINS_TIME, createRenderer } from "./sim/render/canvas";
 import { loadFonts } from "./sim/render/palette";
 import { artReady } from "./sim/render/images";
 import { Fx } from "./sim/render/fx";
@@ -11,11 +11,11 @@ import type { FighterDef } from "./sim/types";
 import { World } from "./sim/world";
 
 /**
- * Seconds of the end screen kept at the end of the clip (history mode adds the
- * season standings / "who's next?" card, which needs a moment to be read).
+ * Seconds of the end screen kept at the end of the clip. History mode: "X WINS" for
+ * WINS_TIME, then the season standings / "who's next?" card for 2 s, and the clip ends.
  */
 export function tailSeconds(fighters: readonly FighterDef[]): number {
-  return fighters.some((d) => d.growth) ? 4.2 : 1.6;
+  return fighters.some((d) => d.growth) ? WINS_TIME + 2 : 1.6;
 }
 /** Safety net: stop a recording that somehow never finishes. */
 const MAX_SECONDS = 90;

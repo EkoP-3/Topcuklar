@@ -213,7 +213,7 @@ export function ArenaPage() {
         }
       }
       sfxRef.current.setMuted(mutedRef.current);
-      sfxRef.current.resume();
+      if (!live.current.paused) sfxRef.current.resume();
       setAudioReady(true);
     };
     window.addEventListener("pointerdown", start);
@@ -237,6 +237,27 @@ export function ArenaPage() {
   useEffect(() => {
     live.current = { paused, speed, auto, busy: recProgress !== null };
   }, [paused, speed, auto, recProgress]);
+
+  // Pausing freezes the sound too (narrator, music, finishing track), so nothing runs on.
+  useEffect(() => {
+    const ctx = sfxRef.current?.ctx;
+    if (!(ctx instanceof AudioContext)) return;
+    if (paused && ctx.state === "running") void ctx.suspend();
+    else if (!paused && ctx.state === "suspended") void ctx.resume();
+  }, [paused]);
+
+  // Space bar pauses and resumes (not while typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, button")) return;
+      e.preventDefault();
+      setPaused((p) => !p);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Chosen "who's next?" leaders (both must be picked to replace the question marks).
   const nextDefs: readonly [FighterDef, FighterDef] | null = (() => {
@@ -364,10 +385,14 @@ export function ArenaPage() {
     let renderer = createRenderer(canvas, pickQuality());
     // The look is baked into the renderer's static layers: rebuild when it changes.
     let builtFor = THEME;
+    /** Whether the frame on screen was drawn while paused (then it needs no redraw). */
+    let frozen = false;
+    let frozenWorld: World | null = null;
     const onResize = () => {
       if (Math.abs(canvas.clientWidth - shownWidth) < 8) return;
       shownWidth = canvas.clientWidth;
       renderer = createRenderer(canvas, pickQuality());
+      frozen = false;
     };
     window.addEventListener("resize", onResize);
     let raf = 0;
@@ -384,6 +409,7 @@ export function ArenaPage() {
       if (THEME !== builtFor) {
         builtFor = THEME;
         renderer = createRenderer(canvas, pickQuality());
+        frozen = false;
       }
       if (world && fx && !busy) {
         const extras = extrasRef.current;
@@ -402,7 +428,12 @@ export function ArenaPage() {
           const epicKo = epicKoRef.current;
           if (sfx && epicKo !== null && rate === 1) sfx.finaleDue(world, epicKo);
         }
-        renderer.draw(world, fx, { next: extras.next, season: extras.season });
+        // Paused: the frame stays exactly as it is (no glints or pulses running on).
+        if (!isPaused || !frozen || world !== frozenWorld) {
+          renderer.draw(world, fx, { next: extras.next, season: extras.season });
+        }
+        frozen = isPaused;
+        frozenWorld = world;
 
         if (world.phase === "over" && isAuto && !isPaused) {
           overFor += dt;
@@ -437,10 +468,31 @@ export function ArenaPage() {
           className="w-full"
           style={{ maxWidth: "min(100%, 460px, calc((100dvh - 2rem) * 0.5625))" }}
         >
-          <canvas
-            ref={canvasRef}
-            className="block aspect-[9/16] w-full rounded-2xl bg-black shadow-[0_0_60px_rgba(61,139,255,0.18)]"
-          />
+          <div className="relative">
+            <canvas
+              ref={canvasRef}
+              className="block aspect-[9/16] w-full rounded-2xl bg-black shadow-[0_0_60px_rgba(61,139,255,0.18)]"
+            />
+            {/* Not part of the video: a pause button over the preview. */}
+            <button
+              onClick={() => setPaused((p) => !p)}
+              aria-label={paused ? "Devam" : "Duraklat"}
+              className="absolute bottom-3 right-3 flex size-14 items-center justify-center rounded-full border border-white/25 bg-black/60 text-2xl text-white backdrop-blur transition-colors hover:bg-black/80"
+            >
+              {paused ? "▶" : "⏸"}
+            </button>
+            {paused && (
+              <button
+                onClick={() => setPaused(false)}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/35 text-white"
+              >
+                <span className="text-6xl">▶</span>
+                <span className="text-sm font-medium">
+                  Duraklatıldı — devam için dokun (veya boşluk)
+                </span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="w-full max-w-[460px] space-y-5 pb-8">
