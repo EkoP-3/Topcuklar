@@ -4,6 +4,7 @@ import type { SimEvent } from "../types";
 import type { World } from "../world";
 import { SIDES, THEME } from "./palette";
 import type { Sfx } from "./sfx";
+import { tierLook } from "./tiers";
 
 interface Particle {
   x: number;
@@ -55,6 +56,14 @@ interface Slash {
   max: number;
 }
 
+interface PowerUp {
+  fighter: number;
+  life: number;
+  max: number;
+}
+
+/** How long a leader's level-up burst plays. */
+const POWER_UP_TIME = 0.6;
 const MAX_PARTICLES = 1600;
 const POISON_GREEN = "#4fbf3a";
 /** Dark flecks of ink mixed into sparks so they read on parchment. */
@@ -80,6 +89,8 @@ export class Fx {
   /** Current screen shake offset in arena units. */
   shakeX = 0;
   shakeY = 0;
+  /** Leaders powering up right now (white flash and pop on the ball). */
+  powerUps: PowerUp[] = [];
   /** White screen flash, 0..1. */
   flash = 0;
   private shake = 0;
@@ -140,6 +151,9 @@ export class Fx {
     for (const sl of this.slashes) sl.life -= dt;
     this.slashes = this.slashes.filter((sl) => sl.life > 0);
 
+    for (const pu of this.powerUps) pu.life -= dt;
+    this.powerUps = this.powerUps.filter((pu) => pu.life > 0);
+
     for (const r of this.rings) r.life -= dt;
     this.rings = this.rings.filter((r) => r.life > 0);
 
@@ -151,6 +165,12 @@ export class Fx {
     this.shakeX = (this.rng.next() * 2 - 1) * this.shake;
     this.shakeY = (this.rng.next() * 2 - 1) * this.shake;
     this.flash = Math.max(0, this.flash - dt * 2.4);
+  }
+
+  /** 1 → 0 over a fighter's level-up burst; 0 when none is playing. */
+  powerUp(fighter: number): number {
+    const pu = this.powerUps.find((p) => p.fighter === fighter);
+    return pu ? Math.max(0, pu.life / pu.max) : 0;
   }
 
   private burst(
@@ -258,6 +278,35 @@ export class Fx {
       case "levelUp": {
         const f = world.fighters[e.fighter];
         if (!f) break;
+        if (f.def.growth) {
+          // A leader reaches the next metal: rings and sparkles in its colours.
+          const look = tierLook(e.level);
+          this.powerUps = this.powerUps.filter((pu) => pu.fighter !== f.index);
+          this.powerUps.push({ fighter: f.index, life: POWER_UP_TIME, max: POWER_UP_TIME });
+          this.rings.push({
+            x: f.x,
+            y: f.y,
+            radius: f.radius * 3.4,
+            life: POWER_UP_TIME,
+            max: POWER_UP_TIME,
+            color: look.main,
+          });
+          this.rings.push({
+            x: f.x,
+            y: f.y,
+            radius: f.radius * 2,
+            life: 0.4,
+            max: 0.4,
+            color: look.light,
+          });
+          this.burst(f.x, f.y, 34, [look.light, look.main, "#ffffff", speck()], 560, 0.7, 10);
+          // The centre banner names the metal, except at 15 s when a Domain takes the stage.
+          if (e.level === 2 && world.domainsEnabled) {
+            this.text(f.x, f.y - f.radius - 40, `${look.name}!`, look.main, 50, 0.9);
+          }
+          this.addShake(10);
+          break;
+        }
         this.burst(f.x, f.y, 22, ["#ffd45e", speck(), "#ffe9a6"], 420, 0.6, 9);
         this.text(f.x, f.y - f.radius - 30, `LV ${e.level}`, "#ffd45e", 52, 1);
         this.addShake(6);

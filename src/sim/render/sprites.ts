@@ -1,5 +1,6 @@
 import { OUTLINE, THEME } from "./palette";
 import { weaponImage } from "./images";
+import { tintedWeapon } from "./tiers";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -75,6 +76,8 @@ export function drawWeapon(
   to: number,
   thick: number,
   level = 0,
+  /** Leaders' power tier (1..3): iron, then gold art. */
+  tier = 0,
 ): void {
   const L = to - from;
   const T = thick;
@@ -91,7 +94,13 @@ export function drawWeapon(
       ctx.shadowColor = "rgba(255,255,255,0.55)";
       ctx.shadowBlur = 9;
     }
-    ctx.drawImage(img, 0, -h / 2, L, h);
+    const metal = tintedWeapon(img, tier);
+    if (metal) {
+      // The tinted copy may carry a margin for its glow; scale it like the art.
+      const px = (metal.pad * L) / img.naturalWidth;
+      const py = (metal.pad * h) / img.naturalHeight;
+      ctx.drawImage(metal.canvas, -px, -h / 2 - py, L + px * 2, h + py * 2);
+    } else ctx.drawImage(img, 0, -h / 2, L, h);
     ctx.restore();
     return;
   }

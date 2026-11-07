@@ -52,6 +52,7 @@ import { drawHeadgear } from "./headgear";
 import { hasWeaponImage, portraitImage } from "./images";
 import { weaponArt } from "../leaders/weapons";
 import { drawWeapon } from "./sprites";
+import { drawTierPips, drawTierRim, tierLook, tierOf } from "./tiers";
 
 /** The video frame is laid out in a fixed 1080x1920 (9:16) space and scaled to the canvas. */
 const W = 1080;
@@ -320,7 +321,7 @@ function drawArena(
     }
   }
 
-  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world);
+  for (const f of world.fighters) if (f.alive) drawFighter(ctx, f, world, fx);
   // Armies and projectiles go over bodies.
   for (const h of world.hazards) if (h.kind === "strike") drawStrike(ctx, h);
   for (const h of world.hazards) if (h.kind === "sweep") drawSweep(ctx, h, world);
@@ -764,10 +765,13 @@ function drawWear(ctx: Ctx, r: number, ratio: number, seed: number): void {
   ctx.restore();
 }
 
-function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
+function drawFighter(ctx: Ctx, f: Fighter, world: World, fx: Fx): void {
   const time = world.time;
   const side = SIDES[f.side];
   const leader = !!f.def.growth;
+  const tier = tierOf(f, time);
+  // 1 → 0 over the level-up burst.
+  const power = fx.powerUp(f.index);
   ctx.save();
   ctx.translate(f.x, f.y);
 
@@ -782,6 +786,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       f.radius + f.def.reach * (leader ? 1.3 : 1),
       f.def.thickness,
       f.ability?.visualLevel?.() ?? 0,
+      tier,
     );
     ctx.restore();
   }
@@ -805,6 +810,7 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
   }
 
   if (leader) drawWear(ctx, f.radius, f.hp / f.maxHp, f.index);
+  if (leader) drawTierRim(ctx, f.radius, tier, time + world.phaseTime);
 
   if (f.poison > 0) {
     ctx.beginPath();
@@ -836,12 +842,26 @@ function drawFighter(ctx: Ctx, f: Fighter, world: World): void {
       f.index,
     );
     hpBadge(ctx, hp, f.radius, side);
+    drawTierPips(ctx, f.radius, tier, power);
   } else {
     ctx.font = `900 ${Math.round(f.radius * 0.48)}px ${MONO_FONT}`;
     outlinedText(ctx, hp, 0, 2, "#fff8e8", 4);
   }
 
   if (leader) drawHeadgear(ctx, f.def.id, f.radius);
+
+  if (power > 0) {
+    // Level-up: the ball flashes white, then a ring in the new metal settles on it.
+    ctx.beginPath();
+    ctx.arc(0, 0, f.radius, 0, TAU);
+    ctx.fillStyle = `rgba(255,255,255,${0.85 * power * power})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, f.radius * (1.05 + 0.5 * power), 0, TAU);
+    ctx.lineWidth = 10 * power;
+    ctx.strokeStyle = tierLook(tier).light;
+    ctx.stroke();
+  }
 
   if (f.whirl > 0) {
     // Scimitars spinning around Saladin, out to where the cuts actually land.
@@ -1383,9 +1403,9 @@ function drawBanner(ctx: Ctx, world: World, extras: DrawExtras = {}): void {
     case "fight": {
       const lv = levelBanner(world);
       if (lv) {
-        text = `LEVEL ${lv.level}`;
-        size = 150;
-        color = GOLD;
+        text = `LEVEL ${lv.level} · ${tierLook(lv.level).name}`;
+        size = 112;
+        color = tierLook(lv.level).main;
         t = lv.t;
         alpha = 1 - clamp((lv.t - 0.8) / 0.4, 0, 1);
         break;
