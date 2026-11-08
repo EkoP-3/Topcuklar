@@ -17,6 +17,7 @@ import {
   inCurrentSeason,
   matchKey,
   playWinner,
+  SEASON_1_DEFS,
   seasonOf,
   seasonView,
   standings,
@@ -106,6 +107,31 @@ function resolveFighters(
   const defA = findIn(mode, a) ?? rng.pick(roster);
   const defB = findIn(mode, b) ?? rng.pick(roster.filter((d) => d.id !== defA.id));
   return [defA, defB];
+}
+
+/** Same two leaders in either order. */
+const pairKey = (x: string, y: string): string => [x, y].sort().join("|");
+
+/**
+ * A random current-season pairing that has not been played yet this season (all of them
+ * once every pairing has been played). Sides are drawn at random too.
+ */
+function freshPair(ledger: readonly SeasonMatch[]): [string, string] {
+  const ids = SEASON_1_DEFS.map((d) => d.id);
+  const played = new Set(ledger.map((m) => pairKey(m.a, m.b)));
+  const all: [string, string][] = [];
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) all.push([ids[i] ?? "", ids[j] ?? ""]);
+  }
+  const fresh = all.filter(([x, y]) => !played.has(pairKey(x, y)));
+  const pool = fresh.length > 0 ? fresh : all;
+  const [x, y] = pool[Math.floor(Math.random() * pool.length)] ?? ["", ""];
+  return Math.random() < 0.5 ? [x, y] : [y, x];
+}
+
+function unplayedPairs(ledger: readonly SeasonMatch[]): number {
+  const n = SEASON_1_DEFS.length;
+  return (n * (n - 1)) / 2 - new Set(ledger.map((m) => pairKey(m.a, m.b))).size;
 }
 
 /** Selector order: current-season leaders first, the others after them. */
@@ -201,6 +227,18 @@ export function ArenaPage() {
   const mutedRef = useRef(muted);
   const live = useRef({ paused, speed, auto, busy: false });
   const nextMatch = useRef(() => setSeed(randomSeed()));
+  const ledgerRef = useRef(ledger);
+  ledgerRef.current = ledger;
+  /** New seed; in history mode also a season pairing not played yet. */
+  const freshMatch = () => {
+    if (mode === "leaders") {
+      const [x, y] = freshPair(ledgerRef.current);
+      setA(x);
+      setB(y);
+    }
+    setSeed(randomSeed());
+  };
+  nextMatch.current = freshMatch;
 
   // Browsers only allow sound after the first tap/click, so audio starts then.
   useEffect(() => {
@@ -577,7 +615,11 @@ export function ArenaPage() {
                 }}
               />
             </label>
-            <button className={buttonClass} onClick={() => setSeed(randomSeed())}>
+            <button
+              className={buttonClass}
+              onClick={freshMatch}
+              title="Tarih modunda bu sezon henüz oynanmamış bir eşleşme seçer"
+            >
               🎲 Rastgele maç
             </button>
           </div>
@@ -768,6 +810,11 @@ export function ArenaPage() {
                   {ledgerBackend === "db" ? "Paylaşılan veritabanı" : "Bu tarayıcıda saklanıyor"}
                 </span>
               </div>
+              <p className="text-xs text-neutral-400">
+                Oynanmamış eşleşme: {unplayedPairs(ledger)} /{" "}
+                {(SEASON_1_DEFS.length * (SEASON_1_DEFS.length - 1)) / 2} — 🎲 Rastgele maç
+                bunlardan seçer.
+              </p>
               <p className="text-xs text-neutral-500">
                 Yayınlanan maçları buraya ekleyin. Videoda liderlerin önceki maç sonuçları (ör.
                 3W–1L) ve sonda bu maç dahil puan tablosu görünür.

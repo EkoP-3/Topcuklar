@@ -1714,6 +1714,8 @@ function drawStandingsCard(
   ctx.save();
   ctx.globalAlpha = a;
   ctx.fillStyle = THEME.curtain;
+  // Twice: the arena behind should not show through the table.
+  ctx.fillRect(0, 0, AS, AS);
   ctx.fillRect(0, 0, AS, AS);
   ctx.globalAlpha = 1;
 
@@ -1743,28 +1745,22 @@ function drawStandingsCard(
     ctx.globalAlpha = e;
     ctx.translate((1 - e) * 120, 0);
 
-    // Row plate: the two leaders of this match in their colours, the winner framed in gold.
+    // Kept plain: only this match's two leaders get a soft plate in their colours.
     const played = row.result !== 0;
     const side = played ? sideOf(season, row) : null;
-    roundRect(ctx, left, y + 4, right - left, rowH - 12, 14);
-    ctx.fillStyle = side
-      ? side.main
-      : i % 2 === 0
-        ? "rgba(255,255,255,0.08)"
-        : "rgba(255,255,255,0.03)";
-    if (side) ctx.globalAlpha = e * (row.result === 1 ? 0.55 : 0.32);
-    ctx.fill();
-    ctx.globalAlpha = e;
-    if (row.result === 1) {
-      ctx.lineWidth = 5;
-      ctx.strokeStyle = GOLD;
-      ctx.stroke();
+    if (side) {
+      roundRect(ctx, left, y + 4, right - left, rowH - 12, 14);
+      ctx.fillStyle = side.main;
+      ctx.globalAlpha = e * (row.result === 1 ? 0.5 : 0.28);
+      ctx.fill();
+      ctx.globalAlpha = e;
     }
 
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
     ctx.font = `900 50px ${MONO_FONT}`;
-    outlinedText(ctx, String(row.rank), left + 50, mid, row.rank === 1 ? GOLD : PAPER, 8);
+    ctx.fillStyle = row.rank === 1 ? GOLD : "rgba(236,220,180,0.55)";
+    ctx.fillText(String(row.rank), left + 50, mid);
 
     let nameX = left + 104;
     if (row.def.flag) {
@@ -1773,21 +1769,19 @@ function drawStandingsCard(
       ctx.translate(nameX, mid - fh / 2);
       drawFlag(ctx, row.def.flag, fh);
       ctx.restore();
-      ctx.strokeStyle = OUTLINE;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(nameX, mid - fh / 2, fh * FLAG_RATIO, fh);
       nameX += fh * FLAG_RATIO + 20;
     }
     ctx.textAlign = "left";
     fitFont(ctx, row.def.name, 800, 50, 600 - nameX, DISPLAY_FONT);
-    outlinedText(ctx, row.def.name, nameX, mid + 2, side ? side.light : PAPER, 8);
+    ctx.fillStyle = side ? "#ffffff" : PAPER;
+    ctx.fillText(row.def.name, nameX, mid + 2);
 
     ctx.textAlign = "right";
     ctx.font = `800 48px ${MONO_FONT}`;
-    outlinedText(ctx, formatRecord(row), right - 130, mid + 2, PAPER, 8);
+    ctx.fillStyle = PAPER;
+    ctx.fillText(formatRecord(row), right - 130, mid + 2);
 
-    // The winner's gold "+1" pops in once the rows are in; other rows show how far
-    // this match moved them.
+    // The winner's gold "+1" pops in once the rows are in.
     if (row.result === 1) {
       const pop = easeOutBack(clamp((t - 0.25 - rows.length * ROW_STAGGER) / 0.25, 0, 1));
       if (pop > 0) {
@@ -1806,8 +1800,6 @@ function drawStandingsCard(
         ctx.fillText("+1", 0, 2);
         ctx.restore();
       }
-    } else if (row.moved !== 0) {
-      drawRankMove(ctx, right - 62, mid, row.moved);
     }
     ctx.restore();
   });
@@ -1843,34 +1835,6 @@ function drawStandingsCard(
 function sideOf(season: SeasonView, row: SeasonView["table"][number]): SideColors | null {
   const i = season.sides.indexOf(row.def.id);
   return i === 0 || i === 1 ? SIDES[i] : null;
-}
-
-/** Places gained (green ▲) or lost (red ▼) in the table by this match. */
-function drawRankMove(ctx: Ctx, x: number, y: number, moved: number): void {
-  const up = moved > 0;
-  ctx.save();
-  ctx.translate(x - 20, y);
-  ctx.beginPath();
-  if (up) {
-    ctx.moveTo(-14, 10);
-    ctx.lineTo(14, 10);
-    ctx.lineTo(0, -14);
-  } else {
-    ctx.moveTo(-14, -10);
-    ctx.lineTo(14, -10);
-    ctx.lineTo(0, 14);
-  }
-  ctx.closePath();
-  ctx.fillStyle = up ? "#5fd36a" : "#ff5a5a";
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = OUTLINE;
-  ctx.stroke();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.font = `800 34px ${MONO_FONT}`;
-  outlinedText(ctx, String(Math.abs(moved)), 22, 2, PAPER, 6);
-  ctx.restore();
 }
 
 /** Frenzy: everything outside the shrunken walls turns into a red danger zone. */
